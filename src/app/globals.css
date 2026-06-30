@@ -120,6 +120,11 @@ tr.clickable{cursor:pointer}
 .spinner{width:34px;height:34px;border:3px solid var(--surface-2);border-top-color:var(--green);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .errbar{background:var(--neg-bg);border:1px solid #F2C9D0;color:var(--neg);border-radius:11px;padding:12px 16px;font-size:13px;margin-bottom:16px}
+.okbar{background:var(--pos-bg);border:1px solid #BFE7D2;color:var(--pos);border-radius:11px;padding:12px 16px;font-size:13px;margin-bottom:16px}
+.alert-list{display:flex;flex-direction:column}
+.alert-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--surface-2);font-size:14px}
+.alert-row:last-child{border-bottom:0}
+.alert-row .tag{margin-inline-start:auto;font-size:12px;font-weight:600}
 
 /* نماذج / نوافذ */
 .modal-backdrop{position:fixed;inset:0;background:rgba(39,33,64,.42);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:80;display:grid;place-items:center;padding:22px}

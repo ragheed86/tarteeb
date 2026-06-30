@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ترتيب · نظام إدارة الأعمال</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --canvas:#F4F2FC;--surface:#FFFFFF;--surface-2:#F1EEFA;
+  --pine:#5B3DC4;--pine-2:#4E33AE;--green:#6C4DE0;--sage:#A78BF0;--sage-bg:#EDE7FB;
+  --gold:#F0913E;--gold-bg:#FCEBD8;--ink:#272140;--muted:#7C7596;--faint:#ABA4C2;--line:#E9E5F5;
+  --pos:#22A06B;--pos-bg:#DCF3E8;--neg:#E0566B;--neg-bg:#FBE3E8;
+  --r:16px;--display:"Readex Pro",sans-serif;--body:"IBM Plex Sans Arabic",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--body);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased;
+  background:radial-gradient(1100px 560px at 100% -5%, #E9DEFF 0%, transparent 58%),radial-gradient(950px 520px at -5% 105%, #DCF1FF 0%, transparent 55%),#F5F3FD;
+  background-attachment:fixed;}
+.app{display:flex;min-height:100vh}
+.ryl{width:.75em;height:.84em;vertical-align:-.05em;display:inline-block;margin-inline-start:2px;margin-inline-end:0}
+.amt{unicode-bidi:isolate;white-space:nowrap}
+
+.sidebar{width:248px;flex-shrink:0;background:rgba(255,255,255,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:var(--ink);padding:24px 16px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;border-inline-end:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:12px;padding:0 8px 22px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.mark{width:34px;height:34px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:3px;flex-shrink:0}
+.mark span{background:#6C4DE0;border-radius:5px}
+.mark span:nth-child(1){background:#36C5E6}.mark span:nth-child(2){background:#8A6CFF}.mark span:nth-child(3){background:#F0913E}.mark span:nth-child(4){background:#3FCB86}
+.brand h1{font-family:var(--display);font-size:21px;font-weight:600;color:var(--ink);letter-spacing:.5px}
+.brand small{display:block;font-size:11px;color:var(--green);font-weight:400;margin-top:-2px}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1}
+.nav-label{font-size:10.5px;color:var(--faint);font-weight:600;padding:13px 12px 5px;letter-spacing:.5px}
+.nav a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;color:var(--muted);font-size:14px;font-weight:400;cursor:pointer;text-decoration:none;transition:.15s}
+.nav a:hover{background:var(--surface-2);color:var(--ink)}
+.nav a.active{background:linear-gradient(135deg,#8A6CFF,#6C4DE0);color:#fff;font-weight:500;box-shadow:0 6px 16px rgba(108,77,224,.32)}
+.nav a svg{width:18px;height:18px;flex-shrink:0;opacity:.92}
+.nav a .badge{margin-inline-start:auto;background:var(--gold);color:#fff;font-size:11px;font-weight:600;padding:1px 8px;border-radius:20px}
+.side-foot{display:flex;align-items:center;gap:11px;padding:12px 8px 0;border-top:1px solid var(--line);margin-top:8px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--sage-bg);color:var(--green);display:grid;place-items:center;font-weight:600;font-size:14px;flex-shrink:0}
+.side-foot div{font-size:13px}.side-foot small{color:var(--muted);font-size:11px}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:18px;padding:18px 30px;background:rgba(245,243,253,.7);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);position:sticky;top:0;z-index:5;border-bottom:1px solid var(--line)}
+.topbar .pt{font-family:var(--display);font-size:22px;font-weight:600}
+.topbar .pt small{display:block;font-family:var(--body);font-size:12.5px;color:var(--muted);font-weight:400}
+.search{margin-inline-start:auto;display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 14px;width:240px;color:var(--faint)}
+.search input{border:0;background:none;outline:none;font-family:var(--body);font-size:13.5px;width:100%;color:var(--ink)}
+.icon-btn{width:42px;height:42px;border:1px solid var(--line);background:var(--surface);border-radius:10px;display:grid;place-items:center;cursor:pointer;color:var(--muted);position:relative}
+.icon-btn .dot{position:absolute;top:9px;right:11px;width:7px;height:7px;background:var(--gold);border-radius:50%;border:2px solid var(--surface)}
+.content{padding:26px 30px 50px;flex:1}
+.screen{display:none;animation:fade .35s ease}.screen.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+.card{background:rgba(255,255,255,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.7);border-radius:var(--r);padding:20px;box-shadow:0 8px 28px rgba(91,61,196,.07)}
+.sec-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.sec-head h2{font-family:var(--display);font-size:17px;font-weight:600}
+.sec-head .more{margin-inline-start:auto;font-size:13px;color:var(--green);cursor:pointer;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--green);color:#fff;border:0;border-radius:10px;padding:10px 18px;font-family:var(--body);font-size:14px;font-weight:500;cursor:pointer;transition:.15s}
+.btn:hover{background:var(--pine-2)}.btn svg{width:17px;height:17px}
+.btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line)}.btn.ghost:hover{background:var(--surface-2)}
+.btn.sm{padding:8px 13px;font-size:13px}
+.pill{font-size:12px;font-weight:500;padding:3px 11px;border-radius:20px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.8}
+.p-prog{background:var(--gold-bg);color:#8a651f}.p-done{background:var(--pos-bg);color:#2c6043}
+.p-wait{background:var(--surface-2);color:var(--muted)}.p-quote{background:#E3E9F0;color:#3d5a78}
+.src{font-size:12px;padding:2px 10px;border-radius:7px;background:var(--surface-2);color:var(--muted);font-weight:500}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.kpi{border:0;border-radius:var(--r);padding:18px;color:#fff;box-shadow:0 10px 26px rgba(91,61,196,.16)}
+.kpis .kpi:nth-child(1){background:linear-gradient(135deg,#8A6CFF,#6C4DE0)}
+.kpis .kpi:nth-child(2){background:linear-gradient(135deg,#39C7E8,#2BA3D6)}
+.kpis .kpi:nth-child(3){background:linear-gradient(135deg,#41CE88,#27AE74)}
+.kpis .kpi:nth-child(4){background:linear-gradient(135deg,#F8AC44,#F0852E)}
+.kpis .kpi:nth-child(5){background:linear-gradient(135deg,#8088FF,#5A62E8)}
+.kpis .kpi:nth-child(6){background:linear-gradient(135deg,#F2738C,#E0566B)}
+.kpi.alert{border:0}
+.kpi .lbl{font-size:13px;color:rgba(255,255,255,.9);display:flex;align-items:center;gap:8px}
+.kpi .lbl svg{opacity:.95}
+.kpi .val{font-family:var(--display);font-size:26px;font-weight:600;margin-top:10px;letter-spacing:.3px;color:#fff}
+.kpi.pos .val,.kpi.alert .val{color:#fff}
+.kpi .trend{color:rgba(255,255,255,.92)}
+.kpi .trend span{color:rgba(255,255,255,.82)!important}
+.kpi .up,.kpi .down{color:#fff}
+.kpi .lbl svg{width:16px;height:16px;opacity:.95}
+.kpi .val .ryl{width:.6em;height:.6em}
+.kpi .trend{font-size:12px;margin-top:6px;display:flex;align-items:center;gap:5px}
+.up{color:var(--pos)}.down{color:var(--neg)}
+
+.grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse}
+th{text-align:start;font-size:12px;font-weight:500;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--line)}
+td{padding:13px 14px;font-size:14px;border-bottom:1px solid var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:var(--surface-2)}
+tfoot td{border-top:2px solid var(--line);padding:13px 14px;font-size:14px}
+tr.clickable{cursor:pointer}
+.uid{font-size:12px;color:var(--faint)}.nm{font-weight:500}
+
+.bars{display:flex;align-items:flex-end;gap:14px;height:150px;padding-top:10px}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;height:100%}
+.bar .col{width:100%;max-width:34px;border-radius:6px 6px 0 0;display:flex;align-items:flex-end;justify-content:center;margin-top:auto}
+.bar .fill{width:100%;background:linear-gradient(180deg,#9B82FF,#6C4DE0);border-radius:6px 6px 0 0}
+.bar.cur .fill{background:linear-gradient(180deg,#5AD2EF,#2BA3D6)}.bar small{font-size:11.5px;color:var(--muted)}
+.srcrow{display:flex;align-items:center;gap:10px;margin-bottom:13px;font-size:13px}
+.srcrow .track{flex:1;height:9px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.srcrow .tf{height:100%;border-radius:6px}.srcrow .pct{color:var(--muted);font-size:12.5px;width:34px;text-align:start}
+.note{font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center}
+
+.countdowns{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+.cdcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;align-items:center;gap:13px}
+.cdcard .ring{width:52px;height:52px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;line-height:1}
+.cdcard .ring b{font-family:var(--display);font-size:20px;font-weight:600}
+.cdcard .ring span{font-size:9.5px;margin-top:1px}
+.cdcard .cdttl{font-weight:600;font-size:14px}.cdcard .cdttl.urgent{color:var(--neg)}
+.cdcard small{color:var(--muted);font-size:12px;display:block}
+
+.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.pcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.pcard .ph{height:96px;background:var(--sage-bg);display:grid;place-items:center;color:var(--sage);position:relative}
+.pcard .ph .ba{position:absolute;top:10px;inset-inline-start:10px;font-size:11px;background:var(--surface);padding:2px 9px;border-radius:6px;color:var(--muted)}
+.pcard .pb{padding:15px 16px}.pcard .pb h3{font-size:15px;font-weight:600;margin-bottom:3px}
+.pcard .cl{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+.pcard .row{display:flex;align-items:center;justify-content:space-between;margin-top:11px;font-size:13px}
+.pcard .price{font-family:var(--display);font-weight:600;font-size:16px}
+.prog{height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden;margin-top:12px}
+.prog i{display:block;height:100%;background:var(--green);border-radius:6px}
+.tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.tab{padding:8px 16px;border-radius:9px;font-size:13.5px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.tab.active{background:var(--pine);color:#fff;border-color:var(--pine)}
+
+.costwrap{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
+.cost-line{display:flex;align-items:center;justify-content:space-between;padding:13px 4px;border-bottom:1px solid var(--surface-2);font-size:14px}
+.cost-line .ic{width:30px;height:30px;border-radius:8px;background:var(--surface-2);display:grid;place-items:center;color:var(--muted);margin-inline-end:11px}
+.cost-line .lft{display:flex;align-items:center}.cost-line b{font-weight:600}
+.result{background:var(--pine);color:#fff;border-radius:var(--r);padding:22px;display:flex;flex-direction:column;gap:4px}
+.result .big{font-family:var(--display);font-size:32px;font-weight:600}.result .mg{font-size:13px;color:var(--sage)}
+.waterfall{margin-top:16px}
+.wf{display:flex;align-items:center;gap:12px;margin-bottom:12px;font-size:13px}
+.wf .wl{width:74px;color:var(--muted)}
+.wf .wbar{flex:1;height:26px;border-radius:7px;display:flex;align-items:center;padding-inline-start:12px;color:#fff;font-size:12.5px;font-weight:500}
+
+.invoice{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:30px;max-width:660px}
+.inv-top{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:22px;border-bottom:2px solid var(--pine)}
+.inv-top .tag{font-family:var(--display);font-size:20px;font-weight:600;color:var(--pine)}
+.inv-top .sub{font-size:12.5px;color:var(--muted)}
+.qr{width:74px;height:74px;border-radius:10px;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center}
+.qr svg{width:58px;height:58px}
+.inv-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin:20px 0;font-size:13.5px}
+.inv-meta .k{color:var(--muted);font-size:12px}
+.inv-tot{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
+.inv-tot .tr{display:flex;justify-content:space-between;padding:7px 0;font-size:14px}
+.inv-tot .tr.grand{font-family:var(--display);font-size:19px;font-weight:600;border-top:1px solid var(--line);margin-top:6px;padding-top:13px}
+.taxbar{display:flex;align-items:center;justify-content:space-between;background:var(--gold-bg);border:1px solid #E8D6AC;border-radius:11px;padding:12px 16px;margin:18px 0 4px;font-size:13.5px;color:#7c5c1c}
+.toggle{width:46px;height:26px;border-radius:20px;background:var(--green);position:relative;cursor:pointer;transition:.2s;flex-shrink:0}
+.toggle::after{content:"";position:absolute;top:3px;inset-inline-end:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+.toggle.off{background:var(--faint)}.toggle.off::after{inset-inline-end:23px}
+
+.ptgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:18px}
+.ptcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.ptcard .h{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.ptcard .h .av{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-weight:600;color:#fff}
+.ptcard .h b{font-weight:600;font-size:15px}.ptcard .h small{color:var(--muted);font-size:12.5px}
+.ptcard .ln{display:flex;justify-content:space-between;font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--surface-2)}
+.ptcard .ln:last-child{border-bottom:0}.ptcard .bal{font-family:var(--display);font-weight:600;color:var(--green)}
+
+.lowrow td{background:var(--neg-bg)}
+.qbar{display:inline-flex;align-items:center;gap:8px}
+.qbar .qt{width:70px;height:7px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+.qbar .qf{height:100%;border-radius:6px}
+
+.hmwrap{display:grid;grid-template-columns:1fr 280px;gap:16px}
+.hmgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.htile{border-radius:12px;padding:14px;min-height:88px;display:flex;flex-direction:column;justify-content:space-between}
+.htile .hn{font-weight:600;font-size:14px}
+.htile .hv{font-family:var(--display);font-size:18px;font-weight:600}
+.htile .hr{font-size:11px;opacity:.85}
+.legend{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:14px}
+.legend .sw{display:flex;gap:3px}.legend .sw i{width:18px;height:11px;border-radius:3px;display:block}
+
+.inbox{display:grid;grid-template-columns:290px 1fr;gap:16px}
+.convlist{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.conv{display:flex;gap:11px;padding:13px 15px;border-bottom:1px solid var(--surface-2);cursor:pointer}
+.conv:hover,.conv.active{background:var(--surface-2)}
+.conv .ca{width:40px;height:40px;border-radius:50%;background:var(--sage-bg);color:var(--green);display:grid;place-items:center;font-weight:600;flex-shrink:0}
+.conv .cn{font-weight:600;font-size:13.5px;display:flex;align-items:center;gap:6px}
+.conv .cx{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px}
+.conv .ct{margin-inline-start:auto;font-size:11px;color:var(--faint)}
+.ch{font-size:10px;font-weight:600;padding:1px 7px;border-radius:6px}
+.ch-wa{background:#DBF0E2;color:#1c7a45}.ch-tg{background:#DAEBF8;color:#2a6aa0}.ch-ml{background:var(--surface-2);color:var(--muted)}
+.ch-sys{background:var(--gold-bg);color:#8a651f}
+.thread{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column}
+.thread .th-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.thread .th-h b{font-size:15px;font-weight:600}.thread .th-h small{color:var(--muted);font-size:12px}
+.tl{padding:20px;display:flex;flex-direction:column;gap:14px}
+.msg{max-width:72%}
+.msg .bub{padding:10px 14px;border-radius:13px;font-size:13.5px}
+.msg.in .bub{background:var(--surface-2);border-top-right-radius:4px}
+.msg.out{margin-inline-start:auto;text-align:start}
+.msg.out .bub{background:var(--green);color:#fff;border-top-left-radius:4px}
+.msg .meta{font-size:11px;color:var(--faint);margin-top:4px;display:flex;align-items:center;gap:6px}
+.daysep{text-align:center;font-size:11.5px;color:var(--faint);margin:4px 0}
+
+/* client 360 */
+.backlink{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:13px;cursor:pointer;margin-bottom:16px}
+.backlink:hover{color:var(--ink)}
+.profhead{display:flex;align-items:center;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.profhead .pav{width:62px;height:62px;border-radius:50%;background:var(--sage-bg);color:var(--green);display:grid;place-items:center;font-family:var(--display);font-size:24px;font-weight:600;flex-shrink:0}
+.profhead h2{font-family:var(--display);font-size:21px;font-weight:600}
+.profhead .meta{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap}
+.profhead .actions{margin-inline-start:auto;display:flex;gap:8px}
+.statstrip{display:flex;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:18px}
+.statstrip .st{flex:1;min-width:120px;padding:15px 20px;border-inline-start:1px solid var(--line)}
+.statstrip .st:first-child{border-inline-start:0}
+.statstrip .st .stv{font-family:var(--display);font-size:19px;font-weight:600}
+.statstrip .st .stl{font-size:11.5px;color:var(--muted);margin-top:3px}
+.prof-cols{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}
+.lrow{display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-bottom:1px solid var(--surface-2);font-size:13.5px}
+.lrow:last-child{border-bottom:0}
+.lrow .lt{font-weight:500}.lrow .ls{font-size:12px;color:var(--muted)}
+.lrow .lv{font-family:var(--display);font-weight:600}
+.tl360{position:relative;padding-inline-start:22px}
+.tl360::before{content:"";position:absolute;inset-inline-start:5px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.tlitem{position:relative;margin-bottom:17px}
+.tlitem:last-child{margin-bottom:0}
+.tlitem::before{content:"";position:absolute;inset-inline-start:-21px;top:3px;width:11px;height:11px;border-radius:50%;background:var(--sage);border:2px solid var(--surface)}
+.tlitem.sys::before{background:var(--gold)}
+.tlitem .tt{font-size:13.5px;line-height:1.5}
+.tlitem .tm{font-size:11.5px;color:var(--faint);margin-top:3px;display:flex;align-items:center;gap:6px}
+
+/* view toggle + filters */
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.viewtoggle{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.vt{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border:0;background:none;border-radius:8px;font-family:var(--body);font-size:13.5px;color:var(--muted);cursor:pointer}
+.vt svg{width:15px;height:15px}
+.vt.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500}
+.fbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.chip{padding:7px 14px;border-radius:9px;font-size:13px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.chip.active{background:var(--pine);color:#fff;border-color:var(--pine)}
+.chip.cat{border-radius:20px}
+.fdivider{width:1px;height:22px;background:var(--line);margin:0 4px}
+.fdate{font-family:var(--body);font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:8px 12px;outline:none;cursor:pointer}
+
+/* kanban */
+.kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.kcol{background:var(--surface-2);border-radius:var(--r);padding:12px}
+.kcol .kh{display:flex;align-items:center;gap:8px;padding:4px 6px 12px;font-weight:600;font-size:14px}
+.kcol .kh .kc{margin-inline-start:auto;font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:0 9px}
+.kbody{min-height:60px;display:flex;flex-direction:column;gap:10px}
+.kcard{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:13px;cursor:grab}
+.kcard.dragging{opacity:.4}
+.kcard h4{font-size:13.5px;font-weight:600;margin-bottom:6px}
+.kcard .km{font-size:12px;color:var(--muted);margin-bottom:9px}
+.kcard .kf{display:flex;align-items:center;justify-content:space-between;font-size:12.5px}
+.kcard .chk{font-size:11.5px;color:var(--muted);background:var(--surface-2);border-radius:7px;padding:2px 8px}
+.kcard .kp{font-family:var(--display);font-weight:600}
+.kdrop{outline:2px dashed var(--sage);outline-offset:-4px;border-radius:11px}
+
+/* calendar */
+.calhead{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.calhead h3{font-family:var(--display);font-size:16px;font-weight:600}
+.cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:8px}
+.cal-week div{font-size:12px;color:var(--muted);text-align:center;font-weight:500}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.cell{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-height:94px;padding:8px}
+.cell.empty{background:transparent;border:0}
+.cell .dn{font-size:12.5px;color:var(--muted);font-weight:500}
+.cev{font-size:11px;padding:3px 7px;border-radius:6px;margin-top:5px;cursor:pointer;line-height:1.35}
+.cev.prog{background:var(--gold-bg);color:#8a651f}.cev.done{background:var(--pos-bg);color:#2c6043}.cev.quote{background:#E3E9F0;color:#3d5a78}
+.cell.celldrop{outline:2px dashed var(--sage);outline-offset:-3px}
+.cev{cursor:grab}.cev:active{cursor:grabbing}
+
+/* project detail */
+.gal{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px}
+.galt{aspect-ratio:1;background:var(--sage-bg);border-radius:10px;display:grid;place-items:center;color:var(--sage);font-size:11px;position:relative}
+.galt span{position:absolute;top:7px;inset-inline-start:7px;font-size:10px;background:var(--surface);padding:1px 7px;border-radius:5px;color:var(--muted)}
+.task{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--surface-2);font-size:13.5px;cursor:pointer}
+.task:last-child{border-bottom:0}
+.task .box{width:19px;height:19px;border-radius:6px;border:1.5px solid var(--line);flex-shrink:0;display:grid;place-items:center;color:transparent;font-size:12px}
+.task.done .box{background:var(--green);border-color:var(--green);color:#fff}
+.task.done .tx{color:var(--muted);text-decoration:line-through}
+.drow{display:flex;justify-content:space-between;font-size:13.5px;padding:9px 0;border-bottom:1px solid var(--surface-2)}
+.drow:last-child{border-bottom:0}.drow .dk{color:var(--muted)}
+
+/* cost search */
+.fsearch{display:flex;align-items:center;gap:9px;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin-bottom:12px;color:var(--faint)}
+.fsearch input{border:0;background:none;outline:none;font-family:var(--body);font-size:14px;width:100%;color:var(--ink)}
+.presult{display:flex;align-items:center;justify-content:space-between;padding:11px 10px;border-radius:9px;cursor:pointer;font-size:13.5px}
+.presult:hover{background:var(--surface-2)}
+.presult.sel{background:var(--sage-bg)}
+.presult .pa{color:var(--green);font-size:12px;font-weight:500}
+.ac{position:absolute;top:calc(100% + 6px);inset-inline-start:0;inset-inline-end:0;background:var(--surface);border:1px solid var(--line);border-radius:11px;box-shadow:0 10px 28px rgba(32,43,38,.12);padding:6px;z-index:20;display:none;max-height:300px;overflow-y:auto}
+.ac.open{display:block}
+.fselect{font-family:var(--body);font-size:14px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:11px 14px;min-width:300px;cursor:pointer;outline:none}
+.fselect optgroup{font-weight:700;color:var(--green)}
+.fselect option{font-weight:400;color:var(--ink)}
+
+/* supplier logo */
+.sup{display:inline-flex;align-items:center;gap:8px}
+.sup .lg{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+
+/* invoice actions + print */
+.invoice-actions{display:flex;gap:10px;margin-bottom:16px}
+@media print{
+  .sidebar,.topbar,.invoice-actions,.taxbar .toggle{display:none!important}
+  .content{padding:0!important}
+  .screen:not(#invoices){display:none!important}
+  #invoices{display:block!important}
+  body,.app,.main{background:#fff!important}
+  .invoice{border:0!important;max-width:100%!important;padding:0!important}
+}
+
+/* employees */
+.empgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.empcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.empcard .top{display:flex;align-items:center;gap:13px;margin-bottom:14px}
+.empcard .pic{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-size:20px;font-weight:600;color:#fff;flex-shrink:0;position:relative}
+.empcard .pic .cam{position:absolute;bottom:-2px;inset-inline-end:-2px;width:21px;height:21px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center;font-size:10px}
+.empcard h3{font-size:15px;font-weight:600}
+.empcard .role{font-size:12.5px;color:var(--muted)}
+.empcard .erow{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0}
+.empcard .erow span{color:var(--muted)}.empcard .erow b{font-weight:500}
+.docs{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px;padding-top:13px;border-top:1px solid var(--surface-2)}
+.doc{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:4px 9px;border-radius:7px;background:var(--surface-2);color:var(--muted)}
+.doc.ok{background:var(--pos-bg);color:#2c6043}
+.doc.warn{background:var(--neg-bg);color:var(--neg)}
+.attach{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:4px 10px;border-radius:7px;border:1px dashed var(--sage);color:var(--green);cursor:pointer}
+
+/* settings */
+.settabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.settab{padding:11px 16px;font-size:13.5px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.settab.active{color:var(--ink);border-bottom-color:var(--green);font-weight:500}
+.setpanel{display:none}.setpanel.active{display:block}
+.notebar{background:var(--gold-bg);border:1px solid #E8D6AC;border-radius:11px;padding:11px 16px;font-size:13px;color:#7c5c1c;margin-bottom:18px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px 16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;color:var(--muted)}
+.field input{font-family:var(--body);font-size:13.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:10px 12px;outline:none}
+.field input:focus{border-color:var(--sage)}
+
+/* suppliers */
+.supgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.supcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;align-items:center;gap:11px}
+.supcard .nm2{font-size:13.5px;font-weight:600}
+.supcard small{font-size:11.5px;color:var(--muted)}
+.supact{display:flex;gap:4px;flex-shrink:0;opacity:.45;transition:opacity .15s}
+.supcard:hover .supact{opacity:1}
+.supact button{width:26px;height:26px;border:1px solid var(--line);background:var(--surface);border-radius:7px;cursor:pointer;font-size:12px;display:grid;place-items:center;color:var(--muted)}
+.supact button:hover{background:var(--surface-2);color:var(--ink)}
+
+/* permissions */
+.perm{display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--surface-2);font-size:13.5px}
+.perm:last-child{border-bottom:0}
+.perm .pr{font-weight:600;min-width:130px}
+.perm .pd{color:var(--muted)}
+.link{color:var(--green);cursor:pointer;font-size:13px}
+
+@media(max-width:1100px){.kpis,.countdowns{grid-template-columns:1fr 1fr}.grid2,.costwrap,.hmwrap,.prof-cols,.form-grid{grid-template-columns:1fr 1fr}.pgrid,.ptgrid,.kanban,.empgrid,.supgrid{grid-template-columns:1fr 1fr}.inbox{grid-template-columns:1fr}.cal-grid,.cal-week{font-size:11px}}
+.hamburger{display:none;width:42px;height:42px;border:1px solid var(--line);background:var(--surface);border-radius:10px;place-items:center;cursor:pointer;color:var(--muted);flex-shrink:0}
+.hamburger svg{width:20px;height:20px}
+.scrim{display:none;position:fixed;inset:0;background:rgba(39,33,64,.35);z-index:40}
+@media(max-width:860px){
+  .hamburger{display:grid}
+  .scrim.show{display:block}
+  .sidebar{position:fixed;inset-block:0;inset-inline-end:0;width:264px;transform:translateX(100%);transition:transform .25s ease;z-index:50;box-shadow:-12px 0 40px rgba(39,33,64,.18)}
+  .sidebar.open{transform:translateX(0)}
+  .search{width:auto;flex:1;min-width:0}
+  .topbar{padding:14px 16px;gap:12px}
+  .content{padding:18px 16px 50px}
+  .toolbar{gap:8px}
+}
+@media(max-width:640px){
+  .kpis,.countdowns,.grid2,.costwrap,.hmwrap,.prof-cols,.form-grid,.pgrid,.ptgrid,.kanban,.empgrid,.supgrid,.funnel{grid-template-columns:1fr!important}
+  .statstrip{flex-direction:column}.statstrip .st{border-inline-start:0;border-top:1px solid var(--line)}.statstrip .st:first-child{border-top:0}
+  .hmgrid{grid-template-columns:1fr 1fr}
+  .profhead .actions{margin-inline-start:0;width:100%}
+  .cal-grid,.cal-week{gap:4px}.cell{min-height:64px;padding:5px}.cev{font-size:9.5px}
+  .topbar .pt{font-size:18px}.search{width:auto}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="ryl" viewBox="0 0 1124.14 1256.39"><path fill="currentColor" d="M699.62,1113.02h0c-20.06,44.48-33.32,92.75-38.4,143.37l424.51-90.24c20.06-44.47,33.31-92.75,38.4-143.37l-424.51,90.24Z"/><path fill="currentColor" d="M1085.73,895.8c20.06-44.47,33.32-92.75,38.4-143.37l-330.68,70.33v-135.2l292.27-62.11c20.06-44.47,33.32-92.75,38.4-143.37l-330.68,70.27V66.13c-50.67,28.45-95.67,66.32-132.25,110.99v403.35l-132.25,28.11V0c-50.67,28.44-95.67,66.32-132.25,110.99v525.69l-295.91,62.88c-20.06,44.47-33.33,92.75-38.42,143.37l334.33-71.05v170.26l-358.3,76.14c-20.06,44.47-33.32,92.75-38.4,143.37l375.04-79.7c30.53-6.35,56.77-24.4,73.83-49.24l68.78-101.97v-.02c7.14-10.55,11.3-23.27,11.3-36.97v-149.98l132.25-28.11v270.4l424.53-90.28Z"/></symbol></svg>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark"><span></span><span></span><span></span><span></span></div>
+      <div><h1>ترتيب</h1><small>نظام إدارة الأعمال</small></div>
+    </div>
+    <nav class="nav">
+      <a class="active" data-s="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>لوحة المعلومات</a>
+      <div class="nav-label">العمليات</div>
+      <a data-s="clients"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 6.2a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-3-4.9"/></svg>العملاء</a>
+      <a data-s="projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 8.5h16.5a1.5 1.5 0 0 1 1.48 1.76l-1.2 7A1.5 1.5 0 0 1 18.3 18.5H5.7a1.5 1.5 0 0 1-1.48-1.24l-1.2-7A1.5 1.5 0 0 1 3 8.5Z"/><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h7"/></svg>المشاريع</a>
+      <a data-s="cost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h3M8 15h3"/><circle cx="15.5" cy="13.5" r="2"/></svg>تكلفة المشاريع</a>
+      <a data-s="warehouse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 21V9l9-5 9 5v12"/><path d="M3 21h18M8 21v-6h8v6"/></svg>المستودع<span class="badge">3</span></a>
+      <a data-s="employees"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M5 16a3 3 0 0 1 6 0M14 9h4M14 12h4M14 15h2"/></svg>الموظفون</a>
+      <div class="nav-label">التسويق</div>
+      <a data-s="heatmap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>الخريطة الحرارية</a>
+      <div class="nav-label">المالية</div>
+      <a data-s="invoices"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>الفواتير</a>
+      <a data-s="partners"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><path d="M3.5 18a4.5 4.5 0 0 1 9 0M11.5 18a4.5 4.5 0 0 1 9 0"/></svg>حسابات الشركاء</a>
+      <div class="nav-label">التواصل</div>
+      <a data-s="inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v11H8l-4 3z"/><path d="M8 9h8M8 12h5"/></svg>الوارد الموحّد</a>
+      <div class="nav-label">النظام</div>
+      <a data-s="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/></svg>الإعدادات</a>
+    </nav>
+    <div class="side-foot"><div class="avatar">ر</div><div>راغد<br><small>المدير العام</small></div></div>
+  </aside>
+  <div class="scrim" id="scrim" onclick="toggleSidebar()"></div>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="فتح القائمة"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <div class="pt" id="ptitle">لوحة المعلومات<small id="psub">نظرة عامة على الأداء · يونيو 2026</small></div>
+      <div class="search"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg><input placeholder="ابحث عن عميل أو مشروع..."></div>
+      <div class="icon-btn"><span class="dot"></span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 19a2 2 0 0 0 4 0"/></svg></div>
+    </header>
+
+    <div class="content">
+
+      <!-- Dashboard -->
+      <section class="screen active" id="dash">
+        <div class="sec-head"><h2>تسليمات قادمة</h2><span class="more">العدّ التنازلي للمواعيد</span></div>
+        <div class="countdowns" id="countdowns">
+          <div class="cdcard" data-due="2026-07-01"><div class="ring"></div><div><div class="cdttl"></div><small>تسليم · نورة العتيبي · دواليب</small></div></div>
+          <div class="cdcard" data-due="2026-06-30"><div class="ring"></div><div><div class="cdttl"></div><small>زيارة قياس · سارة المطيري</small></div></div>
+          <div class="cdcard" data-due="2026-07-04"><div class="ring"></div><div><div class="cdttl"></div><small>تسليم · منيرة السبيعي · تخزين</small></div></div>
+          <div class="cdcard" data-due="2026-07-07"><div class="ring"></div><div><div class="cdttl"></div><small>تنفيذ · ريم القحطاني · نقل</small></div></div>
+        </div>
+
+        <div class="sec-head" style="margin-bottom:14px">
+          <h2>مؤشرات الأداء</h2>
+          <div style="margin-inline-start:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <input type="date" class="fdate" value="2026-06-29" onchange="setPeriodDate(this)">
+            <div class="viewtoggle">
+              <button class="vt" data-p="day" onclick="setPeriod(this)">يوم</button>
+              <button class="vt" data-p="week" onclick="setPeriod(this)">أسبوع</button>
+              <button class="vt active" data-p="month" onclick="setPeriod(this)">شهر</button>
+              <button class="vt" data-p="year" onclick="setPeriod(this)">سنة</button>
+            </div>
+          </div>
+        </div>
+        <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+          <div class="kpi"><div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span id="k-revlbl">إيرادات الشهر</span></div><div class="val"><span id="k-rev">48,200</span><svg class="ryl"><use href="#ryl"></use></svg></div><div class="trend up">▲ مقابل الفترة السابقة</div></div>
+          <div class="kpi pos"><div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 17l5-5 4 3 8-8"/><path d="M16 4h4v4"/></svg>صافي الربح</div><div class="val"><span id="k-profit">21,650</span><svg class="ryl"><use href="#ryl"></use></svg></div><div class="trend"><span style="color:var(--muted)">بعد خصم كل التكاليف</span></div></div>
+          <div class="kpi"><div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M19 5 5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg>متوسط هامش الربح</div><div class="val"><span id="k-margin">45%</span></div><div class="trend"><span style="color:var(--muted)">على مستوى المشاريع</span></div></div>
+          <div class="kpi"><div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M19 8v6M16 11h6"/></svg>العملاء الجدد</div><div class="val"><span id="k-newc">6</span></div><div class="trend up">▲ مقابل الفترة السابقة</div></div>
+          <div class="kpi"><div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h16M4 8 6 5h12l2 3M4 8v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V8"/></svg>مشاريع نشطة</div><div class="val">7</div><div class="trend"><span style="color:var(--muted)">3 تسلّم هذا الأسبوع</span></div></div>
+          <div class="kpi alert"><div class="lbl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 9v4M12 17h.01M10.3 4.3 2.6 18a1.5 1.5 0 0 0 1.3 2.2h16.2a1.5 1.5 0 0 0 1.3-2.2L13.7 4.3a1.5 1.5 0 0 0-3.4 0Z"/></svg>تنبيهات المستودع</div><div class="val">3</div><div class="trend down">أصناف وصلت حد النفاد</div></div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="sec-head"><h2>الإيرادات والأرباح</h2><span class="more">آخر 6 أشهر</span></div>
+            <div class="bars">
+              <div class="bar"><div class="col"><div class="fill" style="height:42%"></div></div><small>يناير</small></div>
+              <div class="bar"><div class="col"><div class="fill" style="height:55%"></div></div><small>فبراير</small></div>
+              <div class="bar"><div class="col"><div class="fill" style="height:48%"></div></div><small>مارس</small></div>
+              <div class="bar"><div class="col"><div class="fill" style="height:68%"></div></div><small>أبريل</small></div>
+              <div class="bar"><div class="col"><div class="fill" style="height:74%"></div></div><small>مايو</small></div>
+              <div class="bar cur"><div class="col"><div class="fill" style="height:92%"></div></div><small>يونيو</small></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="sec-head"><h2>مصدر العملاء</h2></div>
+            <div class="srcrow"><span style="width:74px">انستقرام</span><div class="track"><div class="tf" style="width:52%;background:var(--gold)"></div></div><span class="pct">52%</span></div>
+            <div class="srcrow"><span style="width:74px">تيك توك</span><div class="track"><div class="tf" style="width:28%;background:var(--sage)"></div></div><span class="pct">28%</span></div>
+            <div class="srcrow"><span style="width:74px">توصية صديق</span><div class="track"><div class="tf" style="width:14%;background:var(--green)"></div></div><span class="pct">14%</span></div>
+            <div class="srcrow"><span style="width:74px">أخرى</span><div class="track"><div class="tf" style="width:6%;background:var(--faint)"></div></div><span class="pct">6%</span></div>
+            <div class="note">أعلى ربحية فعلية من <b style="color:var(--green)">توصية صديق</b> رغم قلة عددها</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Clients -->
+      <section class="screen" id="clients">
+        <div id="clients-list">
+          <div class="sec-head" style="margin-bottom:18px">
+            <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>عميل جديد</button>
+            <button class="btn ghost">تصفية حسب الحي</button>
+            <span class="more" style="margin-inline-start:auto">34 عميلاً · اضغط أي عميل لعرض ملف 360</span>
+          </div>
+          <div class="card" style="padding:6px 0">
+            <table>
+              <thead><tr><th>العميل</th><th>الجوال</th><th>المصدر</th><th>الحي</th><th>المشاريع</th><th>الحالة</th></tr></thead>
+              <tbody>
+                <tr class="clickable" onclick="openClient()"><td><span class="nm">نورة العتيبي</span><br><span class="uid">TRT-014</span></td><td>055 412 8890</td><td><span class="src">انستقرام</span></td><td>النرجس</td><td>3</td><td><span class="pill p-prog">عميل نشط</span></td></tr>
+                <tr class="clickable" onclick="openClient()"><td><span class="nm">عبدالله الشهري</span><br><span class="uid">TRT-021</span></td><td>050 773 1245</td><td><span class="src">توصية صديق</span></td><td>الملقا</td><td>2</td><td><span class="pill p-done">مكتمل</span></td></tr>
+                <tr class="clickable" onclick="openClient()"><td><span class="nm">ريم القحطاني</span><br><span class="uid">TRT-027</span></td><td>056 901 3347</td><td><span class="src">تيك توك</span></td><td>الياسمين</td><td>1</td><td><span class="pill p-quote">عرض سعر</span></td></tr>
+                <tr class="clickable" onclick="openClient()"><td><span class="nm">فهد الدوسري</span><br><span class="uid">TRT-009</span></td><td>053 228 7610</td><td><span class="src">انستقرام</span></td><td>العليا</td><td>4</td><td><span class="pill p-done">مكتمل</span></td></tr>
+                <tr class="clickable" onclick="openClient()"><td><span class="nm">سارة المطيري</span><br><span class="uid">TRT-031</span></td><td>059 554 2198</td><td><span class="src">توصية صديق</span></td><td>قرطبة</td><td>1</td><td><span class="pill p-prog">عميل نشط</span></td></tr>
+                <tr class="clickable" onclick="openClient()"><td><span class="nm">خالد الحربي</span><br><span class="uid">TRT-018</span></td><td>054 667 0043</td><td><span class="src">أخرى</span></td><td>الربيع</td><td>2</td><td><span class="pill p-wait">بانتظار رد</span></td></tr>
+                <tr class="clickable" onclick="openClient()"><td><span class="nm">منيرة السبيعي</span><br><span class="uid">TRT-024</span></td><td>058 330 9912</td><td><span class="src">انستقرام</span></td><td>الملقا</td><td>2</td><td><span class="pill p-done">مكتمل</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Client 360 profile -->
+        <div id="client-profile" style="display:none">
+          <div class="backlink" onclick="backClients()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>كل العملاء</div>
+          <div class="profhead">
+            <div class="pav">ن</div>
+            <div>
+              <h2>نورة العتيبي</h2>
+              <div class="meta"><span class="src">انستقرام</span><span style="color:var(--muted);font-size:13px">النرجس · TRT-014</span><span class="pill p-prog">عميل نشط</span></div>
+            </div>
+            <div class="actions">
+              <button class="btn sm ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 5 5L16 13l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>اتصال</button>
+              <button class="btn sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12a8 8 0 1 1 3 6l-3 1 1-3a8 8 0 0 1-1-4Z"/></svg>واتساب</button>
+            </div>
+          </div>
+
+          <div class="statstrip">
+            <div class="st"><div class="stv">عميلة منذ 2024</div><div class="stl">تاريخ أول تعامل</div></div>
+            <div class="st"><div class="stv">3</div><div class="stl">عدد المشاريع</div></div>
+            <div class="st"><div class="stv">9,400<svg class="ryl"><use href="#ryl"></use></svg></div><div class="stl">إجمالي الإنفاق</div></div>
+            <div class="st"><div class="stv">46%</div><div class="stl">متوسط هامش الربح</div></div>
+            <div class="st"><div class="stv">اليوم</div><div class="stl">آخر تواصل</div></div>
+          </div>
+
+          <div class="prof-cols">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div class="card">
+                <div class="sec-head"><h2>مشاريع العميل</h2></div>
+                <div class="lrow"><div><div class="lt">تنظيم دواليب</div><div class="ls">يونيو 2026 · قيد التنفيذ</div></div><span class="lv">3,200<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+                <div class="lrow"><div><div class="lt">تنظيم غرفة ملابس</div><div class="ls">مارس 2026 · مكتمل</div></div><span class="lv">2,800<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+                <div class="lrow"><div><div class="lt">استشارة تنظيم منزلي</div><div class="ls">ديسمبر 2024 · مكتمل</div></div><span class="lv">3,400<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+              </div>
+              <div class="card">
+                <div class="sec-head"><h2>السجل المالي</h2></div>
+                <div class="lrow"><div><div class="lt">فاتورة #1066</div><div class="ls">يونيو 2026</div></div><span style="display:flex;align-items:center;gap:10px"><span class="pill p-wait">غير مدفوعة</span><span class="lv">3,200<svg class="ryl"><use href="#ryl"></use></svg></span></span></div>
+                <div class="lrow"><div><div class="lt">فاتورة #1051</div><div class="ls">مارس 2026</div></div><span style="display:flex;align-items:center;gap:10px"><span class="pill p-done">مدفوعة</span><span class="lv">2,800<svg class="ryl"><use href="#ryl"></use></svg></span></span></div>
+                <div class="lrow"><div><div class="lt">فاتورة #0982</div><div class="ls">ديسمبر 2024</div></div><span style="display:flex;align-items:center;gap:10px"><span class="pill p-done">مدفوعة</span><span class="lv">3,400<svg class="ryl"><use href="#ryl"></use></svg></span></span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="sec-head"><h2>الخط الزمني · 360°</h2></div>
+              <div class="tl360">
+                <div class="tlitem"><div class="tt">رسالة من العميلة: «تمام، نشوفكم بكرة الساعة 11»</div><div class="tm"><span class="ch ch-wa">واتساب</span> اليوم · 9:42 ص</div></div>
+                <div class="tlitem sys"><div class="tt">صدرت فاتورة #1066 بقيمة 3,200<svg class="ryl"><use href="#ryl"></use></svg></div><div class="tm"><span class="ch ch-sys">النظام</span> اليوم · 9:00 ص</div></div>
+                <div class="tlitem"><div class="tt">رد منك: «الفريق بيكون عندكم الساعة 11 صباحاً»</div><div class="tm"><span class="ch ch-wa">واتساب</span> أمس · 6:10 م</div></div>
+                <div class="tlitem sys"><div class="tt">بدأ تنفيذ مشروع «تنظيم دواليب»</div><div class="tm"><span class="ch ch-sys">النظام</span> 25 يونيو</div></div>
+                <div class="tlitem"><div class="tt">استفسار عبر تيليجرام عن مواعيد الفريق</div><div class="tm"><span class="ch ch-tg">تيليجرام</span> 22 يونيو</div></div>
+                <div class="tlitem sys"><div class="tt">اعتمدت عرض السعر للمشروع الجديد</div><div class="tm"><span class="ch ch-sys">النظام</span> 20 يونيو</div></div>
+                <div class="tlitem"><div class="tt">طلب عرض سعر لتنظيم الدواليب</div><div class="tm"><span class="ch ch-ml">بريد</span> 18 يونيو</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Projects -->
+      <section class="screen" id="projects">
+        <div id="projects-main">
+          <div class="toolbar">
+            <div class="viewtoggle">
+              <button class="vt active" data-v="cards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>بطاقات</button>
+              <button class="vt" data-v="kanban"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="11" rx="1.5"/><rect x="16" y="4" width="5" height="14" rx="1.5"/></svg>كانبان</button>
+              <button class="vt" data-v="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>تقويم</button>
+            </div>
+            <span class="fdivider"></span>
+            <span style="font-size:12.5px;color:var(--muted)">من</span>
+            <input type="date" class="fdate" id="pFrom" onchange="filterProjectsByDate()">
+            <span style="font-size:12.5px;color:var(--muted)">إلى</span>
+            <input type="date" class="fdate" id="pTo" onchange="filterProjectsByDate()">
+            <button class="chip" onclick="clearProjDate()">مسح</button>
+            <button class="btn" style="margin-inline-start:auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>مشروع جديد</button>
+          </div>
+          <div style="font-size:12.5px;color:var(--muted);margin:-4px 0 16px">اسحب المشاريع في كانبان أو التقويم لإعادة جدولتها · فلتر التواريخ يطبّق على طريقة البطاقات.</div>
+
+          <!-- Cards view -->
+          <div class="pview" id="v-cards">
+            <div class="sec-head"><h2>ملخص المشاريع</h2><span class="more">اضغط أي صف للتفاصيل</span></div>
+            <div class="card" style="padding:6px 0;overflow-x:auto;margin-bottom:20px">
+              <table>
+                <thead><tr><th>المشروع</th><th>العميل</th><th>الحي</th><th>الحالة</th><th>سعر البيع</th><th>التقدّم</th></tr></thead>
+                <tbody>
+                  <tr class="clickable" data-date="2026-07-01" onclick="openProject()"><td class="nm">تنظيم دواليب</td><td>نورة العتيبي</td><td>النرجس</td><td><span class="pill p-prog">قيد التنفيذ</span></td><td>3,200<svg class="ryl"><use href="#ryl"></use></svg></td><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:70px;height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:65%;background:var(--green);border-radius:6px"></span></span>65%</span></td></tr>
+                  <tr class="clickable" data-date="2026-06-20" onclick="openProject()"><td class="nm">تنظيم مطبخ كامل</td><td>عبدالله الشهري</td><td>الملقا</td><td><span class="pill p-done">مكتمل</span></td><td>4,800<svg class="ryl"><use href="#ryl"></use></svg></td><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:70px;height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:100%;background:var(--green);border-radius:6px"></span></span>100%</span></td></tr>
+                  <tr class="clickable" data-date="2026-07-07" onclick="openProject()"><td class="nm">باكج نقل وتغليف</td><td>ريم القحطاني</td><td>الياسمين</td><td><span class="pill p-quote">عرض سعر</span></td><td>6,500<svg class="ryl"><use href="#ryl"></use></svg></td><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:70px;height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:10%;background:var(--green);border-radius:6px"></span></span>10%</span></td></tr>
+                  <tr class="clickable" data-date="2026-07-09" onclick="openProject()"><td class="nm">غرفة أطفال</td><td>سارة المطيري</td><td>قرطبة</td><td><span class="pill p-prog">قيد التنفيذ</span></td><td>2,400<svg class="ryl"><use href="#ryl"></use></svg></td><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:70px;height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:40%;background:var(--green);border-radius:6px"></span></span>40%</span></td></tr>
+                  <tr class="clickable" data-date="2026-06-15" onclick="openProject()"><td class="nm">تنظيم مكتب</td><td>فهد الدوسري</td><td>العليا</td><td><span class="pill p-done">مكتمل</span></td><td>3,900<svg class="ryl"><use href="#ryl"></use></svg></td><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:70px;height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:100%;background:var(--green);border-radius:6px"></span></span>100%</span></td></tr>
+                  <tr class="clickable" data-date="2026-07-04" onclick="openProject()"><td class="nm">تخزين مخصص</td><td>منيرة السبيعي</td><td>الملقا</td><td><span class="pill p-prog">قيد التنفيذ</span></td><td>5,200<svg class="ryl"><use href="#ryl"></use></svg></td><td><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:70px;height:6px;background:var(--surface-2);border-radius:6px;overflow:hidden"><span style="display:block;height:100%;width:75%;background:var(--green);border-radius:6px"></span></span>75%</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pgrid">
+              <div class="pcard" data-date="2026-07-01" onclick="openProject()"><div class="ph"><span class="ba">قبل / بعد</span><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 14l4-4 4 4 4-5 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></div><div class="pb"><h3>تنظيم دواليب</h3><div class="cl">نورة العتيبي · النرجس</div><div class="row"><span class="pill p-prog">قيد التنفيذ</span><span class="price">3,200<svg class="ryl"><use href="#ryl"></use></svg></span></div><div class="prog"><i style="width:65%"></i></div></div></div>
+              <div class="pcard" data-date="2026-06-20" onclick="openProject()"><div class="ph"><span class="ba">قبل / بعد</span><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 14l4-4 4 4 4-5 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></div><div class="pb"><h3>تنظيم مطبخ كامل</h3><div class="cl">عبدالله الشهري · الملقا</div><div class="row"><span class="pill p-done">مكتمل</span><span class="price">4,800<svg class="ryl"><use href="#ryl"></use></svg></span></div><div class="prog"><i style="width:100%"></i></div></div></div>
+              <div class="pcard" data-date="2026-07-07" onclick="openProject()"><div class="ph"><span class="ba">عرض سعر</span><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 14l4-4 4 4 4-5 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></div><div class="pb"><h3>باكج نقل وتغليف</h3><div class="cl">ريم القحطاني · الياسمين</div><div class="row"><span class="pill p-quote">عرض سعر</span><span class="price">6,500<svg class="ryl"><use href="#ryl"></use></svg></span></div><div class="prog"><i style="width:10%"></i></div></div></div>
+              <div class="pcard" data-date="2026-07-09" onclick="openProject()"><div class="ph"><span class="ba">قبل / بعد</span><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 14l4-4 4 4 4-5 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></div><div class="pb"><h3>غرفة أطفال</h3><div class="cl">سارة المطيري · قرطبة</div><div class="row"><span class="pill p-prog">قيد التنفيذ</span><span class="price">2,400<svg class="ryl"><use href="#ryl"></use></svg></span></div><div class="prog"><i style="width:40%"></i></div></div></div>
+              <div class="pcard" data-date="2026-06-15" onclick="openProject()"><div class="ph"><span class="ba">قبل / بعد</span><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 14l4-4 4 4 4-5 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></div><div class="pb"><h3>تنظيم مكتب</h3><div class="cl">فهد الدوسري · العليا</div><div class="row"><span class="pill p-done">مكتمل</span><span class="price">3,900<svg class="ryl"><use href="#ryl"></use></svg></span></div><div class="prog"><i style="width:100%"></i></div></div></div>
+              <div class="pcard" data-date="2026-07-04" onclick="openProject()"><div class="ph"><span class="ba">قبل / بعد</span><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 14l4-4 4 4 4-5 4 4"/><circle cx="9" cy="9" r="1.4"/></svg></div><div class="pb"><h3>تخزين مخصص</h3><div class="cl">منيرة السبيعي · الملقا</div><div class="row"><span class="pill p-prog">قيد التنفيذ</span><span class="price">5,200<svg class="ryl"><use href="#ryl"></use></svg></span></div><div class="prog"><i style="width:75%"></i></div></div></div>
+            </div>
+          </div>
+
+          <!-- Kanban view -->
+          <div class="pview" id="v-kanban" style="display:none">
+            <div class="kanban">
+              <div class="kcol" ondragover="allowDrop(event,this)" ondragleave="leaveDrop(this)" ondrop="drop(event,this)">
+                <div class="kh">قيد التجهيز<span class="kc">2</span></div>
+                <div class="kbody">
+                  <div class="kcard" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="openProject(event)"><h4>باكج نقل وتغليف</h4><div class="km">ريم القحطاني · مشرف سلطان</div><div class="kf"><span class="chk">☑ 1 / 4 مهام</span><span class="kp">6,500<svg class="ryl"><use href="#ryl"></use></svg></span></div></div>
+                  <div class="kcard" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="openProject(event)"><h4>تنظيم مكتب</h4><div class="km">فهد الدوسري · مشرف نواف</div><div class="kf"><span class="chk">☑ 0 / 3 مهام</span><span class="kp">3,900<svg class="ryl"><use href="#ryl"></use></svg></span></div></div>
+                </div>
+              </div>
+              <div class="kcol" ondragover="allowDrop(event,this)" ondragleave="leaveDrop(this)" ondrop="drop(event,this)">
+                <div class="kh">جاري التنفيذ<span class="kc">3</span></div>
+                <div class="kbody">
+                  <div class="kcard" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="openProject(event)"><h4>تنظيم دواليب</h4><div class="km">نورة العتيبي · مشرف سلطان</div><div class="kf"><span class="chk">☑ 3 / 4 مهام</span><span class="kp">3,200<svg class="ryl"><use href="#ryl"></use></svg></span></div></div>
+                  <div class="kcard" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="openProject(event)"><h4>غرفة أطفال</h4><div class="km">سارة المطيري · مشرف نواف</div><div class="kf"><span class="chk">☑ 2 / 5 مهام</span><span class="kp">2,400<svg class="ryl"><use href="#ryl"></use></svg></span></div></div>
+                  <div class="kcard" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="openProject(event)"><h4>تخزين مخصص</h4><div class="km">منيرة السبيعي · مشرف سلطان</div><div class="kf"><span class="chk">☑ 3 / 4 مهام</span><span class="kp">5,200<svg class="ryl"><use href="#ryl"></use></svg></span></div></div>
+                </div>
+              </div>
+              <div class="kcol" ondragover="allowDrop(event,this)" ondragleave="leaveDrop(this)" ondrop="drop(event,this)">
+                <div class="kh">تم التسليم<span class="kc">2</span></div>
+                <div class="kbody">
+                  <div class="kcard" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="openProject(event)"><h4>تنظيم مطبخ كامل</h4><div class="km">عبدالله الشهري · مشرف سلطان</div><div class="kf"><span class="chk">☑ 4 / 4 مهام</span><span class="kp">4,800<svg class="ryl"><use href="#ryl"></use></svg></span></div></div>
+                  <div class="kcard" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)" onclick="openProject(event)"><h4>تنظيم مكتب فهد</h4><div class="km">فهد الدوسري · مشرف نواف</div><div class="kf"><span class="chk">☑ 3 / 3 مهام</span><span class="kp">3,900<svg class="ryl"><use href="#ryl"></use></svg></span></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Calendar view -->
+          <div class="pview" id="v-calendar" style="display:none">
+            <div class="card">
+              <div class="calhead"><h3>يوليو 2026</h3><span style="font-size:12.5px;color:var(--muted)">مواعيد التسليم والزيارات</span></div>
+              <div class="cal-week"><div>الأحد</div><div>الإثنين</div><div>الثلاثاء</div><div>الأربعاء</div><div>الخميس</div><div>الجمعة</div><div>السبت</div></div>
+              <div class="cal-grid" id="cal"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Project detail -->
+        <div id="project-detail" style="display:none">
+          <div class="backlink" onclick="backProject()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>كل المشاريع</div>
+          <div class="profhead">
+            <div class="pav" style="border-radius:14px">📋</div>
+            <div><h2>تنظيم دواليب</h2><div class="meta"><span style="color:var(--muted);font-size:13px">نورة العتيبي · النرجس · TRT-014</span><span class="pill p-prog">قيد التنفيذ</span></div></div>
+            <div class="actions"><button class="btn sm ghost">تعديل</button><button class="btn sm" onclick="go('cost')">عرض التكلفة</button></div>
+          </div>
+          <div class="statstrip">
+            <div class="st"><div class="stv">3,200<svg class="ryl"><use href="#ryl"></use></svg></div><div class="stl">سعر البيع</div></div>
+            <div class="st"><div class="stv">1,750<svg class="ryl"><use href="#ryl"></use></svg></div><div class="stl">التكلفة</div></div>
+            <div class="st"><div class="stv" style="color:var(--pos)">1,450<svg class="ryl"><use href="#ryl"></use></svg></div><div class="stl">صافي الربح</div></div>
+            <div class="st"><div class="stv">45%</div><div class="stl">هامش الربح</div></div>
+            <div class="st"><div class="stv">1 يوليو</div><div class="stl">موعد التسليم</div></div>
+          </div>
+          <div class="prof-cols">
+            <div style="display:flex;flex-direction:column;gap:16px">
+              <div class="card">
+                <div class="sec-head"><h2>توثيق بصري · قبل / بعد</h2></div>
+                <div class="gal">
+                  <div class="galt"><span>قبل</span>📷</div>
+                  <div class="galt"><span>قبل</span>📷</div>
+                  <div class="galt" style="background:var(--pos-bg);color:var(--pos)"><span>بعد</span>✓</div>
+                </div>
+                <div class="note" style="text-align:start">ترفع الصور مباشرة من كاميرا الجوال وتُربط بالمشروع.</div>
+              </div>
+              <div class="card">
+                <div class="sec-head"><h2>مهام التنفيذ</h2><span class="more">3 / 4 مكتملة</span></div>
+                <div class="task done" onclick="this.classList.toggle('done')"><div class="box">✓</div><span class="tx">فرز وتصنيف الملابس</span></div>
+                <div class="task done" onclick="this.classList.toggle('done')"><div class="box">✓</div><span class="tx">طي وترتيب حسب الفئة</span></div>
+                <div class="task done" onclick="this.classList.toggle('done')"><div class="box">✓</div><span class="tx">تركيب الفواصل والمنظمات</span></div>
+                <div class="task" onclick="this.classList.toggle('done')"><div class="box">✓</div><span class="tx">التنظيم النهائي والتسليم</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="sec-head"><h2>تفاصيل المشروع</h2></div>
+              <div class="drow"><span class="dk">العميل</span><span>نورة العتيبي</span></div>
+              <div class="drow"><span class="dk">الحي</span><span>النرجس</span></div>
+              <div class="drow"><span class="dk">نوع الخدمة</span><span>تنظيم دواليب</span></div>
+              <div class="drow"><span class="dk">المشرف</span><span>سلطان</span></div>
+              <div class="drow"><span class="dk">الفريق</span><span>3 أفراد</span></div>
+              <div class="drow"><span class="dk">تاريخ البدء</span><span>26 يونيو 2026</span></div>
+              <div class="drow"><span class="dk">التسليم المتوقع</span><span>1 يوليو 2026</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cost -->
+      <section class="screen" id="cost">
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <div class="searchwrap" style="flex:1;min-width:240px;position:relative">
+              <div class="fsearch" style="margin-bottom:0">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+                <input id="costSearch" autocomplete="off" oninput="filterCostProjects()" placeholder="اكتب اسم المشروع أو العميل لإضافة تكاليفه...">
+              </div>
+              <div id="costResults" class="ac">
+                <div class="presult" data-name="تنظيم دواليب نورة العتيبي" onclick="pickCostProject('تنظيم دواليب','نورة العتيبي','3,200')"><span>تنظيم دواليب · نورة العتيبي</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="تنظيم غرفة ملابس نورة العتيبي" onclick="pickCostProject('تنظيم غرفة ملابس','نورة العتيبي','2,800')"><span>تنظيم غرفة ملابس · نورة العتيبي</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="استشارة تنظيم منزلي نورة العتيبي" onclick="pickCostProject('استشارة تنظيم منزلي','نورة العتيبي','3,400')"><span>استشارة تنظيم منزلي · نورة العتيبي</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="تنظيم مطبخ كامل عبدالله الشهري" onclick="pickCostProject('تنظيم مطبخ كامل','عبدالله الشهري','4,800')"><span>تنظيم مطبخ كامل · عبدالله الشهري</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="تنظيم مكتب منزلي عبدالله الشهري" onclick="pickCostProject('تنظيم مكتب منزلي','عبدالله الشهري','2,600')"><span>تنظيم مكتب منزلي · عبدالله الشهري</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="باكج نقل وتغليف ريم القحطاني" onclick="pickCostProject('باكج نقل وتغليف','ريم القحطاني','6,500')"><span>باكج نقل وتغليف · ريم القحطاني</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="غرفة أطفال سارة المطيري" onclick="pickCostProject('غرفة أطفال','سارة المطيري','2,400')"><span>غرفة أطفال · سارة المطيري</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="تنظيم مكتب فهد الدوسري" onclick="pickCostProject('تنظيم مكتب','فهد الدوسري','3,900')"><span>تنظيم مكتب · فهد الدوسري</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="تنظيم مستودع فهد الدوسري" onclick="pickCostProject('تنظيم مستودع','فهد الدوسري','4,100')"><span>تنظيم مستودع · فهد الدوسري</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="تخزين مخصص منيرة السبيعي" onclick="pickCostProject('تخزين مخصص','منيرة السبيعي','5,200')"><span>تخزين مخصص · منيرة السبيعي</span><span class="pa">اختيار +</span></div>
+                <div class="presult" data-name="تنظيم دواليب منيرة السبيعي" onclick="pickCostProject('تنظيم دواليب','منيرة السبيعي','3,000')"><span>تنظيم دواليب · منيرة السبيعي</span><span class="pa">اختيار +</span></div>
+                <div class="presult empty" style="display:none;color:var(--muted);cursor:default">لا يوجد مشروع مطابق</div>
+              </div>
+            </div>
+            <select class="fselect" onchange="onCostSelect(this)">
+              <option value="">— أو اختر من القائمة —</option>
+              <optgroup label="نورة العتيبي">
+                <option data-c="نورة العتيبي" data-p="3,200">تنظيم دواليب</option>
+                <option data-c="نورة العتيبي" data-p="2,800">تنظيم غرفة ملابس</option>
+                <option data-c="نورة العتيبي" data-p="3,400">استشارة تنظيم منزلي</option>
+              </optgroup>
+              <optgroup label="عبدالله الشهري">
+                <option data-c="عبدالله الشهري" data-p="4,800">تنظيم مطبخ كامل</option>
+                <option data-c="عبدالله الشهري" data-p="2,600">تنظيم مكتب منزلي</option>
+              </optgroup>
+              <optgroup label="ريم القحطاني">
+                <option data-c="ريم القحطاني" data-p="6,500">باكج نقل وتغليف</option>
+              </optgroup>
+              <optgroup label="سارة المطيري">
+                <option data-c="سارة المطيري" data-p="2,400">غرفة أطفال</option>
+              </optgroup>
+              <optgroup label="فهد الدوسري">
+                <option data-c="فهد الدوسري" data-p="3,900">تنظيم مكتب</option>
+                <option data-c="فهد الدوسري" data-p="4,100">تنظيم مستودع</option>
+              </optgroup>
+              <optgroup label="منيرة السبيعي">
+                <option data-c="منيرة السبيعي" data-p="5,200">تخزين مخصص</option>
+                <option data-c="منيرة السبيعي" data-p="3,000">تنظيم دواليب</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div><div class="uid">مشروع · <span id="costPid">TRT-021-P2</span></div><h2 id="costName" style="font-family:var(--display);font-size:18px;font-weight:600">تنظيم مطبخ كامل · عبدالله الشهري</h2></div>
+          <div style="margin-inline-start:auto;text-align:start"><div class="uid">سعر البيع</div><div style="font-family:var(--display);font-size:22px;font-weight:600"><span id="costPrice">4,800</span><svg class="ryl"><use href="#ryl"></use></svg></div></div>
+        </div>
+        <div class="costwrap">
+          <div class="card">
+            <div class="sec-head"><h2>تفصيل التكاليف</h2><button class="btn ghost sm" style="margin-inline-start:auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>بند</button></div>
+            <div class="cost-line"><div class="lft"><div class="ic">👤</div>أجور عمالة</div><b id="clLabor">—</b></div>
+            <div class="cost-line"><div class="lft"><div class="ic">📦</div>مواد ومنظمات</div><b id="clMaterials">—</b></div>
+            <div class="cost-line"><div class="lft"><div class="ic">🚚</div>مواصلات ونقل</div><b id="clTransport">—</b></div>
+            <div class="cost-line"><div class="lft"><div class="ic">⭐</div>مكافأة المشرف</div><b id="clBonus">—</b></div>
+            <div class="cost-line" style="border-bottom:0;font-weight:600"><div class="lft" style="margin-inline-start:41px">إجمالي التكلفة</div><b id="clTotal" style="color:var(--neg)">—</b></div>
+          </div>
+          <div>
+            <div class="result">
+              <div class="mg">صافي ربح المشروع</div>
+              <div class="big"><span id="costProfit">—</span><svg class="ryl" style="width:.55em;height:.55em"><use href="#ryl"></use></svg></div>
+              <div class="mg" id="costMargin">—</div>
+            </div>
+            <div class="card waterfall" style="margin-top:16px">
+              <div class="wf"><span class="wl">سعر البيع</span><div class="wbar" id="wfSale" style="width:100%;background:var(--sage)">—</div></div>
+              <div class="wf"><span class="wl">التكلفة</span><div class="wbar" id="wfCost" style="background:var(--neg)">—</div></div>
+              <div class="wf"><span class="wl">صافي الربح</span><div class="wbar" id="wfProfit" style="background:var(--green)">—</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Warehouse -->
+      <section class="screen" id="warehouse">
+        <div class="toolbar">
+          <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>صنف جديد</button>
+          <button class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M11 5v14M15 9v6M19 5v14"/></svg>جرد بالباركود</button>
+          <span class="more" style="margin-inline-start:auto">3 أصناف منخفضة</span>
+        </div>
+        <div class="fbar">
+          <span style="font-size:12.5px;color:var(--muted)">المستودع:</span>
+          <div class="chip wh active" data-wh="all" onclick="filterWh(this)">الكل</div>
+          <div class="chip wh" data-wh="dalal" onclick="filterWh(this)">مستودع دلال</div>
+          <div class="chip wh" data-wh="rageed" onclick="filterWh(this)">مستودع رغيد</div>
+          <div class="chip wh" data-wh="riyadh" onclick="filterWh(this)">مستودع الرياض</div>
+          <span class="fdivider"></span>
+          <span style="font-size:12.5px;color:var(--muted)">الفئة:</span>
+          <div class="chip cat active" data-cat="all" onclick="filterCat(this)">الكل</div>
+          <div class="chip cat" data-cat="storage" onclick="filterCat(this)">تخزين</div>
+          <div class="chip cat" data-cat="organizers" onclick="filterCat(this)">منظمات</div>
+          <div class="chip cat" data-cat="tools" onclick="filterCat(this)">أدوات</div>
+        </div>
+        <div class="card" style="padding:6px 0;overflow-x:auto">
+          <table id="whTable">
+            <thead><tr><th>الباركود</th><th>اسم الصنف</th><th>الفئة</th><th>الوحدة</th><th>الكمية</th><th>سعر الوحدة</th><th>القيمة الإجمالية</th><th>المورّد</th><th>المستودع</th></tr></thead>
+            <tbody>
+              <tr data-wh="riyadh" data-cat="storage"><td class="uid">6286045022045</td><td class="nm">علبة ببسي</td><td><span class="src">تخزين</span></td><td>قطعة</td><td style="font-weight:600">1</td><td><span class="amt">44<svg class="ryl"><use href="#ryl"></use></svg></span></td><td style="font-weight:600"><span class="amt">44<svg class="ryl"><use href="#ryl"></use></svg></span></td><td><span class="sup"><span class="lg" style="background:#111">SH</span>شي إنشي إن</span></td><td>مستودع الرياض</td></tr>
+              <tr data-wh="dalal" data-cat="organizers" class="lowrow"><td class="uid">7501032901234</td><td class="nm">فاصل أدراج خشبي</td><td><span class="src">منظمات</span></td><td>قطعة</td><td style="font-weight:600"><span style="color:var(--neg);font-weight:700">⚠ </span>4</td><td><span class="amt">22<svg class="ryl"><use href="#ryl"></use></svg></span></td><td style="font-weight:600"><span class="amt">88<svg class="ryl"><use href="#ryl"></use></svg></span></td><td><span class="sup"><span class="lg" style="background:var(--green)">د</span>مؤسسة الديار</span></td><td>مستودع دلال</td></tr>
+              <tr data-wh="rageed" data-cat="storage"><td class="uid">6291100640021</td><td class="nm">صناديق تخزين شفافة</td><td><span class="src">تخزين</span></td><td>قطعة</td><td style="font-weight:600">38</td><td><span class="amt">18<svg class="ryl"><use href="#ryl"></use></svg></span></td><td style="font-weight:600"><span class="amt">684<svg class="ryl"><use href="#ryl"></use></svg></span></td><td><span class="sup"><span class="lg" style="background:var(--gold)">م</span>متجر المنظّم</span></td><td>مستودع رغيد</td></tr>
+              <tr data-wh="dalal" data-cat="organizers" class="lowrow"><td class="uid">8901234560019</td><td class="nm">منظّم أحذية معدني</td><td><span class="src">منظمات</span></td><td>قطعة</td><td style="font-weight:600"><span style="color:var(--neg);font-weight:700">⚠ </span>6</td><td><span class="amt">45<svg class="ryl"><use href="#ryl"></use></svg></span></td><td style="font-weight:600"><span class="amt">270<svg class="ryl"><use href="#ryl"></use></svg></span></td><td><span class="sup"><span class="lg" style="background:var(--green)">د</span>مؤسسة الديار</span></td><td>مستودع دلال</td></tr>
+              <tr data-wh="riyadh" data-cat="tools"><td class="uid">6281007030146</td><td class="nm">ملصقات تصنيف لاصقة</td><td><span class="src">أدوات</span></td><td>علبة</td><td style="font-weight:600">120</td><td><span class="amt">3<svg class="ryl"><use href="#ryl"></use></svg></span></td><td style="font-weight:600"><span class="amt">360<svg class="ryl"><use href="#ryl"></use></svg></span></td><td><span class="sup"><span class="lg" style="background:var(--neg)">ج</span>مكتبة جرير</span></td><td>مستودع الرياض</td></tr>
+              <tr data-wh="rageed" data-cat="tools" class="lowrow"><td class="uid">6291100777050</td><td class="nm">حامل أكياس قمامة</td><td><span class="src">أدوات</span></td><td>قطعة</td><td style="font-weight:600"><span style="color:var(--neg);font-weight:700">⚠ </span>9</td><td><span class="amt">12<svg class="ryl"><use href="#ryl"></use></svg></span></td><td style="font-weight:600"><span class="amt">108<svg class="ryl"><use href="#ryl"></use></svg></span></td><td><span class="sup"><span class="lg" style="background:var(--gold)">م</span>متجر المنظّم</span></td><td>مستودع رغيد</td></tr>
+              <tr data-wh="rageed" data-cat="organizers"><td class="uid">6291100888061</td><td class="nm">فواصل خزائن قماشية</td><td><span class="src">منظمات</span></td><td>قطعة</td><td style="font-weight:600">24</td><td><span class="amt">28<svg class="ryl"><use href="#ryl"></use></svg></span></td><td style="font-weight:600"><span class="amt">672<svg class="ryl"><use href="#ryl"></use></svg></span></td><td><span class="sup"><span class="lg" style="background:var(--gold)">م</span>متجر المنظّم</span></td><td>مستودع رغيد</td></tr>
+            </tbody>
+            <tfoot><tr><td colspan="6" style="text-align:end;font-weight:600;color:var(--muted)">إجمالي قيمة المخزون</td><td style="font-weight:700"><span class="amt">2,226<svg class="ryl"><use href="#ryl"></use></svg></span></td><td colspan="2"></td></tr></tfoot>
+          </table>
+        </div>
+      </section>
+
+      <!-- Heatmap -->
+      <section class="screen" id="heatmap">
+        <div class="sec-head"><h2>كثافة الطلبات حسب أحياء الرياض</h2><span class="more">آخر 6 أشهر</span></div>
+        <div class="hmwrap">
+          <div class="card">
+            <div class="hmgrid">
+              <div class="htile" style="background:var(--green);color:#fff"><div class="hn">السليمانية</div><div><div class="hv">24 طلب</div><div class="hr">86,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:var(--green);color:#fff"><div class="hn">الملقا</div><div><div class="hv">19 طلب</div><div class="hr">72,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:#4C8068;color:#fff"><div class="hn">العليا</div><div><div class="hv">17 طلب</div><div class="hr">61,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:var(--sage);color:#1f3b30"><div class="hn">النرجس</div><div><div class="hv">15 طلب</div><div class="hr">54,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:var(--sage);color:#1f3b30"><div class="hn">الياسمين</div><div><div class="hv">12 طلب</div><div class="hr">43,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:#A7CCB8;color:#1f3b30"><div class="hn">قرطبة</div><div><div class="hv">9 طلبات</div><div class="hr">31,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:#A7CCB8;color:#1f3b30"><div class="hn">حطين</div><div><div class="hv">8 طلبات</div><div class="hr">29,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:var(--sage-bg);color:var(--muted)"><div class="hn">الصحافة</div><div><div class="hv">7 طلبات</div><div class="hr">24,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:var(--sage-bg);color:var(--muted)"><div class="hn">الربيع</div><div><div class="hv">6 طلبات</div><div class="hr">20,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:var(--surface-2);color:var(--faint)"><div class="hn">العقيق</div><div><div class="hv">5 طلبات</div><div class="hr">17,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:var(--surface-2);color:var(--faint)"><div class="hn">الورود</div><div><div class="hv">4 طلبات</div><div class="hr">13,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+              <div class="htile" style="background:var(--surface-2);color:var(--faint)"><div class="hn">المروج</div><div><div class="hv">3 طلبات</div><div class="hr">9,000<svg class="ryl"><use href="#ryl"></use></svg></div></div></div>
+            </div>
+            <div class="legend">قليل<span class="sw"><i style="background:var(--surface-2)"></i><i style="background:var(--sage-bg)"></i><i style="background:#A7CCB8"></i><i style="background:var(--sage)"></i><i style="background:#4C8068"></i><i style="background:var(--green)"></i></span>كثيف</div>
+          </div>
+          <div class="card" style="height:fit-content">
+            <div class="sec-head"><h2>أين تصرف ميزانية الإعلان؟</h2></div>
+            <p style="font-size:13.5px;color:var(--muted);line-height:1.8">أعلى كثافة طلبات في <b style="color:var(--green)">السليمانية والملقا</b>، وجّه حملات انستقرام المدفوعة لهذه الأحياء.</p>
+            <p style="font-size:13.5px;color:var(--muted);line-height:1.8;margin-top:10px"><b style="color:var(--gold)">حطين والصحافة</b> طلب صاعد بهامش ربح أعلى، فرصة توسّع.</p>
+            <div class="note" style="text-align:start;margin-top:14px">تتصل بـ Google Maps في النسخة الفعلية لعرض خريطة جغرافية حيّة بدل الشبكة.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Invoices -->
+      <section class="screen" id="invoices">
+        <div class="sec-head" style="margin-bottom:18px"><button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>فاتورة جديدة</button><span class="more" style="margin-inline-start:auto">معاينة الفاتورة الضريبية</span></div>
+        <div class="invoice-actions">
+          <button class="btn ghost" onclick="printInvoice()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg>طباعة / حفظ PDF</button>
+          <button class="btn" onclick="sendInvoiceWhatsApp()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12a8 8 0 1 1 3 6l-3 1 1-3a8 8 0 0 1-1-4Z"/></svg>إرسال نسخة PDF عبر واتساب</button>
+        </div>
+        <div class="invoice">
+          <div class="inv-top">
+            <div><div class="tag">فاتورة ضريبية</div><div class="sub">ترتيب لتنظيم المساحات · الرقم الضريبي 300123456700003</div></div>
+            <div class="qr"><svg viewBox="0 0 24 24" fill="currentColor" style="color:var(--pine)"><path d="M3 3h7v7H3V3zm2 2v3h3V5H5zm9-2h7v7h-7V3zm2 2v3h3V5h-3zM3 14h7v7H3v-7zm2 2v3h3v-3H5zm9 0h2v2h-2v-2zm2 2h2v2h-2v-2zm-2 2h2v2h-2v-2zm4 0h3v3h-3v-3zm0-4h3v2h-3v-2z"/></svg></div>
+          </div>
+          <div class="inv-meta">
+            <div><div class="k">رقم الفاتورة</div>#1058</div>
+            <div><div class="k">التاريخ</div>29 يونيو 2026</div>
+            <div><div class="k">العميل</div>عبدالله الشهري</div>
+            <div><div class="k">المشروع</div>تنظيم مطبخ كامل</div>
+          </div>
+          <table>
+            <thead><tr><th>البند</th><th>الكمية</th><th style="text-align:start">السعر</th></tr></thead>
+            <tbody>
+              <tr><td>تنظيم وتقسيم مطبخ كامل</td><td>1</td><td style="text-align:start">3,800<svg class="ryl"><use href="#ryl"></use></svg></td></tr>
+              <tr><td>منظمات وفواصل أدراج</td><td>1</td><td style="text-align:start">1,000<svg class="ryl"><use href="#ryl"></use></svg></td></tr>
+            </tbody>
+          </table>
+          <div class="taxbar">
+            <span>تطبيق ضريبة القيمة المضافة (15%)، <b>قابلة للتفعيل حسب العميل</b></span>
+            <div class="toggle" id="taxToggle" onclick="toggleTax()"></div>
+          </div>
+          <div class="inv-tot">
+            <div class="tr"><span>المجموع الفرعي</span><span>4,800<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="tr" id="taxLine"><span>ضريبة القيمة المضافة 15%</span><span>720<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="tr grand"><span>الإجمالي المستحق</span><span id="grand">5,520<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+          </div>
+        </div>
+        <div class="note" style="text-align:start;max-width:660px">ملاحظة: رمز QR هنا توضيحي فقط؛ في النسخة الفعلية يجب توليد QR ضريبي متوافق مع هيئة الزكاة (ZATCA) يحتوي بيانات TLV (اسم البائع، الرقم الضريبي، الوقت، الإجمالي، قيمة الضريبة) مرمّزة Base64 من الخادم. وزر واتساب يفتح رقماً ورسالة توضيحيين، ويُربط بجوال العميل الفعلي وملف PDF عند التطوير.</div>
+      </section>
+
+      <!-- Partners -->
+      <section class="screen" id="partners">
+        <div class="sec-head" style="margin-bottom:18px"><h2 style="font-family:var(--display);font-size:18px">توزيع أرباح يونيو 2026</h2><span class="more" style="margin-inline-start:auto">صافي الربح القابل للتوزيع: 21,650<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+        <div class="ptgrid">
+          <div class="ptcard">
+            <div class="h"><div class="av" style="background:var(--green)">ر</div><div><b>راغد</b><br><small>شريك · 50%</small></div></div>
+            <div class="ln"><span>حصة الأرباح</span><span>10,825<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span>سحوبات الشهر</span><span style="color:var(--neg)">− 4,000<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span>الرصيد المرحّل</span><span>2,300<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span><b>الرصيد الختامي</b></span><span class="bal">9,125<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+          </div>
+          <div class="ptcard">
+            <div class="h"><div class="av" style="background:var(--gold)">س</div><div><b>سلطان</b><br><small>شريك · 30%</small></div></div>
+            <div class="ln"><span>حصة الأرباح</span><span>6,495<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span>سحوبات الشهر</span><span style="color:var(--neg)">− 1,500<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span>الرصيد المرحّل</span><span>900<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span><b>الرصيد الختامي</b></span><span class="bal">5,895<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+          </div>
+          <div class="ptcard">
+            <div class="h"><div class="av" style="background:var(--sage)">ن</div><div><b>نواف</b><br><small>شريك · 20%</small></div></div>
+            <div class="ln"><span>حصة الأرباح</span><span>4,330<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span>سحوبات الشهر</span><span style="color:var(--neg)">− 2,000<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span>الرصيد المرحّل</span><span>450<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+            <div class="ln"><span><b>الرصيد الختامي</b></span><span class="bal">2,780<svg class="ryl"><use href="#ryl"></use></svg></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="sec-head"><h2>توزيع الحصص</h2></div>
+          <div class="srcrow"><span style="width:60px">راغد</span><div class="track"><div class="tf" style="width:50%;background:var(--green)"></div></div><span class="pct">50%</span></div>
+          <div class="srcrow"><span style="width:60px">سلطان</span><div class="track"><div class="tf" style="width:30%;background:var(--gold)"></div></div><span class="pct">30%</span></div>
+          <div class="srcrow"><span style="width:60px">نواف</span><div class="track"><div class="tf" style="width:20%;background:var(--sage)"></div></div><span class="pct">20%</span></div>
+        </div>
+      </section>
+
+      <!-- Unified Inbox -->
+      <section class="screen" id="inbox">
+        <div class="sec-head"><h2>صندوق الوارد الموحّد</h2><span class="pill p-wait">يُربط بالقنوات بعد تطوير الـ Backend</span></div>
+        <div class="inbox">
+          <div class="convlist">
+            <div class="conv active"><div class="ca">ن</div><div><div class="cn">نورة العتيبي <span class="ch ch-wa">واتساب</span></div><div class="cx">تمام، نشوفكم بكرة الساعة 11</div></div><span class="ct">9:42 ص</span></div>
+            <div class="conv"><div class="ca">ر</div><div><div class="cn">ريم القحطاني <span class="ch ch-tg">تيليجرام</span></div><div class="cx">حابة أعرف تفاصيل باكج النقل</div></div><span class="ct">أمس</span></div>
+            <div class="conv"><div class="ca">ع</div><div><div class="cn">عبدالله الشهري <span class="ch ch-ml">بريد</span></div><div class="cx">وصلتني الفاتورة، شكراً لكم</div></div><span class="ct">أمس</span></div>
+            <div class="conv"><div class="ca">س</div><div><div class="cn">سارة المطيري <span class="ch ch-wa">واتساب</span></div><div class="cx">ممكن نأجل الزيارة ليوم الأحد؟</div></div><span class="ct">السبت</span></div>
+          </div>
+          <div class="thread">
+            <div class="th-h"><div class="ca" style="width:40px;height:40px;border-radius:50%;background:var(--sage-bg);color:var(--green);display:grid;place-items:center;font-weight:600">ن</div><div><b>نورة العتيبي</b><br><small>النرجس · عميل نشط · مشروع: تنظيم دواليب</small></div></div>
+            <div class="tl">
+              <div class="daysep">الإثنين 29 يونيو</div>
+              <div class="msg in"><div class="bub">السلام عليكم، أبي أعرف موعد الفريق بكرة</div><div class="meta"><span class="ch ch-wa">واتساب</span> 9:15 ص</div></div>
+              <div class="msg out"><div class="bub">وعليكم السلام نورة، الفريق بيكون عندكم الساعة 11 صباحاً بإذن الله</div><div class="meta">راغد · 9:38 ص ✓✓</div></div>
+              <div class="msg in"><div class="bub">تمام، نشوفكم بكرة الساعة 11</div><div class="meta"><span class="ch ch-wa">واتساب</span> 9:42 ص</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="note">سجل 360 درجة لكل عميل متاح أيضاً داخل ملفه في قسم العملاء</div>
+      </section>
+
+      <!-- Employees -->
+      <section class="screen" id="employees">
+        <div class="sec-head" style="margin-bottom:18px">
+          <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>موظف جديد</button>
+          <span class="more" style="margin-inline-start:auto">6 موظفين</span>
+        </div>
+        <div class="empgrid">
+          <div class="empcard">
+            <div class="top"><div class="pic" style="background:var(--green)">س<span class="cam">📷</span></div><div><h3>سلطان القحطاني</h3><div class="role">مشرف عام</div></div></div>
+            <div class="erow"><span>الجوال</span><b>055 220 1180</b></div>
+            <div class="erow"><span>الحالة</span><span class="pill p-done">على رأس العمل</span></div>
+            <div class="docs"><span class="doc ok">🪪 الهوية الوطنية</span><span class="doc ok">📄 العقد</span><span class="doc ok">🩺 الشهادة الصحية</span><label class="attach"><input type="file" hidden onchange="attachDoc(this)">＋ إرفاق</label></div>
+          </div>
+          <div class="empcard">
+            <div class="top"><div class="pic" style="background:var(--gold)">ن<span class="cam">📷</span></div><div><h3>نواف العتيبي</h3><div class="role">مشرف ميداني</div></div></div>
+            <div class="erow"><span>الجوال</span><b>050 661 4420</b></div>
+            <div class="erow"><span>الحالة</span><span class="pill p-done">على رأس العمل</span></div>
+            <div class="docs"><span class="doc ok">🪪 الهوية الوطنية</span><span class="doc ok">📄 العقد</span><span class="doc warn">🩺 شهادة صحية تنتهي قريباً</span><label class="attach"><input type="file" hidden onchange="attachDoc(this)">＋ إرفاق</label></div>
+          </div>
+          <div class="empcard">
+            <div class="top"><div class="pic" style="background:#3d6b58">م<span class="cam">📷</span></div><div><h3>ماجد رحمان</h3><div class="role">فني تنظيم</div></div></div>
+            <div class="erow"><span>الجوال</span><b>054 778 9012</b></div>
+            <div class="erow"><span>الحالة</span><span class="pill p-done">على رأس العمل</span></div>
+            <div class="docs"><span class="doc ok">🪪 الإقامة</span><span class="doc ok">📄 العقد</span><span class="doc ok">🩺 الشهادة الصحية</span><label class="attach"><input type="file" hidden onchange="attachDoc(this)">＋ إرفاق</label></div>
+          </div>
+          <div class="empcard">
+            <div class="top"><div class="pic" style="background:var(--pine)">ع<span class="cam">📷</span></div><div><h3>عمر فاروق</h3><div class="role">فني تنظيم</div></div></div>
+            <div class="erow"><span>الجوال</span><b>056 334 5567</b></div>
+            <div class="erow"><span>الحالة</span><span class="pill p-prog">في مشروع</span></div>
+            <div class="docs"><span class="doc warn">🪪 إقامة تنتهي قريباً</span><span class="doc ok">📄 العقد</span><label class="attach"><input type="file" hidden onchange="attachDoc(this)">＋ إرفاق</label></div>
+          </div>
+          <div class="empcard">
+            <div class="top"><div class="pic" style="background:#4C8068">ر<span class="cam">📷</span></div><div><h3>ريان السهلي</h3><div class="role">سائق ومساعد</div></div></div>
+            <div class="erow"><span>الجوال</span><b>053 909 7781</b></div>
+            <div class="erow"><span>الحالة</span><span class="pill p-done">على رأس العمل</span></div>
+            <div class="docs"><span class="doc ok">🪪 الهوية الوطنية</span><span class="doc ok">🚗 رخصة القيادة</span><span class="doc ok">📄 العقد</span><label class="attach"><input type="file" hidden onchange="attachDoc(this)">＋ إرفاق</label></div>
+          </div>
+          <div class="empcard">
+            <div class="top"><div class="pic" style="background:var(--neg)">خ<span class="cam">📷</span></div><div><h3>خالد منصور</h3><div class="role">محاسب</div></div></div>
+            <div class="erow"><span>الجوال</span><b>058 112 3390</b></div>
+            <div class="erow"><span>الحالة</span><span class="pill p-done">على رأس العمل</span></div>
+            <div class="docs"><span class="doc ok">🪪 الهوية الوطنية</span><span class="doc ok">📄 العقد</span><label class="attach"><input type="file" hidden onchange="attachDoc(this)">＋ إرفاق</label></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="screen" id="settings">
+        <div class="settabs">
+          <div class="settab active" data-t="company" onclick="settingsTab(this)">معلومات الشركة</div>
+          <div class="settab" data-t="suppliers" onclick="settingsTab(this)">الموردون</div>
+          <div class="settab" data-t="gov" onclick="settingsTab(this)">الجهات الحكومية والرخص</div>
+          <div class="settab" data-t="team" onclick="settingsTab(this)">الفريق والصلاحيات</div>
+        </div>
+
+        <div class="setpanel active" id="t-company">
+          <div class="notebar">هذه البيانات تظهر تلقائياً على الفواتير والمستندات الرسمية.</div>
+          <div class="card">
+            <div class="form-grid">
+              <div class="field"><label>اسم الشركة (عربي)</label><input value="ترتيب لتنظيم المساحات"></div>
+              <div class="field"><label>اسم الشركة (إنجليزي)</label><input value="Tartib Space Organizing" dir="ltr"></div>
+              <div class="field"><label>رقم السجل التجاري</label><input value="1010567890"></div>
+              <div class="field"><label>الرقم الضريبي</label><input value="300123456700003"></div>
+              <div class="field"><label>الرقم الوطني الموحّد</label><input value="7012345678"></div>
+              <div class="field"><label>الرمز التجاري</label><input value="TRTB" dir="ltr"></div>
+              <div class="field"><label>رخصة البلدية</label><input value="4012345678"></div>
+              <div class="field"><label>انتهاء السجل التجاري</label><input type="date" value="2027-03-15"></div>
+              <div class="field"><label>اسم المالك</label><input value="راغد"></div>
+              <div class="field"><label>رأس المال</label><input value="100,000"></div>
+              <div class="field"><label>رقم الهاتف</label><input value="0112345678" dir="ltr"></div>
+              <div class="field"><label>البريد الإلكتروني</label><input value="info@tartib.sa" dir="ltr"></div>
+              <div class="field"><label>المدينة</label><input value="الرياض"></div>
+              <div class="field"><label>الموقع الإلكتروني</label><input value="www.tartib.sa" dir="ltr"></div>
+              <div class="field" style="grid-column:1/-1"><label>العنوان</label><input value="حي النرجس، الرياض"></div>
+            </div>
+            <div style="margin-top:18px"><button class="btn">حفظ التغييرات</button></div>
+          </div>
+        </div>
+
+        <div class="setpanel" id="t-suppliers">
+          <div class="notebar" style="background:var(--sage-bg);border-color:#bcd4c5;color:#2c5347">إدارة الموردين وربطهم بالمنتجات والمستودع.</div>
+          <div class="sec-head" style="margin-bottom:14px"><h2>الموردون</h2><button class="btn" onclick="openSupForm()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>مورّد جديد</button></div>
+          <div id="supForm" class="card" style="display:none;margin-bottom:16px">
+            <h3 id="supFormTitle" style="font-family:var(--display);font-size:15px;font-weight:600;margin-bottom:14px">إضافة مورّد</h3>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr">
+              <div class="field"><label>اسم المورّد</label><input id="supName" placeholder="مثال: مفروشات الراحة"></div>
+              <div class="field"><label>التصنيف</label><select id="supCat" class="fselect" style="min-width:0;width:100%"><option>أخرى</option><option>أثاث ومفروشات</option><option>أدوات ومنظمات</option><option>متجر عام</option><option>إلكترونيات</option></select></div>
+              <div class="field" style="grid-column:1/-1"><label>شعار المورّد (اختياري)</label><div style="display:flex;align-items:center;gap:12px"><span id="supLogoPrev" class="lg" style="width:42px;height:42px;font-size:13px;background:var(--surface-2);color:var(--muted)">؟</span><label class="attach"><input type="file" id="supLogo" accept="image/*" hidden onchange="previewSupLogo(this)">رفع صورة الشعار</label><span id="supLogoName" style="font-size:12px;color:var(--muted)"></span></div></div>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:10px"><button class="btn" onclick="saveSup()">حفظ</button><button class="btn ghost" onclick="closeSupForm()">إلغاء</button></div>
+          </div>
+          <div class="statstrip" style="margin-bottom:16px">
+            <div class="st"><div class="stv" id="supTotal">16</div><div class="stl">إجمالي الموردين</div></div>
+            <div class="st"><div class="stv">0</div><div class="stl">المدن</div></div>
+            <div class="st"><div class="stv">1</div><div class="stl">منتجات مرتبطة</div></div>
+            <div class="st"><div class="stv">1</div><div class="stl">التصنيفات</div></div>
+          </div>
+          <div class="supgrid" id="supGrid">
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--faint)">أخ</span><div style="flex:1;min-width:0"><div class="nm2">أخرى</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:#0058A3">IK</span><div style="flex:1;min-width:0"><div class="nm2">ايكيا</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--pine)">سن</span><div style="flex:1;min-width:0"><div class="nm2">سنتر بوينت</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--green)">هـ</span><div style="flex:1;min-width:0"><div class="nm2">هوم سنتر</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="1"><span class="lg" style="background:#111">SH</span><div style="flex:1;min-width:0"><div class="nm2">شي إن</div><small>أخرى · 1 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--gold)">بح</span><div style="flex:1;min-width:0"><div class="nm2">بحر الأسعار</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:#4C8068">با</span><div style="flex:1;min-width:0"><div class="nm2">الباسم</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--neg)">مك</span><div style="flex:1;min-width:0"><div class="nm2">ماكس</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--sage)">نا</span><div style="flex:1;min-width:0"><div class="nm2">نايس</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:#7c5c1c">جد</span><div style="flex:1;min-width:0"><div class="nm2">جدة لديكور</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:#F58220">تي</span><div style="flex:1;min-width:0"><div class="nm2">تيمو</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--neg)">جر</span><div style="flex:1;min-width:0"><div class="nm2">جرير</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--green)">كي</span><div style="flex:1;min-width:0"><div class="nm2">على كيفك</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:var(--pine)">ما</span><div style="flex:1;min-width:0"><div class="nm2">ماي مارت</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:#FFD400;color:#222">نون</span><div style="flex:1;min-width:0"><div class="nm2">نون</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+            <div class="supcard" data-cat="أخرى" data-count="0"><span class="lg" style="background:#232F3E">AM</span><div style="flex:1;min-width:0"><div class="nm2">امازون</div><small>أخرى · 0 منتج</small></div><div class="supact"><button onclick="editSup(this)" title="تعديل">✎</button><button onclick="delSup(this)" title="حذف">🗑</button></div></div>
+          </div>
+        </div>
+
+        <div class="setpanel" id="t-gov">
+          <div class="notebar">جدول موحّد لحسابات الجهات الحكومية وبيانات الدخول والمستندات وتواريخ الانتهاء. ينبّه النظام قبل 30 يوماً من انتهاء أي رخصة.</div>
+          <div class="card" style="padding:6px 0;overflow-x:auto">
+            <table>
+              <thead><tr><th>#</th><th>الجهة</th><th>الدخول</th><th>اسم المستخدم</th><th>كلمة المرور</th><th>التواصل</th><th>المستندات</th><th>الانتهاء</th><th>الحالة</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td class="nm">البنك</td><td>—</td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>2</td><td class="nm">بلدي</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>3</td><td class="nm">قوى</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>4</td><td class="nm">أبشر أعمال</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>5</td><td class="nm">وزارة الموارد البشرية</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>6</td><td class="nm">مقيم</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>7</td><td class="nm">الدفاع المدني (سلامة)</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>8</td><td class="nm">هيئة الزكاة والضريبة والجمارك</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>9</td><td class="nm">البريد السعودي (سبل)</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>10</td><td class="nm">التأمينات الاجتماعية</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>11</td><td class="nm">الغرفة التجارية</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+                <tr><td>12</td><td class="nm">وزارة التجارة</td><td><span class="link">فتح ↗</span></td><td>—</td><td>—</td><td>—</td><td><span class="link">📎 إرفاق</span></td><td>—</td><td><span class="pill p-wait">غير مكتمل</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="setpanel" id="t-team">
+          <div class="notebar" style="background:var(--sage-bg);border-color:#bcd4c5;color:#2c5347">مستويات الوصول مشتقّة تلقائياً من أدوار الموظفين.</div>
+          <div class="card">
+            <div class="perm"><span class="pr">المدير العام</span><span class="pd">كل الصلاحيات، الإعدادات، حسابات الشركاء، والتقارير المالية</span></div>
+            <div class="perm"><span class="pr">مشرف</span><span class="pd">المشاريع، الفريق، المستودع، والجدولة الميدانية</span></div>
+            <div class="perm"><span class="pr">محاسب</span><span class="pd">الفواتير، تكلفة المشاريع، وحسابات الشركاء</span></div>
+            <div class="perm"><span class="pr">فني تنظيم</span><span class="pd">المهام المسندة إليه والتوثيق البصري فقط</span></div>
+            <div class="perm"><span class="pr">سائق ومساعد</span><span class="pd">الجدول والمهام الميدانية المسندة فقط</span></div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const titles={
+  dash:["لوحة المعلومات","نظرة عامة على الأداء · يونيو 2026"],
+  clients:["العملاء","قاعدة بيانات العملاء وملف 360 درجة"],
+  projects:["المشاريع","بطاقات · كانبان · تقويم"],
+  cost:["تكلفة المشاريع","ابحث عن مشروع وأضف تكاليفه"],
+  warehouse:["المستودع","الأصناف والموردون والمواقع"],
+  heatmap:["الخريطة الحرارية","كثافة الطلبات حسب أحياء الرياض"],
+  invoices:["الفواتير","فواتير ضريبية متوافقة مع هيئة الزكاة"],
+  partners:["حسابات الشركاء","توزيع الأرباح والسحوبات والأرصدة"],
+  inbox:["الوارد الموحّد","كل قنوات التواصل في مكان واحد"],
+  employees:["الموظفون","بطاقات الموظفين ومستنداتهم"],
+  settings:["الإعدادات","بيانات الشركة والموردون والرخص والصلاحيات"]
+};
+function go(s){
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.s===s));
+  document.querySelectorAll('.screen').forEach(sec=>sec.classList.toggle('active',sec.id===s));
+  document.getElementById('ptitle').firstChild.textContent=titles[s][0];
+  document.getElementById('psub').textContent=titles[s][1];
+  backClients();backProject();
+  document.querySelector('.sidebar').classList.remove('open');
+  const sc=document.getElementById('scrim'); if(sc) sc.classList.remove('show');
+  window.scrollTo(0,0);
+}
+function toggleSidebar(){
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('scrim').classList.toggle('show');
+}
+document.querySelectorAll('.nav a').forEach(a=>{
+  a.setAttribute('role','button');a.setAttribute('tabindex','0');
+  a.addEventListener('click',()=>go(a.dataset.s));
+  a.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go(a.dataset.s);}});
+});
+document.querySelectorAll('tr.clickable,.pcard[onclick]').forEach(el=>{
+  el.setAttribute('role','button');el.setAttribute('tabindex','0');
+  el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.click();}});
+});
+
+function openClient(){
+  document.getElementById('clients-list').style.display='none';
+  document.getElementById('client-profile').style.display='block';
+  window.scrollTo(0,0);
+}
+function backClients(){
+  const l=document.getElementById('clients-list'),p=document.getElementById('client-profile');
+  if(l&&p){l.style.display='block';p.style.display='none';}
+}
+
+let taxOn=true;
+function toggleTax(){
+  taxOn=!taxOn;
+  document.getElementById('taxToggle').classList.toggle('off',!taxOn);
+  document.getElementById('taxLine').style.opacity=taxOn?'1':'.35';
+  document.getElementById('grand').innerHTML=(taxOn?'5,520':'4,800')+'<svg class="ryl"><use href="#ryl"></use></svg>';
+}
+
+const today=new Date();today.setHours(0,0,0,0);
+function daysWord(n){
+  if(n<=0) return 'اليوم';
+  if(n===1) return 'غداً';
+  if(n===2) return 'باقي يومان';
+  if(n<=10) return 'باقي '+n+' أيام';
+  return 'باقي '+n+' يوماً';
+}
+document.querySelectorAll('.cdcard').forEach(c=>{
+  const due=new Date(c.dataset.due);
+  const n=Math.round((due-today)/86400000);
+  const ring=c.querySelector('.ring'), ttl=c.querySelector('.cdttl');
+  ring.innerHTML='<b>'+Math.max(n,0)+'</b><span>'+(n===1?'يوم':'أيام')+'</span>';
+  ttl.textContent=daysWord(n);
+  let bg='var(--sage-bg)',col='var(--green)';
+  if(n<=2){bg='var(--neg-bg)';col='var(--neg)';ttl.classList.add('urgent');}
+  else if(n<=5){bg='var(--gold-bg)';col='#8a651f';}
+  ring.style.background=bg;ring.style.color=col;
+});
+
+/* suppliers add / edit / delete */
+const supPalette=['var(--green)','var(--gold)','var(--pine)','var(--sage)','var(--neg)','#4C8068','#0058A3','#7c5c1c'];
+let supEditing=null, supLogoData=null;
+function resetSupLogo(){
+  supLogoData=null;
+  const p=document.getElementById('supLogoPrev');
+  p.style.backgroundImage='';p.style.background='var(--surface-2)';p.style.color='var(--muted)';p.textContent='؟';
+  document.getElementById('supLogoName').textContent='';document.getElementById('supLogo').value='';
+}
+function previewSupLogo(inp){
+  if(!inp.files||!inp.files.length)return;
+  const r=new FileReader();
+  r.onload=()=>{supLogoData=r.result;const p=document.getElementById('supLogoPrev');p.style.backgroundImage='url('+supLogoData+')';p.style.backgroundSize='cover';p.style.backgroundPosition='center';p.textContent='';document.getElementById('supLogoName').textContent=inp.files[0].name;};
+  r.readAsDataURL(inp.files[0]);
+}
+function openSupForm(){
+  supEditing=null;
+  document.getElementById('supFormTitle').textContent='إضافة مورّد';
+  document.getElementById('supName').value='';
+  document.getElementById('supCat').value='أخرى';
+  resetSupLogo();
+  document.getElementById('supForm').style.display='block';
+  document.getElementById('supName').focus();
+}
+function editSup(btn){
+  const card=btn.closest('.supcard');
+  supEditing=card; resetSupLogo();
+  document.getElementById('supFormTitle').textContent='تعديل مورّد';
+  document.getElementById('supName').value=card.querySelector('.nm2').textContent;
+  document.getElementById('supCat').value=card.dataset.cat;
+  const lg=card.querySelector('.lg'), p=document.getElementById('supLogoPrev');
+  if(lg.style.backgroundImage){p.style.backgroundImage=lg.style.backgroundImage;p.style.backgroundSize='cover';p.style.backgroundPosition='center';p.textContent='';}
+  else{p.style.background=lg.style.background;p.style.color=lg.style.color||'#fff';p.textContent=lg.textContent;}
+  document.getElementById('supForm').style.display='block';
+  document.getElementById('supName').focus();
+}
+function closeSupForm(){document.getElementById('supForm').style.display='none';}
+function updateSupCount(){document.getElementById('supTotal').textContent=document.querySelectorAll('#supGrid .supcard').length;}
+function saveSup(){
+  const name=document.getElementById('supName').value.trim();
+  const cat=document.getElementById('supCat').value;
+  if(!name){document.getElementById('supName').focus();return;}
+  if(supEditing){
+    supEditing.querySelector('.nm2').textContent=name;
+    supEditing.dataset.cat=cat;
+    const cnt=supEditing.dataset.count||'0';
+    supEditing.querySelector('small').textContent=cat+' · '+cnt+' منتج';
+    if(supLogoData){const lg=supEditing.querySelector('.lg');lg.style.backgroundImage='url('+supLogoData+')';lg.style.backgroundSize='cover';lg.style.backgroundPosition='center';lg.textContent='';}
+  }else{
+    const grid=document.getElementById('supGrid');
+    const color=supPalette[grid.querySelectorAll('.supcard').length % supPalette.length];
+    const ini=name.replace(/\s/g,'').slice(0,2);
+    const card=document.createElement('div');
+    card.className='supcard';card.dataset.cat=cat;card.dataset.count='0';
+    const lg=document.createElement('span');lg.className='lg';
+    if(supLogoData){lg.style.backgroundImage='url('+supLogoData+')';lg.style.backgroundSize='cover';lg.style.backgroundPosition='center';}
+    else{lg.style.background=color;lg.textContent=ini;}
+    const info=document.createElement('div');info.style.cssText='flex:1;min-width:0';
+    const nm=document.createElement('div');nm.className='nm2';nm.textContent=name;
+    const sm=document.createElement('small');sm.textContent=cat+' · 0 منتج';
+    info.appendChild(nm);info.appendChild(sm);
+    const act=document.createElement('div');act.className='supact';
+    const eb=document.createElement('button');eb.title='تعديل';eb.textContent='✎';eb.onclick=function(){editSup(this);};
+    const db=document.createElement('button');db.title='حذف';db.textContent='🗑';db.onclick=function(){delSup(this);};
+    act.appendChild(eb);act.appendChild(db);
+    card.appendChild(lg);card.appendChild(info);card.appendChild(act);
+    grid.appendChild(card);
+  }
+  closeSupForm();updateSupCount();
+}
+function delSup(btn){btn.closest('.supcard').remove();updateSupCount();}
+
+/* settings tabs + employee docs */
+function settingsTab(el){
+  document.querySelectorAll('.settab').forEach(t=>t.classList.toggle('active',t===el));
+  document.querySelectorAll('.setpanel').forEach(p=>p.classList.toggle('active',p.id==='t-'+el.dataset.t));
+}
+function attachDoc(inp){
+  if(!inp.files||!inp.files.length) return;
+  const chip=document.createElement('span');
+  chip.className='doc ok';
+  chip.textContent='📎 '+inp.files[0].name;
+  const docs=inp.closest('.docs'); docs.insertBefore(chip, inp.closest('.attach'));
+  inp.value='';
+}
+
+/* dashboard period filter */
+const periodData={
+  day:  {lbl:'إيرادات اليوم',   rev:'2,400',   profit:'1,080',   margin:'45%', newc:'1'},
+  week: {lbl:'إيرادات الأسبوع', rev:'12,800',  profit:'5,760',   margin:'45%', newc:'2'},
+  month:{lbl:'إيرادات الشهر',   rev:'48,200',  profit:'21,650',  margin:'45%', newc:'6'},
+  year: {lbl:'إيرادات السنة',   rev:'512,400', profit:'228,900', margin:'47%', newc:'41'}
+};
+function applyPeriod(p){
+  const d=periodData[p]; if(!d) return;
+  document.getElementById('k-revlbl').textContent=d.lbl;
+  document.getElementById('k-rev').textContent=d.rev;
+  document.getElementById('k-profit').textContent=d.profit;
+  document.getElementById('k-margin').textContent=d.margin;
+  document.getElementById('k-newc').textContent=d.newc;
+}
+function setPeriod(el){
+  document.querySelectorAll('.vt[data-p]').forEach(b=>b.classList.toggle('active',b===el));
+  applyPeriod(el.dataset.p);
+}
+function setPeriodDate(inp){
+  document.querySelectorAll('.vt[data-p]').forEach(b=>b.classList.toggle('active',b.dataset.p==='day'));
+  applyPeriod('day');
+}
+
+/* project views */
+document.querySelectorAll('.vt[data-v]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.vt[data-v]').forEach(x=>x.classList.toggle('active',x===b));
+  ['cards','kanban','calendar'].forEach(v=>{document.getElementById('v-'+v).style.display=(v===b.dataset.v)?'':'none';});
+}));
+function openProject(e){if(e)e.stopPropagation();document.getElementById('projects-main').style.display='none';document.getElementById('project-detail').style.display='block';window.scrollTo(0,0);}
+function filterProjectsByDate(){
+  const f=document.getElementById('pFrom').value, t=document.getElementById('pTo').value;
+  document.querySelectorAll('#v-cards [data-date]').forEach(el=>{
+    const d=el.dataset.date, show=(!f||d>=f)&&(!t||d<=t);
+    el.style.display=show?'':'none';
+  });
+}
+function clearProjDate(){document.getElementById('pFrom').value='';document.getElementById('pTo').value='';filterProjectsByDate();}
+function backProject(){const m=document.getElementById('projects-main'),d=document.getElementById('project-detail');if(m&&d){m.style.display='block';d.style.display='none';}}
+
+/* kanban drag & drop */
+let dragged=null;
+function dragStart(e){dragged=e.currentTarget;e.dataTransfer.effectAllowed='move';setTimeout(()=>dragged.classList.add('dragging'),0);}
+function dragEnd(){if(dragged)dragged.classList.remove('dragging');dragged=null;recount();}
+function allowDrop(e,col){e.preventDefault();col.classList.add('kdrop');}
+function leaveDrop(col){col.classList.remove('kdrop');}
+function drop(e,col){e.preventDefault();col.classList.remove('kdrop');const body=col.querySelector('.kbody');if(dragged&&body)body.appendChild(dragged);}
+function recount(){document.querySelectorAll('.kcol').forEach(c=>{c.querySelector('.kc').textContent=c.querySelectorAll('.kcard').length;});}
+
+/* calendar */
+const calEvents={1:[['تسليم دواليب · نورة','prog']],4:[['تسليم تخزين · منيرة','prog']],7:[['تنفيذ نقل · ريم','quote']],9:[['تسليم غرفة أطفال · سارة','prog']],12:[['متابعة مطبخ · عبدالله','done']],15:[['زيارة قياس · محمد','quote']]};
+(function buildCal(){
+  const lead=3; let h='';
+  for(let i=0;i<lead;i++) h+='<div class="cell empty"></div>';
+  for(let d=1;d<=31;d++){
+    const ev=(calEvents[d]||[]).map(e=>'<div class="cev '+e[1]+'" draggable="true" ondragstart="cevDragStart(event)" onclick="openProject(event)">'+e[0]+'</div>').join('');
+    h+='<div class="cell" ondragover="cevAllow(event)" ondragleave="this.classList.remove(\'celldrop\')" ondrop="cevDrop(event)"><span class="dn">'+d+'</span>'+ev+'</div>';
+  }
+  const cal=document.getElementById('cal'); if(cal) cal.innerHTML=h;
+})();
+let calDragged=null;
+function cevDragStart(e){calDragged=e.currentTarget;e.dataTransfer.effectAllowed='move';e.stopPropagation();}
+function cevAllow(e){e.preventDefault();e.currentTarget.classList.add('celldrop');}
+function cevDrop(e){e.preventDefault();e.currentTarget.classList.remove('celldrop');if(calDragged)e.currentTarget.appendChild(calDragged);calDragged=null;}
+
+/* cost project search */
+function filterCostProjects(){
+  const q=document.getElementById('costSearch').value.trim();
+  const box=document.getElementById('costResults');
+  if(!q){box.classList.remove('open');return;}
+  let any=false;
+  box.querySelectorAll('.presult:not(.empty)').forEach(r=>{
+    const m=r.dataset.name && r.dataset.name.includes(q);
+    r.style.display=m?'':'none'; if(m)any=true;
+  });
+  box.querySelector('.presult.empty').style.display=any?'none':'';
+  box.classList.add('open');
+}
+const RYL='<svg class="ryl"><use href="#ryl"></use></svg>';
+function fmtNum(n){return n.toLocaleString('en-US');}
+const costModel={
+  'تنظيم دواليب|نورة العتيبي':{price:3200,labor:900,materials:550,transport:150,bonus:150},
+  'تنظيم غرفة ملابس|نورة العتيبي':{price:2800,labor:800,materials:600,transport:120,bonus:120},
+  'استشارة تنظيم منزلي|نورة العتيبي':{price:3400,labor:1200,materials:300,transport:200,bonus:200},
+  'تنظيم مطبخ كامل|عبدالله الشهري':{price:4800,labor:1200,materials:850,transport:200,bonus:300},
+  'تنظيم مكتب منزلي|عبدالله الشهري':{price:2600,labor:700,materials:500,transport:150,bonus:120},
+  'باكج نقل وتغليف|ريم القحطاني':{price:6500,labor:2200,materials:1100,transport:600,bonus:350},
+  'غرفة أطفال|سارة المطيري':{price:2400,labor:700,materials:450,transport:120,bonus:100},
+  'تنظيم مكتب|فهد الدوسري':{price:3900,labor:1000,materials:700,transport:180,bonus:220},
+  'تنظيم مستودع|فهد الدوسري':{price:4100,labor:1300,materials:600,transport:250,bonus:200},
+  'تخزين مخصص|منيرة السبيعي':{price:5200,labor:1500,materials:900,transport:300,bonus:300},
+  'تنظيم دواليب|منيرة السبيعي':{price:3000,labor:850,materials:520,transport:140,bonus:140}
+};
+function renderCost(name,client){
+  const m=costModel[name+'|'+client]; if(!m) return;
+  const total=m.labor+m.materials+m.transport+m.bonus;
+  const profit=m.price-total;
+  const margin=Math.round(profit/m.price*100);
+  document.getElementById('costName').textContent=name+' · '+client;
+  document.getElementById('costPrice').textContent=fmtNum(m.price);
+  document.getElementById('clLabor').innerHTML=fmtNum(m.labor)+RYL;
+  document.getElementById('clMaterials').innerHTML=fmtNum(m.materials)+RYL;
+  document.getElementById('clTransport').innerHTML=fmtNum(m.transport)+RYL;
+  document.getElementById('clBonus').innerHTML=fmtNum(m.bonus)+RYL;
+  document.getElementById('clTotal').innerHTML=fmtNum(total)+RYL;
+  document.getElementById('costProfit').textContent=fmtNum(profit);
+  document.getElementById('costMargin').textContent='هامش الربح '+margin+'% · يُحتسب تلقائياً من البنود';
+  document.getElementById('wfSale').textContent=fmtNum(m.price);
+  const wc=document.getElementById('wfCost'); wc.textContent=fmtNum(total); wc.style.width=Math.round(total/m.price*100)+'%';
+  const wp=document.getElementById('wfProfit'); wp.textContent=fmtNum(profit); wp.style.width=Math.max(profit/m.price*100,0).toFixed(0)+'%';
+}
+function pickCostProject(name,client,price){
+  renderCost(name,client);
+  document.getElementById('costSearch').value=name+' · '+client;
+  document.getElementById('costResults').classList.remove('open');
+}
+function onCostSelect(sel){
+  const o=sel.options[sel.selectedIndex];
+  if(!o.dataset.c) return;
+  renderCost(o.text, o.dataset.c);
+  document.getElementById('costSearch').value='';
+}
+renderCost('تنظيم مطبخ كامل','عبدالله الشهري');
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.searchwrap')){const b=document.getElementById('costResults'); if(b) b.classList.remove('open');}
+});
+
+/* warehouse filters */
+let whF='all',catF='all';
+function applyWh(){
+  document.querySelectorAll('#whTable tbody tr').forEach(r=>{
+    const okW=(whF==='all'||r.dataset.wh===whF), okC=(catF==='all'||r.dataset.cat===catF);
+    r.style.display=(okW&&okC)?'':'none';
+  });
+}
+function filterWh(el){whF=el.dataset.wh;document.querySelectorAll('.chip.wh').forEach(c=>c.classList.toggle('active',c===el));applyWh();}
+function filterCat(el){catF=el.dataset.cat;document.querySelectorAll('.chip.cat').forEach(c=>c.classList.toggle('active',c===el));applyWh();}
+
+/* invoice actions */
+function printInvoice(){window.print();}
+function sendInvoiceWhatsApp(){
+  const msg='مرحباً، مرفق فاتورة ترتيب رقم 1058 بقيمة 5,520 ريال (نسخة PDF). شكراً لتعاملكم معنا.';
+  window.open('https://wa.me/966500000000?text='+encodeURIComponent(msg),'_blank');
+}
+</script>
+</body>
+</html>

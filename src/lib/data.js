@@ -17,6 +17,23 @@ export async function getClient(id) {
   const { data, error } = await supabase.from('clients').select('*').eq('id', id).single();
   if (error) throw error; return data;
 }
+export async function createClient(input) {
+  const payload = {
+    name: input.name.trim(),
+    phone: input.phone?.trim() || null,
+    source: input.source || 'other',
+    district: input.district?.trim() || null,
+    status: input.status || 'active',
+    first_contact_at: input.first_contact_at || null,
+    notes: input.notes?.trim() || null,
+  };
+  const { data, error } = await supabase
+    .from('clients')
+    .insert(payload)
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,created_at')
+    .single();
+  if (error) throw error; return data;
+}
 
 // ---------- المشاريع ----------
 export async function getProjects() {

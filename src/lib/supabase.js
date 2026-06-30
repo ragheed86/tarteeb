@@ -4,9 +4,14 @@ import { createClient } from '@supabase/supabase-js';
 
 const url  = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const missingEnv = !url || !anon;
+export const supabaseReady = !missingEnv;
 
-if (!url || !anon) {
+if (missingEnv) {
   console.warn('Supabase env vars missing — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local');
 }
 
-export const supabase = createClient(url, anon);
+export const supabase = createClient(
+  url || 'https://placeholder.supabase.co',
+  anon || 'placeholder-anon-key'
+);

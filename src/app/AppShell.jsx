@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseReady } from '@/lib/supabase';
 
 // ---------- خريطة التنقّل والعناوين ----------
 const NAV = [
@@ -24,6 +24,10 @@ export default function AppShell({ children }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!supabaseReady) {
+      setSession(null);
+      return undefined;
+    }
     supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
@@ -99,6 +103,10 @@ function Login() {
 
   async function submit(e) {
     e.preventDefault();
+    if (!supabaseReady) {
+      setErr('إعدادات Supabase غير مكتملة في بيئة التشغيل');
+      return;
+    }
     setBusy(true); setErr('');
     const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
     if (error) setErr('بيانات الدخول غير صحيحة، حاول مجدداً');
@@ -113,6 +121,7 @@ function Login() {
           <h1>ترتيب</h1>
           <small>سجّل الدخول للوصول إلى نظام إدارة الأعمال</small>
         </div>
+        {!supabaseReady && <div className="errbar">إعدادات Supabase غير مكتملة في بيئة التشغيل</div>}
         {err && <div className="errbar">{err}</div>}
         <div className="field">
           <label>البريد الإلكتروني</label>

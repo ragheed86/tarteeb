@@ -34,6 +34,41 @@ export async function createClient(input) {
     .single();
   if (error) throw error; return data;
 }
+export async function updateClient(id, input) {
+  const payload = {
+    name: input.name.trim(),
+    phone: input.phone?.trim() || null,
+    source: input.source || 'other',
+    district: input.district?.trim() || null,
+    status: input.status || 'active',
+    first_contact_at: input.first_contact_at || null,
+    notes: input.notes?.trim() || null,
+  };
+  const { data, error } = await supabase
+    .from('clients')
+    .update(payload)
+    .eq('id', id)
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,created_at')
+    .single();
+  if (error) throw error; return data;
+}
+export async function removeClient(id) {
+  const { error } = await supabase.from('clients').delete().eq('id', id);
+  if (error) throw error;
+}
+// مشاريع وفواتير عميل بعينه — لملف العميل 360
+export async function getProjectsByClient(clientId) {
+  const { data, error } = await supabase.from('projects')
+    .select('id,title,service_type,sale_price,status,due_date,progress,created_at')
+    .eq('client_id', clientId).order('created_at', { ascending: false });
+  if (error) throw error; return data;
+}
+export async function getInvoicesByClient(clientId) {
+  const { data, error } = await supabase.from('invoices')
+    .select('id,number,issue_at,total,status')
+    .eq('client_id', clientId).order('issue_at', { ascending: false });
+  if (error) throw error; return data;
+}
 
 // ---------- المشاريع ----------
 export async function getProjects() {

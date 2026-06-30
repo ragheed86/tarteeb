@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { createClient, getClients } from '@/lib/data';
+import Link from 'next/link';
+import { createClient, updateClient, removeClient, getClients } from '@/lib/data';
 import { fmtNum, CLIENT_STATUS, SOURCE_LABEL } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
 
@@ -14,10 +15,24 @@ const EMPTY_FORM = {
   notes: '',
 };
 
+function toForm(c) {
+  return {
+    name: c.name || '',
+    phone: c.phone || '',
+    source: c.source || 'instagram',
+    district: c.district || '',
+    status: c.status || 'active',
+    first_contact_at: c.first_contact_at || '',
+    notes: c.notes || '',
+  };
+}
+
 export default function ClientsPage() {
   const [clients, setClients] = useState(null);
   const [err, setErr] = useState('');
+  const [q, setQ] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState(null); // null = إضافة، كائن = تعديل
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
@@ -30,9 +45,24 @@ export default function ClientsPage() {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function openAdd() {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setFormErr('');
+    setFormOpen(true);
+  }
+
+  function openEdit(c) {
+    setEditing(c);
+    setForm(toForm(c));
+    setFormErr('');
+    setFormOpen(true);
+  }
+
   function closeForm() {
     if (saving) return;
     setFormOpen(false);
+    setEditing(null);
     setForm(EMPTY_FORM);
     setFormErr('');
   }
@@ -46,8 +76,13 @@ export default function ClientsPage() {
     setSaving(true);
     setFormErr('');
     try {
-      const client = await createClient(form);
-      setClients((current) => [client, ...(current || [])]);
+      if (editing) {
+        const updated = await updateClient(editing.id, form);
+        setClients((current) => (current || []).map((c) => (c.id === updated.id ? updated : c)));
+      } else {
+        const client = await createClient(form);
+        setClients((current) => [client, ...(current || [])]);
+      }
       closeForm();
     } catch (error) {
       setFormErr(error.message || 'تعذّر حفظ العميل');
@@ -56,34 +91,68 @@ export default function ClientsPage() {
     }
   }
 
+  async function del(c) {
+    if (!confirm(`حذف العميل «${c.name}»؟ سيُحذف معه مشاريعه وفواتيره المرتبطة.`)) return;
+    try {
+      await removeClient(c.id);
+      setClients((current) => (current || []).filter((x) => x.id !== c.id));
+    } catch (error) {
+      setErr(error.message || 'تعذّر الحذف');
+    }
+  }
+
   if (err) return <ErrorBar message={err} />;
   if (!clients) return <Loading />;
+
+  const term = q.trim().toLowerCase();
+  const filtered = term
+    ? clients.filter((c) =>
+        [c.name, c.phone, c.district, SOURCE_LABEL[c.source]]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(term)),
+      )
+    : clients;
 
   return (
     <>
       <div className="sec-head" style={{ marginBottom: 18 }}>
-        <button className="btn" onClick={() => setFormOpen(true)}>
+        <button className="btn" onClick={openAdd}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
           عميل جديد
         </button>
-        <span className="more" style={{ marginInlineStart: 'auto' }}>{fmtNum(clients.length)} عميلاً</span>
+        <div className="search" style={{ marginInlineStart: 'auto', width: 260 }}>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+          <input placeholder="بحث بالاسم أو الجوال أو الحي…" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <span className="more">{fmtNum(filtered.length)} عميلاً</span>
       </div>
       <div className="card" style={{ padding: '6px 0' }}>
-        {clients.length === 0 ? (
-          <Empty title="لا يوجد عملاء بعد" desc="أضف أول عميل لتظهر بياناته هنا." />
+        {filtered.length === 0 ? (
+          clients.length === 0 ? (
+            <Empty title="لا يوجد عملاء بعد" desc="أضف أول عميل لتظهر بياناته هنا." />
+          ) : (
+            <Empty title="لا نتائج" desc={`لا يوجد عميل يطابق «${q}».`} />
+          )
         ) : (
           <table>
-            <thead><tr><th>العميل</th><th>الجوال</th><th>المصدر</th><th>الحي</th><th>الحالة</th></tr></thead>
+            <thead><tr><th>العميل</th><th>الجوال</th><th>المصدر</th><th>الحي</th><th>الحالة</th><th></th></tr></thead>
             <tbody>
-              {clients.map((c) => {
+              {filtered.map((c) => {
                 const st = CLIENT_STATUS[c.status] || { label: c.status || '—', cls: 'p-wait' };
                 return (
                   <tr key={c.id}>
-                    <td><span className="nm">{c.name}</span><br /><span className="uid">{c.code || '—'}</span></td>
+                    <td>
+                      <Link href={`/clients/${c.id}`} className="nm" style={{ color: 'var(--green)' }}>{c.name}</Link>
+                      <br /><span className="uid">{c.code || '—'}</span>
+                    </td>
                     <td className="amt" dir="ltr" style={{ textAlign: 'start' }}>{c.phone || '—'}</td>
                     <td><span className="src">{SOURCE_LABEL[c.source] || c.source || '—'}</span></td>
                     <td>{c.district || '—'}</td>
                     <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
+                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+                      <button className="btn ghost sm" onClick={() => openEdit(c)}>تعديل</button>
+                      <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(c)}>حذف</button>
+                    </td>
                   </tr>
                 );
               })}
@@ -97,8 +166,8 @@ export default function ClientsPage() {
           <form className="modal-card client-form" onSubmit={submit}>
             <div className="modal-head">
               <div>
-                <h2>عميل جديد</h2>
-                <p>إضافة عميل إلى قاعدة عملاء ترتيب</p>
+                <h2>{editing ? 'تعديل عميل' : 'عميل جديد'}</h2>
+                <p>{editing ? 'تحديث بيانات العميل' : 'إضافة عميل إلى قاعدة عملاء ترتيب'}</p>
               </div>
               <button className="icon-close" type="button" onClick={closeForm} aria-label="إغلاق">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -151,7 +220,7 @@ export default function ClientsPage() {
             <div className="modal-actions">
               <button className="btn ghost" type="button" onClick={closeForm} disabled={saving}>إلغاء</button>
               <button className="btn" type="submit" disabled={saving}>
-                {saving ? 'جارٍ الحفظ…' : 'حفظ العميل'}
+                {saving ? 'جارٍ الحفظ…' : editing ? 'حفظ التعديل' : 'حفظ العميل'}
               </button>
             </div>
           </form>

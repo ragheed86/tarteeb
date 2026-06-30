@@ -104,7 +104,6 @@ function Login() {
   async function submit(e) {
     e.preventDefault();
     if (!supabaseReady) {
-      setErr('إعدادات Supabase غير مكتملة في بيئة التشغيل');
       return;
     }
     setBusy(true); setErr('');
@@ -131,7 +130,7 @@ function Login() {
           <label>كلمة المرور</label>
           <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required dir="ltr" autoComplete="current-password" />
         </div>
-        <button className="btn btn-full" type="submit" disabled={busy}>
+        <button className="btn btn-full" type="submit" disabled={busy || !supabaseReady}>
           {busy ? 'جارٍ الدخول…' : 'دخول'}
         </button>
       </form>

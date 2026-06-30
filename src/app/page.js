@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { getClients, getProjects, getInvoices } from '@/lib/data';
+import { getClients, getProjects, getInvoices, getWarehouses, getPartners } from '@/lib/data';
 import { fmtMoney, fmtNum, PROJECT_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from './ui';
 
@@ -13,11 +13,17 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [clients, projects, invoices] = await Promise.all([getClients(), getProjects(), getInvoices()]);
+        const [clients, projects, invoices, warehouses, partners] = await Promise.all([
+          getClients(),
+          getProjects(),
+          getInvoices(),
+          getWarehouses(),
+          getPartners(),
+        ]);
         const revenue = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + Number(i.total || 0), 0);
         const activeProjects = projects.filter((p) => ACTIVE.includes(p.status)).length;
         const newClients = clients.filter((c) => withinDays(c.created_at, 30)).length;
-        setData({ clients, projects, invoices, revenue, activeProjects, newClients });
+        setData({ clients, projects, invoices, warehouses, partners, revenue, activeProjects, newClients });
       } catch (e) {
         setErr(e.message || 'تعذّر تحميل البيانات');
       }
@@ -32,6 +38,8 @@ export default function Dashboard() {
     { lbl: 'إجمالي العملاء', val: fmtNum(data.clients.length), sub: `${fmtNum(data.newClients)} جديد خلال 30 يوماً` },
     { lbl: 'مشاريع نشطة', val: fmtNum(data.activeProjects), sub: `من ${fmtNum(data.projects.length)} إجمالاً` },
     { lbl: 'الفواتير', val: fmtNum(data.invoices.length), sub: 'إجمالي المُصدرة' },
+    { lbl: 'المستودعات', val: fmtNum(data.warehouses.length), sub: 'مواقع التخزين المسجلة' },
+    { lbl: 'الشركاء', val: fmtNum(data.partners.length), sub: 'نِسب الشركاء وحساباتهم' },
   ];
 
   const recent = data.projects.slice(0, 6);

@@ -133,3 +133,235 @@ export async function getCommunications(clientId) {
   const { data, error } = clientId ? await q.eq('client_id', clientId) : await q;
   if (error) throw error; return data;
 }
+export async function createCommunication(p) {
+  const { data, error } = await supabase.from('communications').insert(p).select().single();
+  if (error) throw error; return data;
+}
+
+// ============================================================
+//  المشاريع · CRUD + الفريق + المهام + الوسائط
+// ============================================================
+const PROJECT_COLS = 'id,client_id,title,service_type,sale_price,status,supervisor_id,start_date,due_date,progress,created_at';
+export async function createProject(p) {
+  const { data, error } = await supabase.from('projects').insert(p).select(PROJECT_COLS).single();
+  if (error) throw error; return data;
+}
+export async function updateProject(id, p) {
+  const { data, error } = await supabase.from('projects').update(p).eq('id', id).select(PROJECT_COLS).single();
+  if (error) throw error; return data;
+}
+export async function removeProject(id) {
+  const { error } = await supabase.from('projects').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// الفريق (project_team — مفتاح مركّب) — مع أسماء الموظفين
+export async function getProjectTeam(projectId) {
+  const { data, error } = await supabase.from('project_team')
+    .select('employee_id, employees(id,name,role)').eq('project_id', projectId);
+  if (error) throw error; return data;
+}
+export async function addProjectTeam(projectId, employeeId) {
+  const { error } = await supabase.from('project_team').insert({ project_id: projectId, employee_id: employeeId });
+  if (error) throw error;
+}
+export async function removeProjectTeam(projectId, employeeId) {
+  const { error } = await supabase.from('project_team').delete().eq('project_id', projectId).eq('employee_id', employeeId);
+  if (error) throw error;
+}
+
+// المهام
+export async function getProjectTasks(projectId) {
+  const { data, error } = await supabase.from('project_tasks')
+    .select('id,project_id,title,done,sort_order').eq('project_id', projectId)
+    .order('sort_order', { ascending: true });
+  if (error) throw error; return data;
+}
+export async function createProjectTask(p) {
+  const { data, error } = await supabase.from('project_tasks').insert(p).select().single();
+  if (error) throw error; return data;
+}
+export async function updateProjectTask(id, p) {
+  const { data, error } = await supabase.from('project_tasks').update(p).eq('id', id).select().single();
+  if (error) throw error; return data;
+}
+export async function removeProjectTask(id) {
+  const { error } = await supabase.from('project_tasks').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// الوسائط (قبل/بعد)
+export async function getProjectMedia(projectId) {
+  const { data, error } = await supabase.from('project_media')
+    .select('id,project_id,kind,file_url,created_at').eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+  if (error) throw error; return data;
+}
+export async function createProjectMedia(p) {
+  const { data, error } = await supabase.from('project_media').insert(p).select().single();
+  if (error) throw error; return data;
+}
+export async function removeProjectMedia(id) {
+  const { error } = await supabase.from('project_media').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// تكلفة المشروع — بنود
+export async function createProjectCost(p) {
+  const { data, error } = await supabase.from('project_costs').insert(p).select('id,kind,label,amount').single();
+  if (error) throw error; return data;
+}
+export async function removeProjectCost(id) {
+  const { error } = await supabase.from('project_costs').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+//  المستودع · أصناف
+// ============================================================
+const ITEM_COLS = 'id,barcode,name,category_id,unit,quantity,reorder_level,unit_cost,supplier_id,warehouse_id,created_at';
+export async function createInventoryItem(p) {
+  const { data, error } = await supabase.from('inventory_items').insert(p).select(ITEM_COLS).single();
+  if (error) throw error; return data;
+}
+export async function updateInventoryItem(id, p) {
+  const { data, error } = await supabase.from('inventory_items').update(p).eq('id', id).select(ITEM_COLS).single();
+  if (error) throw error; return data;
+}
+export async function removeInventoryItem(id) {
+  const { error } = await supabase.from('inventory_items').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+//  الموظفون · CRUD + مستندات
+// ============================================================
+export async function createEmployee(p) {
+  const { data, error } = await supabase.from('employees').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function updateEmployee(id, p) {
+  const { data, error } = await supabase.from('employees').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removeEmployee(id) {
+  const { error } = await supabase.from('employees').delete().eq('id', id);
+  if (error) throw error;
+}
+export async function getEmployeeDocuments(employeeId) {
+  const { data, error } = await supabase.from('employee_documents')
+    .select('id,employee_id,doc_type,file_url,expiry_date,created_at').eq('employee_id', employeeId)
+    .order('expiry_date', { ascending: true });
+  if (error) throw error; return data;
+}
+export async function getAllEmployeeDocuments() {
+  const { data, error } = await supabase.from('employee_documents')
+    .select('id,employee_id,doc_type,file_url,expiry_date').order('expiry_date', { ascending: true });
+  if (error) throw error; return data;
+}
+export async function createEmployeeDocument(p) {
+  const { data, error } = await supabase.from('employee_documents').insert(p).select().single();
+  if (error) throw error; return data;
+}
+export async function removeEmployeeDocument(id) {
+  const { error } = await supabase.from('employee_documents').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+//  الموردون · CRUD
+// ============================================================
+export async function createSupplier(p) {
+  const { data, error } = await supabase.from('suppliers').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function updateSupplier(id, p) {
+  const { data, error } = await supabase.from('suppliers').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removeSupplier(id) {
+  const { error } = await supabase.from('suppliers').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+//  الشركاء · CRUD + حركات
+// ============================================================
+export async function createPartner(p) {
+  const { data, error } = await supabase.from('partners').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function updatePartner(id, p) {
+  const { data, error } = await supabase.from('partners').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removePartner(id) {
+  const { error } = await supabase.from('partners').delete().eq('id', id);
+  if (error) throw error;
+}
+export async function getPartnerTransactions() {
+  const { data, error } = await supabase.from('partner_transactions')
+    .select('id,partner_id,period,txn_type,amount,note,created_at')
+    .order('period', { ascending: false });
+  if (error) throw error; return data;
+}
+export async function createPartnerTransaction(p) {
+  const { data, error } = await supabase.from('partner_transactions').insert(p).select().single();
+  if (error) throw error; return data;
+}
+export async function removePartnerTransaction(id) {
+  const { error } = await supabase.from('partner_transactions').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+//  الجهات الحكومية · CRUD
+// ============================================================
+export async function createGovernmentAccount(p) {
+  const { data, error } = await supabase.from('government_accounts').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function updateGovernmentAccount(id, p) {
+  const { data, error } = await supabase.from('government_accounts').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removeGovernmentAccount(id) {
+  const { error } = await supabase.from('government_accounts').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+//  الفواتير · CRUD + البنود
+// ============================================================
+const INVOICE_COLS = 'id,number,project_id,client_id,issue_at,subtotal,vat_applicable,vat_rate,vat_amount,total,zatca_uuid,zatca_qr,status,created_at';
+export async function getInvoice(id) {
+  const { data, error } = await supabase.from('invoices').select('*').eq('id', id).single();
+  if (error) throw error; return data;
+}
+// ينشئ الفاتورة ثم يدرج بنودها. items=[{description,qty,unit_price}]
+export async function createInvoice(invoice, items) {
+  const { data, error } = await supabase.from('invoices').insert(invoice).select(INVOICE_COLS).single();
+  if (error) throw error;
+  if (items && items.length) {
+    const rows = items.map((it) => ({ ...it, invoice_id: data.id }));
+    const { error: e2 } = await supabase.from('invoice_items').insert(rows);
+    if (e2) throw e2;
+  }
+  return data;
+}
+export async function updateInvoice(id, p) {
+  const { data, error } = await supabase.from('invoices').update(p).eq('id', id).select(INVOICE_COLS).single();
+  if (error) throw error; return data;
+}
+export async function removeInvoice(id) {
+  const { error } = await supabase.from('invoices').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ============================================================
+//  إعدادات الشركة
+// ============================================================
+export async function updateCompanySettings(id, p) {
+  const { data, error } = await supabase.from('company_settings').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}

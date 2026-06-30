@@ -192,6 +192,7 @@ tr.clickable{cursor:pointer}
 .filter-sel:focus{border-color:var(--sage)}
 tr.row-low{background:rgba(224,86,107,.05)}
 tr.row-low:hover{background:rgba(224,86,107,.09)}
+.modal-card.modal-sm{width:min(440px,100%)}
 
 @media(max-width:1100px){.kpis{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr 1fr}.pgrid{grid-template-columns:1fr 1fr}}
 .hamburger{display:none;width:42px;height:42px;border:1px solid var(--line);background:var(--surface);border-radius:10px;place-items:center;cursor:pointer;color:var(--muted);flex-shrink:0}

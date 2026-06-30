@@ -194,6 +194,40 @@ tr.row-low{background:rgba(224,86,107,.05)}
 tr.row-low:hover{background:rgba(224,86,107,.09)}
 .modal-card.modal-sm{width:min(440px,100%)}
 
+/* ---------- مجاميع + ورقة الفاتورة ---------- */
+.totals{margin-top:16px;margin-inline-start:auto;width:min(320px,100%)}
+.trow{display:flex;justify-content:space-between;padding:8px 0;font-size:14px;color:var(--muted)}
+.trow .amt{color:var(--ink);font-weight:500}
+.trow.grand{border-top:2px solid var(--line);margin-top:4px;padding-top:12px;font-size:16px;color:var(--ink);font-weight:600}
+.trow.grand .amt{font-family:var(--display);font-size:18px;color:var(--pine)}
+
+.invoice-sheet{max-width:780px;margin:0 auto;padding:32px 34px}
+.inv-top{display:flex;justify-content:space-between;gap:20px;padding-bottom:20px;border-bottom:2px solid var(--line)}
+.inv-co{font-family:var(--display);font-size:22px;font-weight:600;margin-bottom:8px}
+.inv-meta{font-size:12.5px;color:var(--muted);margin-top:3px}
+.inv-title{text-align:left}
+.inv-badge{font-size:12px;color:var(--muted)}
+.inv-num{font-family:var(--display);font-size:22px;font-weight:600;margin:4px 0 8px}
+.inv-parties{display:flex;justify-content:space-between;gap:20px;padding:20px 0}
+.inv-label{font-size:12px;color:var(--faint);margin-bottom:5px}
+.inv-items{width:100%;border-collapse:collapse;margin-top:6px}
+.inv-items th{background:var(--surface-2);text-align:start;font-size:12.5px;color:var(--muted);font-weight:600;padding:11px 14px}
+.inv-items th:last-child,.inv-items td:last-child{text-align:start}
+.inv-items td{padding:12px 14px;border-bottom:1px solid var(--surface-2);font-size:14px}
+.inv-foot{display:flex;justify-content:space-between;gap:20px;margin-top:18px;align-items:flex-start;flex-wrap:wrap}
+.zatca-qr{flex-shrink:0}
+.qr-ph{width:104px;height:104px;border:2px dashed var(--line);border-radius:10px;display:grid;place-items:center;text-align:center;color:var(--faint)}
+.qr-ph span{font-family:var(--display);font-size:18px;font-weight:600}
+.qr-ph small{font-size:9.5px;display:block;margin-top:2px}
+
+/* ---------- طباعة ---------- */
+@media print{
+  .sidebar,.topbar,.scrim,.no-print{display:none!important}
+  .app,.main,.content{display:block;padding:0;margin:0;background:#fff}
+  .invoice-sheet{box-shadow:none;border:0;max-width:100%;backdrop-filter:none;background:#fff}
+  body{background:#fff}
+}
+
 @media(max-width:1100px){.kpis{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr 1fr}.pgrid{grid-template-columns:1fr 1fr}}
 .hamburger{display:none;width:42px;height:42px;border:1px solid var(--line);background:var(--surface);border-radius:10px;place-items:center;cursor:pointer;color:var(--muted);flex-shrink:0}
 .hamburger svg{width:20px;height:20px}

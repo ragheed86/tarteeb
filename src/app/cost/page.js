@@ -21,6 +21,7 @@ export default function CostPage() {
   const [state, setState] = useState(null); // { projects, byId }
   const [err, setErr] = useState('');
   const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [salePrice, setSalePrice] = useState('');
   const [estimate, setEstimate] = useState(EMPTY_ESTIMATE);
@@ -42,6 +43,7 @@ export default function CostPage() {
     const byId = byIdOverride || state?.byId || {};
     setSelected({ ...p, clientName: byId[p.client_id] || 'عميل غير معروف' });
     setQuery(`${p.title} · ${byId[p.client_id] || ''}`);
+    setSearchOpen(false);
     setSalePrice(p.sale_price ?? '');
     setSaveMsg('');
     try {
@@ -58,7 +60,7 @@ export default function CostPage() {
     if (!state) return [];
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return state.projects.filter((p) => `${p.title} ${state.byId[p.client_id] || ''}`.toLowerCase().includes(q));
+    return state.projects.filter((p) => `${p.title} · ${state.byId[p.client_id] || ''}`.toLowerCase().includes(q));
   }, [query, state]);
 
   const workerTotal = num(estimate.workers_count) * num(estimate.worker_hours) * num(estimate.worker_rate);
@@ -97,9 +99,15 @@ export default function CostPage() {
           <div style={{ flex: 1, minWidth: 240, position: 'relative' }}>
             <div className="fsearch" style={{ marginBottom: 0 }}>
               <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="اكتب اسم المشروع أو العميل لإدارة تكلفته..." />
+              <input
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+                placeholder="اكتب اسم المشروع أو العميل لإدارة تكلفته..."
+              />
             </div>
-            <div className={`ac${query.trim() ? ' open' : ''}`}>
+            <div className={`ac${searchOpen && query.trim() ? ' open' : ''}`}>
               {filtered.length === 0 ? (
                 <div className="presult" style={{ color: 'var(--muted)', cursor: 'default' }}>لا يوجد مشروع مطابق</div>
               ) : filtered.map((p) => (

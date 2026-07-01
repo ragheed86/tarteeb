@@ -52,7 +52,7 @@ export default function RiyadhNeighborhoodMap({ geojson, statsById, metric, scal
 
   function applyColors() {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded() || !map.getSource('neighborhoods')) return;
+    if (!map || !map.getSource('neighborhoods') || !map.isSourceLoaded('neighborhoods')) return;
     for (const f of geojson.features) {
       const id = f.properties.district_id;
       const s = statsById.get(id);
@@ -148,7 +148,15 @@ export default function RiyadhNeighborhoodMap({ geojson, statsById, metric, scal
         onSelectRef.current?.(String(e.features[0].properties.district_id));
       });
 
-      applyColorsRef.current();
+      // إضافة المصدر لا تعني جاهزيته فوراً؛ تحميل بيانات GeoJSON يتم بشكل غير متزامن (worker داخلي)،
+      // فأي setFeatureState قبل اكتمال ذلك يُتجاهل بصمت. ننتظر حدث sourcedata الذي يؤكد الاكتمال.
+      function onSourceData(e) {
+        if (e.sourceId === 'neighborhoods' && map.isSourceLoaded('neighborhoods')) {
+          map.off('sourcedata', onSourceData);
+          applyColorsRef.current();
+        }
+      }
+      map.on('sourcedata', onSourceData);
     });
 
     mapRef.current = map;

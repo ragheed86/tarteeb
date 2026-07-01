@@ -50,7 +50,7 @@ export default function AppShell({ children }) {
     return <Splash />;
   }
   if (session === null) {
-    return <Login />;
+    return (<><Login /><IOSInstallBanner /></>);
   }
 
   const active = ALL.find((i) => i.href === pathname) || ALL[0];
@@ -113,11 +113,47 @@ export default function AppShell({ children }) {
           );
         })}
       </nav>
+      <IOSInstallBanner />
     </div>
   );
 }
 
 // ---------- شاشة البدء (splash) ----------
+// ---------- بانر إضافة للشاشة الرئيسية (iPhone فقط، بلا beforeinstallprompt) ----------
+function IOSInstallBanner() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const isIphone = /iPhone|iPod/.test(navigator.userAgent);
+    const isStandalone = window.navigator.standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches;
+    const dismissed = localStorage.getItem('tarteeb-a2hs-dismissed') === '1';
+    if (isIphone && !isStandalone && !dismissed) setShow(true);
+  }, []);
+
+  if (!show) return null;
+
+  function dismiss() {
+    localStorage.setItem('tarteeb-a2hs-dismissed', '1');
+    setShow(false);
+  }
+
+  return (
+    <div className="a2hs-banner">
+      <div className="mark"><span /><span /><span /><span /></div>
+      <div className="a2hs-txt">
+        <b>ثبّت ترتيب كتطبيق على شاشتك الرئيسية</b>
+        <span>
+          اضغط
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 15V3m0 0-4 4m4-4 4 4" /><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" /></svg>
+          مشاركة، ثم «إضافة إلى الشاشة الرئيسية»
+        </span>
+      </div>
+      <button className="a2hs-close" onClick={dismiss} aria-label="إغلاق">✕</button>
+    </div>
+  );
+}
+
 function Splash() {
   return (
     <div className="splash">

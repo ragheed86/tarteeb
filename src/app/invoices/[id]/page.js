@@ -57,7 +57,7 @@ export default function InvoiceDetail() {
   const { invoice, items, client, company } = d;
   if (!invoice) return <Empty title="غير موجودة" desc="لم يُعثر على هذه الفاتورة." />;
   const st = INVOICE_STATUS[invoice.status] || { label: invoice.status, cls: 'p-wait' };
-  const wa = waLink(client?.phone, `فاتورة ${invoice.number} من ${company?.name_ar || 'ترتيب'} بقيمة ${fmtMoney(invoice.total)} ر.س`);
+  const wa = waLink(client?.phone, `فاتورة ${invoice.number} من ${company?.name_ar || 'ترتيب'} بقيمة ${fmtMoney(invoice.total)} ⃁`);
 
   return (
     <>
@@ -113,8 +113,8 @@ export default function InvoiceDetail() {
               <tr key={it.id}>
                 <td>{it.description}</td>
                 <td className="amt">{fmtNum(it.qty)}</td>
-                <td className="amt">{fmtMoney(it.unit_price)} ر.س</td>
-                <td className="amt">{fmtMoney(Number(it.qty) * Number(it.unit_price))} ر.س</td>
+                <td className="amt">{fmtMoney(it.unit_price)} ⃁</td>
+                <td className="amt">{fmtMoney(Number(it.qty) * Number(it.unit_price))} ⃁</td>
               </tr>
             ))}
           </tbody>
@@ -133,9 +133,9 @@ export default function InvoiceDetail() {
             )}
           </div>
           <div className="totals">
-            <div className="trow"><span>المجموع الفرعي</span><span className="amt">{fmtMoney(invoice.subtotal)} ر.س</span></div>
-            <div className="trow"><span>الضريبة ({invoice.vat_applicable ? `${fmtNum(invoice.vat_rate)}%` : 'معفاة'})</span><span className="amt">{fmtMoney(invoice.vat_amount)} ر.س</span></div>
-            <div className="trow grand"><span>الإجمالي</span><span className="amt">{fmtMoney(invoice.total)} ر.س</span></div>
+            <div className="trow"><span>المجموع الفرعي</span><span className="amt">{fmtMoney(invoice.subtotal)} ⃁</span></div>
+            <div className="trow"><span>الضريبة ({invoice.vat_applicable ? `${fmtNum(invoice.vat_rate)}%` : 'معفاة'})</span><span className="amt">{fmtMoney(invoice.vat_amount)} ⃁</span></div>
+            <div className="trow grand"><span>الإجمالي</span><span className="amt">{fmtMoney(invoice.total)} ⃁</span></div>
           </div>
         </div>
       </div>

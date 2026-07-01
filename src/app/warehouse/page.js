@@ -117,14 +117,8 @@ export default function WarehousePage() {
   if (!d) return <Loading />;
 
   const { items, warehouses, categories, suppliers } = d;
-  const northWarehouseId = warehouses.find((w) => w.name === 'مستودع الشمال')?.id
-    || warehouses.find((w) => w.name !== 'مستودع الرياض')?.id;
-  function warehouseDisplayName(warehouse) {
-    if (warehouse.id === northWarehouseId && warehouse.name !== 'مستودع الرياض') return 'مستودع الشمال';
-    return warehouse.name;
-  }
   const catName = Object.fromEntries(categories.map((c) => [c.id, c.name]));
-  const whName = Object.fromEntries(warehouses.map((w) => [w.id, warehouseDisplayName(w)]));
+  const whName = Object.fromEntries(warehouses.map((w) => [w.id, w.name]));
   const supName = Object.fromEntries(suppliers.map((s) => [s.id, s.name]));
 
   const filtered = items.filter((it) =>
@@ -134,7 +128,7 @@ export default function WarehousePage() {
     const rows = items.filter((item) => item.warehouse_id === warehouse.id);
     return {
       id: warehouse.id,
-      name: warehouseDisplayName(warehouse),
+      name: warehouse.name,
       count: rows.length,
       cost: rows.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0), 0),
     };
@@ -154,7 +148,7 @@ export default function WarehousePage() {
         </select>
         <select className="filter-sel" value={fWh} onChange={(e) => setFWh(e.target.value)}>
           <option value="">كل المستودعات</option>
-          {warehouses.map((w) => <option key={w.id} value={w.id}>{warehouseDisplayName(w)}</option>)}
+          {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
         <span className="more">{fmtNum(filtered.length)} صنف{lowCount > 0 ? ` · ${fmtNum(lowCount)} ناقص` : ''}</span>
       </div>
@@ -166,7 +160,7 @@ export default function WarehousePage() {
               <b>{warehouse.name}</b>
               <span>{fmtNum(warehouse.count)} صنف</span>
             </div>
-            <strong className="amt">{fmtMoney(warehouse.cost)} ر.س</strong>
+            <strong className="amt">{fmtMoney(warehouse.cost)} ⃁</strong>
           </div>
         ))}
       </div>
@@ -193,7 +187,7 @@ export default function WarehousePage() {
                       {low && <span className="pill p-cancel" style={{ marginInlineStart: 6 }}>ناقص</span>}
                     </td>
                     <td className="amt">{fmtNum(it.reorder_level)}</td>
-                    <td className="amt">{fmtMoney(it.unit_cost)} ر.س</td>
+                    <td className="amt">{fmtMoney(it.unit_cost)} ⃁</td>
                     <td>{supName[it.supplier_id] || '—'}</td>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                       <button className="btn ghost sm" onClick={() => openEdit(it)}>تعديل</button>
@@ -247,12 +241,12 @@ export default function WarehousePage() {
               <div className="field"><label>المستودع</label>
                 <select value={form.warehouse_id} onChange={(e) => set('warehouse_id', e.target.value)}>
                   <option value="">— بدون —</option>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{warehouseDisplayName(w)}</option>)}
+                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
               </div>
               <div className="field"><label>الكمية</label><input type="number" min="0" step="0.01" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} dir="ltr" /></div>
               <div className="field"><label>حد التنبيه</label><input type="number" min="0" step="0.01" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} dir="ltr" /></div>
-              <div className="field"><label>تكلفة الوحدة (ر.س)</label><input type="number" min="0" step="0.01" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} dir="ltr" /></div>
+              <div className="field"><label>تكلفة الوحدة (⃁)</label><input type="number" min="0" step="0.01" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} dir="ltr" /></div>
               <div className="field"><label>المورّد</label>
                 <select value={form.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
                   <option value="">— بدون —</option>

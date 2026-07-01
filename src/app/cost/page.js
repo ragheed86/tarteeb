@@ -1,99 +1,227 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  getProjects, getClients, updateProject,
+  getProjectCosts, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
+} from '@/lib/data';
 import { fmtMoney } from '@/lib/format';
+import { Loading, Empty, ErrorBar } from '../ui';
 
-const projects = [
-  { name: 'تنظيم دواليب', client: 'نورة العتيبي', price: 3200, labor: 900, materials: 550, transport: 150, bonus: 150 },
-  { name: 'تنظيم غرفة ملابس', client: 'نورة العتيبي', price: 2800, labor: 800, materials: 600, transport: 120, bonus: 120 },
-  { name: 'استشارة تنظيم منزلي', client: 'نورة العتيبي', price: 3400, labor: 1200, materials: 300, transport: 200, bonus: 200 },
-  { name: 'تنظيم مطبخ كامل', client: 'عبدالله الشهري', price: 4800, labor: 1200, materials: 850, transport: 200, bonus: 300 },
-  { name: 'تنظيم مكتب منزلي', client: 'عبدالله الشهري', price: 2600, labor: 700, materials: 500, transport: 150, bonus: 120 },
-  { name: 'باكج نقل وتغليف', client: 'ريم القحطاني', price: 6500, labor: 2200, materials: 1100, transport: 600, bonus: 350 },
-  { name: 'غرفة أطفال', client: 'سارة المطيري', price: 2400, labor: 700, materials: 450, transport: 120, bonus: 100 },
-  { name: 'تنظيم مكتب', client: 'فهد الدوسري', price: 3900, labor: 1000, materials: 700, transport: 180, bonus: 220 },
-  { name: 'تنظيم مستودع', client: 'فهد الدوسري', price: 4100, labor: 1300, materials: 600, transport: 250, bonus: 200 },
-  { name: 'تخزين مخصص', client: 'منيرة السبيعي', price: 5200, labor: 1500, materials: 900, transport: 300, bonus: 300 },
-  { name: 'تنظيم دواليب', client: 'منيرة السبيعي', price: 3000, labor: 850, materials: 520, transport: 140, bonus: 140 },
-];
+const EMPTY_ESTIMATE = {
+  workers_count: '', worker_hours: '', worker_rate: '',
+  supervisors_count: '', supervisor_hours: '', supervisor_rate: '',
+  materials_cost: '', transport_cost: '', other_cost: '',
+};
+
+function num(value) {
+  return Number(value) || 0;
+}
 
 export default function CostPage() {
+  const [state, setState] = useState(null); // { projects, byId }
+  const [err, setErr] = useState('');
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState(projects[3]);
-  const filtered = useMemo(() => {
-    const q = query.trim();
-    if (!q) return [];
-    return projects.filter((p) => `${p.name} ${p.client}`.includes(q));
-  }, [query]);
-  const total = selected.labor + selected.materials + selected.transport + selected.bonus;
-  const profit = selected.price - total;
-  const margin = Math.round((profit / selected.price) * 100);
+  const [selected, setSelected] = useState(null);
+  const [salePrice, setSalePrice] = useState('');
+  const [estimate, setEstimate] = useState(EMPTY_ESTIMATE);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
 
-  function pick(p) {
-    setSelected(p);
-    setQuery(`${p.name} · ${p.client}`);
+  useEffect(() => {
+    Promise.all([getProjects(), getClients()])
+      .then(([projects, clients]) => {
+        const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
+        setState({ projects, byId });
+        if (projects[0]) pick(projects[0], byId);
+      })
+      .catch((e) => setErr(e.message || 'تعذّر التحميل'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function pick(p, byIdOverride) {
+    const byId = byIdOverride || state?.byId || {};
+    setSelected({ ...p, clientName: byId[p.client_id] || 'عميل غير معروف' });
+    setQuery(`${p.title} · ${byId[p.client_id] || ''}`);
+    setSalePrice(p.sale_price ?? '');
+    setSaveMsg('');
+    try {
+      const costs = await getProjectCosts(p.id);
+      setEstimate(costRowsToEstimate(costs));
+    } catch {
+      setEstimate(EMPTY_ESTIMATE);
+    }
+  }
+
+  function setEstimateField(k, v) { setEstimate((f) => ({ ...f, [k]: v })); }
+
+  const filtered = useMemo(() => {
+    if (!state) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return state.projects.filter((p) => `${p.title} ${state.byId[p.client_id] || ''}`.toLowerCase().includes(q));
+  }, [query, state]);
+
+  const workerTotal = num(estimate.workers_count) * num(estimate.worker_hours) * num(estimate.worker_rate);
+  const supervisorTotal = num(estimate.supervisors_count) * num(estimate.supervisor_hours) * num(estimate.supervisor_rate);
+  const total = workerTotal + supervisorTotal + num(estimate.materials_cost) + num(estimate.transport_cost) + num(estimate.other_cost);
+  const price = num(salePrice);
+  const profit = price - total;
+  const margin = price > 0 ? Math.round((profit / price) * 100) : 0;
+
+  async function save() {
+    if (!selected) return;
+    setSaving(true); setSaveMsg('');
+    try {
+      const up = await updateProject(selected.id, { sale_price: price });
+      await saveProjectCosts(selected.id, estimateToCostRows(estimate));
+      setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === up.id ? up : x)) }));
+      setSelected((s) => ({ ...s, sale_price: up.sale_price }));
+      setSaveMsg('تم حفظ التكاليف');
+    } catch (e) {
+      setSaveMsg(e.message || 'تعذّر الحفظ');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (err) return <ErrorBar message={err} />;
+  if (!state) return <Loading />;
+  if (state.projects.length === 0) {
+    return <div className="card"><Empty title="لا توجد مشاريع بعد" desc="أنشئ مشروعاً من صفحة المشاريع أولاً لإدارة تكلفته هنا." /></div>;
   }
 
   return (
     <>
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="searchwrap" style={{ flex: 1, minWidth: 240, position: 'relative' }}>
+          <div style={{ flex: 1, minWidth: 240, position: 'relative' }}>
             <div className="fsearch" style={{ marginBottom: 0 }}>
               <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="اكتب اسم المشروع أو العميل لإضافة تكاليفه..." />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="اكتب اسم المشروع أو العميل لإدارة تكلفته..." />
             </div>
             <div className={`ac${query.trim() ? ' open' : ''}`}>
               {filtered.length === 0 ? (
                 <div className="presult" style={{ color: 'var(--muted)', cursor: 'default' }}>لا يوجد مشروع مطابق</div>
               ) : filtered.map((p) => (
-                <div className="presult" key={`${p.name}-${p.client}`} onClick={() => pick(p)}>
-                  <span>{p.name} · {p.client}</span><span className="pa">اختيار +</span>
+                <div className="presult" key={p.id} onClick={() => pick(p)}>
+                  <span>{p.title} · {state.byId[p.client_id] || '—'}</span><span className="pa">اختيار +</span>
                 </div>
               ))}
             </div>
           </div>
-          <select className="fselect" value={`${selected.name}|${selected.client}`} onChange={(e) => {
-            const [name, client] = e.target.value.split('|');
-            const p = projects.find((x) => x.name === name && x.client === client);
+          <select className="fselect" value={selected?.id || ''} onChange={(e) => {
+            const p = state.projects.find((x) => x.id === e.target.value);
             if (p) pick(p);
           }}>
             <option value="">— أو اختر من القائمة —</option>
-            {projects.map((p) => <option key={`${p.name}-${p.client}`} value={`${p.name}|${p.client}`}>{p.name} · {p.client}</option>)}
+            {state.projects.map((p) => <option key={p.id} value={p.id}>{p.title} · {state.byId[p.client_id] || '—'}</option>)}
           </select>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <div><div className="uid">مشروع · TRT-021-P2</div><h2 style={{ fontFamily: 'var(--display)', fontSize: 18, fontWeight: 600 }}>{selected.name} · {selected.client}</h2></div>
-        <div style={{ marginInlineStart: 'auto', textAlign: 'start' }}><div className="uid">سعر البيع</div><div style={{ fontFamily: 'var(--display)', fontSize: 22, fontWeight: 600 }}>{fmtMoney(selected.price)} ر.س</div></div>
-      </div>
+      {!selected ? (
+        <div className="card"><Empty title="اختر مشروعاً" desc="ابحث عن مشروع أعلاه لعرض تكلفته وتعديلها." /></div>
+      ) : (
+        <>
+          <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div className="uid">مشروع</div>
+              <h2 style={{ fontFamily: 'var(--display)', fontSize: 18, fontWeight: 600 }}>{selected.title} · {selected.clientName}</h2>
+            </div>
+            <div className="field" style={{ marginInlineStart: 'auto', textAlign: 'start', marginBottom: 0 }}>
+              <label>سعر البيع</label>
+              <input
+                type="number" min="0" step="0.01" value={salePrice} dir="ltr"
+                onChange={(e) => setSalePrice(e.target.value)}
+                style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 600, width: 160 }}
+              />
+            </div>
+          </div>
 
-      <div className="costwrap">
-        <div className="card">
-          <div className="sec-head"><h2>تفصيل التكاليف</h2><button className="btn ghost sm" style={{ marginInlineStart: 'auto' }}>بند</button></div>
-          <CostLine icon="👤" label="أجور عمالة" value={selected.labor} />
-          <CostLine icon="📦" label="مواد ومنظمات" value={selected.materials} />
-          <CostLine icon="🚚" label="مواصلات ونقل" value={selected.transport} />
-          <CostLine icon="⭐" label="مكافأة المشرف" value={selected.bonus} />
-          <div className="cost-line" style={{ borderBottom: 0, fontWeight: 600 }}><div className="lft" style={{ marginInlineStart: 41 }}>إجمالي التكلفة</div><b style={{ color: 'var(--neg)' }}>{fmtMoney(total)} ر.س</b></div>
-        </div>
-        <div>
-          <div className="result">
-            <div className="mg">صافي ربح المشروع</div>
-            <div className="big">{fmtMoney(profit)} ر.س</div>
-            <div className="mg">هامش الربح {margin}% · يُحتسب تلقائياً من البنود</div>
+          <div className="estimate-box" style={{ marginBottom: 16 }}>
+            <div className="estimate-head">
+              <h3>تفصيل تكلفة العمالة</h3>
+              <span className="amt">{fmtMoney(workerTotal + supervisorTotal)} ⃁</span>
+            </div>
+            <div className="estimate-grid">
+              <div className="field">
+                <label>عدد العاملين</label>
+                <input type="number" min="0" step="1" value={estimate.workers_count} onChange={(e) => setEstimateField('workers_count', e.target.value)} dir="ltr" />
+              </div>
+              <div className="field">
+                <label>ساعات العامل</label>
+                <input type="number" min="0" step="0.5" value={estimate.worker_hours} onChange={(e) => setEstimateField('worker_hours', e.target.value)} dir="ltr" />
+              </div>
+              <div className="field">
+                <label>سعر الساعة</label>
+                <input type="number" min="0" step="0.01" value={estimate.worker_rate} onChange={(e) => setEstimateField('worker_rate', e.target.value)} dir="ltr" />
+              </div>
+              <div className="estimate-total">
+                <span>إجمالي العاملين</span>
+                <b className="amt">{fmtMoney(workerTotal)} ⃁</b>
+              </div>
+              <div className="field">
+                <label>عدد المشرفين</label>
+                <input type="number" min="0" step="1" value={estimate.supervisors_count} onChange={(e) => setEstimateField('supervisors_count', e.target.value)} dir="ltr" />
+              </div>
+              <div className="field">
+                <label>ساعات المشرف</label>
+                <input type="number" min="0" step="0.5" value={estimate.supervisor_hours} onChange={(e) => setEstimateField('supervisor_hours', e.target.value)} dir="ltr" />
+              </div>
+              <div className="field">
+                <label>سعر ساعة المشرف</label>
+                <input type="number" min="0" step="0.01" value={estimate.supervisor_rate} onChange={(e) => setEstimateField('supervisor_rate', e.target.value)} dir="ltr" />
+              </div>
+              <div className="estimate-total">
+                <span>إجمالي المشرفين</span>
+                <b className="amt">{fmtMoney(supervisorTotal)} ⃁</b>
+              </div>
+            </div>
           </div>
-          <div className="card waterfall">
-            <div className="wf"><span className="wl">سعر البيع</span><div className="wbar" style={{ width: '100%', background: 'var(--sage)' }}>{fmtMoney(selected.price)}</div></div>
-            <div className="wf"><span className="wl">التكلفة</span><div className="wbar" style={{ width: `${Math.round((total / selected.price) * 100)}%`, background: 'var(--neg)' }}>{fmtMoney(total)}</div></div>
-            <div className="wf"><span className="wl">صافي الربح</span><div className="wbar" style={{ width: `${Math.max(Math.round((profit / selected.price) * 100), 0)}%`, background: 'var(--green)' }}>{fmtMoney(profit)}</div></div>
+
+          <div className="costwrap">
+            <div className="card">
+              <div className="sec-head"><h2>تفصيل التكاليف</h2></div>
+              <CostInput icon="📦" label="تكلفة المنتجات" value={estimate.materials_cost} onChange={(v) => setEstimateField('materials_cost', v)} />
+              <CostInput icon="🚚" label="النقل" value={estimate.transport_cost} onChange={(v) => setEstimateField('transport_cost', v)} />
+              <CostInput icon="✳️" label="أخرى" value={estimate.other_cost} onChange={(v) => setEstimateField('other_cost', v)} />
+              <div className="cost-line" style={{ borderBottom: 0, fontWeight: 600 }}>
+                <div className="lft" style={{ marginInlineStart: 41 }}>إجمالي التكلفة</div>
+                <b style={{ color: 'var(--neg)' }}>{fmtMoney(total)} ⃁</b>
+              </div>
+            </div>
+            <div>
+              <div className="result">
+                <div className="mg">صافي ربح المشروع</div>
+                <div className="big">{fmtMoney(profit)} ⃁</div>
+                <div className="mg">هامش الربح {margin}% · يُحتسب تلقائياً من البنود</div>
+              </div>
+              <div className="card waterfall">
+                <div className="wf"><span className="wl">سعر البيع</span><div className="wbar" style={{ width: '100%', background: 'var(--sage)' }}>{fmtMoney(price)}</div></div>
+                <div className="wf"><span className="wl">التكلفة</span><div className="wbar" style={{ width: `${price > 0 ? Math.round((total / price) * 100) : 0}%`, background: 'var(--neg)' }}>{fmtMoney(total)}</div></div>
+                <div className="wf"><span className="wl">صافي الربح</span><div className="wbar" style={{ width: `${Math.max(price > 0 ? Math.round((profit / price) * 100) : 0, 0)}%`, background: 'var(--green)' }}>{fmtMoney(profit)}</div></div>
+              </div>
+              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button className="btn" onClick={save} disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ التكاليف'}</button>
+                {saveMsg && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{saveMsg}</span>}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </>
   );
 }
 
-function CostLine({ icon, label, value }) {
-  return <div className="cost-line"><div className="lft"><div className="ic">{icon}</div>{label}</div><b>{fmtMoney(value)} ر.س</b></div>;
+function CostInput({ icon, label, value, onChange }) {
+  return (
+    <div className="cost-line">
+      <div className="lft"><div className="ic">{icon}</div>{label}</div>
+      <input
+        type="number" min="0" step="0.01" value={value} dir="ltr"
+        onChange={(e) => onChange(e.target.value)}
+        style={{ width: 120, textAlign: 'end', border: '1px solid var(--line)', borderRadius: 8, padding: '6px 8px', fontFamily: 'var(--body)' }}
+      />
+    </div>
+  );
 }

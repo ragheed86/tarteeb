@@ -1,4 +1,5 @@
 // تنسيق موحّد — الأرقام لاتينية دائماً (en-US)، التواريخ عربية بأرقام لاتينية
+export const CURRENCY = '⃁'; // رمز الريال السعودي الجديد (Unicode 17.0)
 export function fmtNum(n) {
   return new Intl.NumberFormat('en-US').format(Number(n || 0));
 }

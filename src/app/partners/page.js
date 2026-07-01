@@ -109,7 +109,7 @@ export default function PartnersPage() {
                   <tr key={p.id}>
                     <td><span className="nm">{p.name}</span></td>
                     <td className="amt">{fmtNum(p.share_percent)}%</td>
-                    <td className="amt" style={{ color: bal < 0 ? 'var(--neg)' : 'var(--pos)' }}>{fmtMoney(bal)} ر.س</td>
+                    <td className="amt" style={{ color: bal < 0 ? 'var(--neg)' : 'var(--pos)' }}>{fmtMoney(bal)} ⃁</td>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                       <button className="btn ghost sm" onClick={() => openEdit(p)}>تعديل</button>
                       <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => delP(p)}>حذف</button>
@@ -152,7 +152,7 @@ export default function PartnersPage() {
                   <tr key={t.id}>
                     <td>{nameById[t.partner_id] || '—'}</td>
                     <td><span className={`pill ${meta.sign < 0 ? 'p-cancel' : 'p-done'}`}>{meta.label}</span></td>
-                    <td className="amt">{meta.sign < 0 ? '−' : '+'}{fmtMoney(t.amount)} ر.س</td>
+                    <td className="amt">{meta.sign < 0 ? '−' : '+'}{fmtMoney(t.amount)} ⃁</td>
                     <td>{fmtDate(t.period)}</td>
                     <td>{t.note || '—'}</td>
                     <td style={{ textAlign: 'left' }}><button className="x-btn" onClick={() => delTx(t)}>✕</button></td>

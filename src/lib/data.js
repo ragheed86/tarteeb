@@ -86,8 +86,57 @@ export async function getProject(id) {
 // ---------- تكلفة المشروع (بنود + ملخص محسوب من view) ----------
 export async function getProjectCosts(projectId) {
   const { data, error } = await supabase.from('project_costs')
-    .select('id,kind,label,amount').eq('project_id', projectId);
+    .select('id,kind,label,amount,qty,hours,rate').eq('project_id', projectId);
   if (error) throw error; return data;
+}
+// يستبدل بنود الجدول التقديري فقط (عمالة/إشراف/مواد/نقل/أخرى) دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً
+export async function saveProjectCosts(projectId, rows) {
+  const managedLabels = new Set(['عمالة', 'إشراف']);
+  const managedKinds = new Set(['materials', 'transport', 'other']);
+  const { data: existing, error: fetchErr } = await supabase.from('project_costs')
+    .select('id,kind,label').eq('project_id', projectId);
+  if (fetchErr) throw fetchErr;
+  const idsToDelete = (existing || [])
+    .filter((c) => (c.kind === 'labor' && managedLabels.has(c.label)) || (managedKinds.has(c.kind) && !c.label))
+    .map((c) => c.id);
+  if (idsToDelete.length) {
+    const { error: delErr } = await supabase.from('project_costs').delete().in('id', idsToDelete);
+    if (delErr) throw delErr;
+  }
+  if (!rows.length) return [];
+  const payload = rows.map((r) => ({ ...r, project_id: projectId }));
+  const { data, error } = await supabase.from('project_costs').insert(payload)
+    .select('id,kind,label,amount,qty,hours,rate');
+  if (error) throw error; return data;
+}
+// جدول تقديري (عمالة/إشراف/مواد/نقل/أخرى) <-> بنود project_costs
+export function estimateToCostRows(estimate) {
+  const n = (v) => Number(v) || 0;
+  const rows = [
+    { kind: 'labor', label: 'عمالة', qty: n(estimate.workers_count), hours: n(estimate.worker_hours), rate: n(estimate.worker_rate) },
+    { kind: 'labor', label: 'إشراف', qty: n(estimate.supervisors_count), hours: n(estimate.supervisor_hours), rate: n(estimate.supervisor_rate) },
+    { kind: 'materials', label: null, qty: null, hours: null, rate: null, amount: n(estimate.materials_cost) },
+    { kind: 'transport', label: null, qty: null, hours: null, rate: null, amount: n(estimate.transport_cost) },
+    { kind: 'other', label: null, qty: null, hours: null, rate: null, amount: n(estimate.other_cost) },
+  ].map((r) => ({ ...r, amount: r.amount ?? r.qty * r.hours * r.rate }));
+  return rows.filter((r) => r.amount > 0);
+}
+export function costRowsToEstimate(rows) {
+  const estimate = {
+    workers_count: '', worker_hours: '', worker_rate: '',
+    supervisors_count: '', supervisor_hours: '', supervisor_rate: '',
+    materials_cost: '', transport_cost: '', other_cost: '',
+  };
+  for (const r of rows || []) {
+    if (r.kind === 'labor' && r.label === 'عمالة') {
+      estimate.workers_count = r.qty ?? ''; estimate.worker_hours = r.hours ?? ''; estimate.worker_rate = r.rate ?? '';
+    } else if (r.kind === 'labor' && r.label === 'إشراف') {
+      estimate.supervisors_count = r.qty ?? ''; estimate.supervisor_hours = r.hours ?? ''; estimate.supervisor_rate = r.rate ?? '';
+    } else if (r.kind === 'materials') estimate.materials_cost = r.amount ?? '';
+    else if (r.kind === 'transport') estimate.transport_cost = r.amount ?? '';
+    else if (r.kind === 'other') estimate.other_cost = r.amount ?? '';
+  }
+  return estimate;
 }
 export async function getProjectFinancials(projectId) {
   const { data, error } = await supabase.from('project_financials')

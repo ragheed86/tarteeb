@@ -28,7 +28,7 @@ export default function HeatmapPage() {
                 <div className="hn">{name}</div>
                 <div>
                   <div className="hv">{count}</div>
-                  <div className="hr">{revenue} ر.س</div>
+                  <div className="hr">{revenue} ⃁</div>
                 </div>
               </div>
             ))}

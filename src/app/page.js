@@ -84,8 +84,8 @@ export default function Dashboard() {
         </div>
       </div>
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-        <div className="kpi"><div className="lbl">{p.lbl}</div><div className="val">{p.rev} ر.س</div><div className="trend up">▲ مقابل الفترة السابقة</div></div>
-        <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val">{p.profit} ر.س</div><div className="trend"><span>بعد خصم كل التكاليف</span></div></div>
+        <div className="kpi"><div className="lbl">{p.lbl}</div><div className="val">{p.rev} ⃁</div><div className="trend up">▲ مقابل الفترة السابقة</div></div>
+        <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val">{p.profit} ⃁</div><div className="trend"><span>بعد خصم كل التكاليف</span></div></div>
         <div className="kpi"><div className="lbl">متوسط هامش الربح</div><div className="val">{p.margin}</div><div className="trend"><span>على مستوى المشاريع</span></div></div>
         <div className="kpi"><div className="lbl">العملاء الجدد</div><div className="val">{p.newc}</div><div className="trend up">▲ مقابل الفترة السابقة</div></div>
         <div className="kpi"><div className="lbl">مشاريع نشطة</div><div className="val">{fmtNum(data.activeProjects)}</div><div className="trend"><span>{fmtNum(data.upcoming.length)} تسلّم هذا الأسبوع</span></div></div>
@@ -164,7 +164,7 @@ export default function Dashboard() {
                   <tr key={p.id} className="clickable" onClick={() => router.push(`/projects/${p.id}`)}>
                     <td><span className="nm">{p.title}</span></td>
                     <td>{p.service_type || '—'}</td>
-                    <td className="amt">{fmtMoney(p.sale_price)} ر.س</td>
+                    <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
                     <td><div className="prog" style={{ width: 90 }}><i style={{ width: `${p.progress || 0}%` }} /></div></td>
                     <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
                   </tr>

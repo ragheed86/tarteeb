@@ -85,7 +85,7 @@ export default function InvoicesPage() {
           فاتورة جديدة
         </button>
         <span className="more" style={{ marginInlineStart: 'auto' }}>
-          {fmtNum(invoices.length)} فاتورة · محصّل {fmtMoney(totalPaid)} من {fmtMoney(totalAll)} ر.س
+          {fmtNum(invoices.length)} فاتورة · محصّل {fmtMoney(totalPaid)} من {fmtMoney(totalAll)} ⃁
         </span>
       </div>
       <div className="card" style={{ padding: '6px 0' }}>
@@ -102,15 +102,15 @@ export default function InvoicesPage() {
                     <td><span className="nm amt">{inv.number || '—'}</span></td>
                     <td>{byId[inv.client_id] || '—'}</td>
                     <td>{fmtDate(inv.issue_at)}</td>
-                    <td className="amt">{fmtMoney(inv.total)} ر.س</td>
-                    <td className="amt">{inv.vat_applicable ? `${fmtMoney(inv.vat_amount)} ر.س` : 'معفاة'}</td>
+                    <td className="amt">{fmtMoney(inv.total)} ⃁</td>
+                    <td className="amt">{inv.vat_applicable ? `${fmtMoney(inv.vat_amount)} ⃁` : 'معفاة'}</td>
                     <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
-              <tr><td colSpan={3}><b>الإجمالي</b></td><td className="amt"><b>{fmtMoney(totalAll)} ر.س</b></td><td colSpan={2} /></tr>
+              <tr><td colSpan={3}><b>الإجمالي</b></td><td className="amt"><b>{fmtMoney(totalAll)} ⃁</b></td><td colSpan={2} /></tr>
             </tfoot>
           </table>
         )}
@@ -165,7 +165,7 @@ export default function InvoicesPage() {
                   <input placeholder="الوصف" value={it.description} onChange={(e) => setItem(idx, 'description', e.target.value)} style={{ flex: 2 }} />
                   <input type="number" min="0" step="1" placeholder="الكمية" dir="ltr" style={{ maxWidth: 90 }} value={it.qty} onChange={(e) => setItem(idx, 'qty', e.target.value)} />
                   <input type="number" min="0" step="0.01" placeholder="سعر الوحدة" dir="ltr" style={{ maxWidth: 120 }} value={it.unit_price} onChange={(e) => setItem(idx, 'unit_price', e.target.value)} />
-                  <span className="amt" style={{ minWidth: 90, alignSelf: 'center', color: 'var(--muted)' }}>{fmtMoney((Number(it.qty) || 0) * (Number(it.unit_price) || 0))} ر.س</span>
+                  <span className="amt" style={{ minWidth: 90, alignSelf: 'center', color: 'var(--muted)' }}>{fmtMoney((Number(it.qty) || 0) * (Number(it.unit_price) || 0))} ⃁</span>
                   <button type="button" className="x-btn" onClick={() => rmItem(idx)}>✕</button>
                 </div>
               ))}
@@ -174,9 +174,9 @@ export default function InvoicesPage() {
 
             {/* المجاميع */}
             <div className="totals">
-              <div className="trow"><span>المجموع الفرعي</span><span className="amt">{fmtMoney(subtotal)} ر.س</span></div>
-              <div className="trow"><span>الضريبة ({head.vat_applicable ? `${VAT_RATE}%` : 'معفاة'})</span><span className="amt">{fmtMoney(vatAmount)} ر.س</span></div>
-              <div className="trow grand"><span>الإجمالي</span><span className="amt">{fmtMoney(total)} ر.س</span></div>
+              <div className="trow"><span>المجموع الفرعي</span><span className="amt">{fmtMoney(subtotal)} ⃁</span></div>
+              <div className="trow"><span>الضريبة ({head.vat_applicable ? `${VAT_RATE}%` : 'معفاة'})</span><span className="amt">{fmtMoney(vatAmount)} ⃁</span></div>
+              <div className="trow grand"><span>الإجمالي</span><span className="amt">{fmtMoney(total)} ⃁</span></div>
             </div>
 
             <div className="modal-actions">

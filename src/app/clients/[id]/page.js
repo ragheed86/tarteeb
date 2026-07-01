@@ -51,9 +51,9 @@ export default function ClientProfile() {
       </button>
 
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <div className="kpi"><div className="lbl">إجمالي المفوتر</div><div className="val amt">{fmtMoney(invoiced)} ر.س</div></div>
-        <div className="kpi"><div className="lbl">المحصّل</div><div className="val amt">{fmtMoney(paid)} ر.س</div></div>
-        <div className="kpi"><div className="lbl">المتبقّي</div><div className="val amt">{fmtMoney(outstanding)} ر.س</div></div>
+        <div className="kpi"><div className="lbl">إجمالي المفوتر</div><div className="val amt">{fmtMoney(invoiced)} ⃁</div></div>
+        <div className="kpi"><div className="lbl">المحصّل</div><div className="val amt">{fmtMoney(paid)} ⃁</div></div>
+        <div className="kpi"><div className="lbl">المتبقّي</div><div className="val amt">{fmtMoney(outstanding)} ⃁</div></div>
         <div className="kpi"><div className="lbl">عدد الفواتير</div><div className="val amt">{fmtNum(invoices.length)}</div></div>
       </div>
 
@@ -111,7 +111,7 @@ export default function ClientProfile() {
                   <tr key={p.id} className="clickable" onClick={() => router.push(`/projects/${p.id}`)}>
                     <td><span className="nm">{p.title}</span></td>
                     <td>{p.service_type || '—'}</td>
-                    <td className="amt">{fmtMoney(p.sale_price)} ر.س</td>
+                    <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
                     <td><span className={`pill ${ps.cls}`}>{ps.label}</span></td>
                     <td>{fmtDate(p.due_date)}</td>
                   </tr>
@@ -137,7 +137,7 @@ export default function ClientProfile() {
                   <tr key={i.id} className="clickable" onClick={() => router.push(`/invoices/${i.id}`)}>
                     <td className="amt" dir="ltr" style={{ textAlign: 'start' }}>{i.number || '—'}</td>
                     <td>{fmtDate(i.issue_at)}</td>
-                    <td className="amt">{fmtMoney(i.total)} ر.س</td>
+                    <td className="amt">{fmtMoney(i.total)} ⃁</td>
                     <td><span className={`pill ${is.cls}`}>{is.label}</span></td>
                   </tr>
                 );

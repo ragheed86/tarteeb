@@ -73,9 +73,9 @@ export default function ProjectDetail() {
 
       {/* المؤشرات المالية من view */}
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <div className="kpi"><div className="lbl">قيمة العقد</div><div className="val amt">{fmtMoney(project.sale_price)} ر.س</div></div>
-        <div className="kpi"><div className="lbl">إجمالي التكاليف</div><div className="val amt">{fmtMoney(totalCost)} ر.س</div></div>
-        <div className="kpi"><div className="lbl">صافي الربح</div><div className="val amt">{fmtMoney(netProfit)} ر.س</div></div>
+        <div className="kpi"><div className="lbl">قيمة العقد</div><div className="val amt">{fmtMoney(project.sale_price)} ⃁</div></div>
+        <div className="kpi"><div className="lbl">إجمالي التكاليف</div><div className="val amt">{fmtMoney(totalCost)} ⃁</div></div>
+        <div className="kpi"><div className="lbl">صافي الربح</div><div className="val amt">{fmtMoney(netProfit)} ⃁</div></div>
         <div className="kpi"><div className="lbl">هامش الربح</div><div className="val amt">{fmtNum(marginPct)}%</div></div>
       </div>
 
@@ -200,7 +200,7 @@ function CostsCard({ projectId, costs, onChange }) {
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="sec-head"><h2>بنود التكلفة</h2><span className="more amt">الإجمالي {fmtMoney(total)} ر.س</span></div>
+      <div className="sec-head"><h2>بنود التكلفة</h2><span className="more amt">الإجمالي {fmtMoney(total)} ⃁</span></div>
       {costs.length === 0 ? <Empty title="لا بنود تكلفة" desc="أضف بنود التكلفة لحساب الربح." /> : (
         <table>
           <thead><tr><th>النوع</th><th>الوصف</th><th>المبلغ</th><th></th></tr></thead>
@@ -209,7 +209,7 @@ function CostsCard({ projectId, costs, onChange }) {
               <tr key={c.id}>
                 <td>{COST_KIND[c.kind] || c.kind}</td>
                 <td>{c.label || '—'}</td>
-                <td className="amt">{fmtMoney(c.amount)} ر.س</td>
+                <td className="amt">{fmtMoney(c.amount)} ⃁</td>
                 <td style={{ textAlign: 'left' }}><button className="x-btn" onClick={() => del(c)}>✕</button></td>
               </tr>
             ))}

@@ -1,7 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getProjects, getClients, getEmployees, createProject, updateProject, removeProject } from '@/lib/data';
+import {
+  getProjects, getClients, createProject, updateProject, removeProject,
+  getProjectCosts, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
+} from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
 
@@ -16,7 +19,7 @@ const STATUS_OPTS = [
 
 const EMPTY = {
   title: '', client_id: '', service_type: '', sale_price: '', status: 'quote',
-  supervisor_id: '', start_date: '', due_date: '', progress: 0,
+  start_date: '', due_date: '', progress: 0,
 };
 
 const EMPTY_ESTIMATE = {
@@ -51,9 +54,9 @@ export default function ProjectsPage() {
 
   async function load() {
     try {
-      const [projects, clients, employees] = await Promise.all([getProjects(), getClients(), getEmployees()]);
+      const [projects, clients] = await Promise.all([getProjects(), getClients()]);
       const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
-      setState({ projects, clients, employees, byId });
+      setState({ projects, clients, byId });
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
@@ -67,15 +70,19 @@ export default function ProjectsPage() {
     setEstimate(EMPTY_ESTIMATE);
     setFormErr(''); setOpen(true);
   }
-  function openEdit(p) {
+  async function openEdit(p) {
     setEditing(p);
     setForm({
       title: p.title || '', client_id: p.client_id || '', service_type: p.service_type || '',
-      sale_price: p.sale_price ?? '', status: p.status || 'quote', supervisor_id: p.supervisor_id || '',
+      sale_price: p.sale_price ?? '', status: p.status || 'quote',
       start_date: p.start_date || '', due_date: p.due_date || '', progress: p.progress ?? 0,
     });
     setEstimate(EMPTY_ESTIMATE);
     setFormErr(''); setOpen(true);
+    try {
+      const costs = await getProjectCosts(p.id);
+      setEstimate(costRowsToEstimate(costs));
+    } catch { /* تجاهل: يبقى الجدول التقديري فارغاً إذا تعذّر التحميل */ }
   }
   function close() { if (!saving) { setOpen(false); setEditing(null); } }
 
@@ -90,19 +97,22 @@ export default function ProjectsPage() {
       service_type: form.service_type.trim() || null,
       sale_price: Number(form.sale_price) || 0,
       status: form.status,
-      supervisor_id: form.supervisor_id || null,
       start_date: form.start_date || null,
       due_date: form.due_date || null,
       progress: Math.max(0, Math.min(100, Number(form.progress) || 0)),
     };
     try {
+      let projectId;
       if (editing) {
         const up = await updateProject(editing.id, payload);
         setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === up.id ? up : x)) }));
+        projectId = up.id;
       } else {
         const np = await createProject(payload);
         setState((s) => ({ ...s, projects: [np, ...s.projects] }));
+        projectId = np.id;
       }
+      await saveProjectCosts(projectId, estimateToCostRows(estimate));
       close();
     } catch (e2) { setFormErr(e2.message || 'تعذّر الحفظ'); }
     finally { setSaving(false); }
@@ -118,7 +128,7 @@ export default function ProjectsPage() {
   if (err) return <ErrorBar message={err} />;
   if (!state) return <Loading />;
 
-  const { projects, clients, employees, byId } = state;
+  const { projects, clients, byId } = state;
   const filtered = projects.filter((p) => {
     const d = p.due_date || p.start_date || '';
     return (!from || d >= from) && (!to || d <= to);
@@ -168,7 +178,7 @@ export default function ProjectsPage() {
                       <td className="nm">{p.title}</td>
                       <td>{byId[p.client_id] || 'عميل غير معروف'}</td>
                       <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
-                      <td className="amt">{fmtMoney(p.sale_price)} ر.س</td>
+                      <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
                       <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ width: 70, height: 6, background: 'var(--surface-2)', borderRadius: 6, overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${p.progress || 0}%`, background: 'var(--green)', borderRadius: 6 }} /></span>{fmtNum(p.progress || 0)}%</span></td>
                     </tr>
                   );
@@ -188,7 +198,7 @@ export default function ProjectsPage() {
                   <h3>{p.title}</h3>
                   <div className="cl">{byId[p.client_id] || 'عميل غير معروف'} · {p.service_type || '—'}</div>
                   <div className="row">
-                    <span className="price amt">{fmtMoney(p.sale_price)} ر.س</span>
+                    <span className="price amt">{fmtMoney(p.sale_price)} ⃁</span>
                     <span className={`pill ${st.cls}`}>{st.label}</span>
                   </div>
                   <div className="prog"><i style={{ width: `${p.progress || 0}%` }} /></div>
@@ -218,7 +228,7 @@ export default function ProjectsPage() {
                     <div className="kcard" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>
                       <h4>{p.title}</h4>
                       <div className="km">{byId[p.client_id] || 'عميل غير معروف'} · {p.service_type || '—'}</div>
-                      <div className="kf"><span className="chk">{fmtNum(p.progress || 0)}%</span><span className="kp">{fmtMoney(p.sale_price)} ر.س</span></div>
+                      <div className="kf"><span className="chk">{fmtNum(p.progress || 0)}%</span><span className="kp">{fmtMoney(p.sale_price)} ⃁</span></div>
                     </div>
                   ))}
                 </div>
@@ -273,20 +283,13 @@ export default function ProjectsPage() {
                 <input value={form.service_type} onChange={(e) => set('service_type', e.target.value)} placeholder="دواليب / مطبخ / نقل…" />
               </div>
               <div className="field">
-                <label>قيمة العقد (ر.س)</label>
+                <label>قيمة العقد (⃁)</label>
                 <input type="number" min="0" step="0.01" value={form.sale_price} onChange={(e) => set('sale_price', e.target.value)} dir="ltr" />
               </div>
               <div className="field">
                 <label>الحالة</label>
                 <select value={form.status} onChange={(e) => set('status', e.target.value)}>
                   {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>حجز المشرف</label>
-                <select value={form.supervisor_id} onChange={(e) => set('supervisor_id', e.target.value)}>
-                  <option value="">— بدون —</option>
-                  {employees.map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
                 </select>
               </div>
               <div className="field">
@@ -304,7 +307,7 @@ export default function ProjectsPage() {
               <div className="estimate-box span-2">
                 <div className="estimate-head">
                   <h3>جدول تقديري</h3>
-                  <span className="amt">{fmtMoney(estimateTotal)} ر.س</span>
+                  <span className="amt">{fmtMoney(estimateTotal)} ⃁</span>
                 </div>
                 <div className="estimate-grid">
                   <div className="field">
@@ -321,7 +324,7 @@ export default function ProjectsPage() {
                   </div>
                   <div className="estimate-total">
                     <span>إجمالي العاملين</span>
-                    <b className="amt">{fmtMoney(workerTotal)} ر.س</b>
+                    <b className="amt">{fmtMoney(workerTotal)} ⃁</b>
                   </div>
                   <div className="field">
                     <label>عدد المشرفين</label>
@@ -337,7 +340,7 @@ export default function ProjectsPage() {
                   </div>
                   <div className="estimate-total">
                     <span>إجمالي المشرفين</span>
-                    <b className="amt">{fmtMoney(supervisorTotal)} ر.س</b>
+                    <b className="amt">{fmtMoney(supervisorTotal)} ⃁</b>
                   </div>
                   <div className="field">
                     <label>تكلفة المنتجات</label>

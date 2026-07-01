@@ -28,6 +28,9 @@ export default function ProjectsPage() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
+  const [view, setView] = useState('cards');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
 
   async function load() {
     try {
@@ -96,22 +99,62 @@ export default function ProjectsPage() {
   if (!state) return <Loading />;
 
   const { projects, clients, employees, byId } = state;
+  const filtered = projects.filter((p) => {
+    const d = p.due_date || p.start_date || '';
+    return (!from || d >= from) && (!to || d <= to);
+  });
+  const cols = [
+    ['قيد التجهيز', ['quote', 'preparing']],
+    ['جاري التنفيذ', ['in_progress']],
+    ['تم التسليم', ['delivered', 'completed']],
+  ];
 
   return (
     <>
-      <div className="sec-head" style={{ marginBottom: 18 }}>
-        <button className="btn" onClick={openAdd}>
+      <div className="toolbar">
+        <div className="viewtoggle">
+          <button className={`vt${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')}>بطاقات</button>
+          <button className={`vt${view === 'kanban' ? ' active' : ''}`} onClick={() => setView('kanban')}>كانبان</button>
+          <button className={`vt${view === 'calendar' ? ' active' : ''}`} onClick={() => setView('calendar')}>تقويم</button>
+        </div>
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>من</span>
+        <input type="date" className="fdate" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>إلى</span>
+        <input type="date" className="fdate" value={to} onChange={(e) => setTo(e.target.value)} />
+        <button className="chip" onClick={() => { setFrom(''); setTo(''); }}>مسح</button>
+        <button className="btn" style={{ marginInlineStart: 'auto' }} onClick={openAdd}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
           مشروع جديد
         </button>
-        <span className="more" style={{ marginInlineStart: 'auto' }}>{fmtNum(projects.length)} مشروع</span>
       </div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-4px 0 16px' }}>اسحب المشاريع في كانبان أو التقويم لإعادة جدولتها · فلتر التواريخ يطبّق على طريقة البطاقات.</div>
 
       {projects.length === 0 ? (
         <div className="card"><Empty title="لا توجد مشاريع بعد" desc="أنشئ أول مشروع لربطه بعميل وتتبّع تقدّمه." /></div>
-      ) : (
-        <div className="pgrid">
-          {projects.map((p) => {
+      ) : view === 'cards' ? (
+        <>
+          <div className="sec-head"><h2>ملخص المشاريع</h2><span className="more">اضغط أي صف للتفاصيل</span></div>
+          <div className="card" style={{ padding: '6px 0', overflowX: 'auto', marginBottom: 20 }}>
+            <table>
+              <thead><tr><th>المشروع</th><th>العميل</th><th>الحالة</th><th>سعر البيع</th><th>التقدّم</th></tr></thead>
+              <tbody>
+                {filtered.map((p) => {
+                  const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
+                  return (
+                    <tr className="clickable" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>
+                      <td className="nm">{p.title}</td>
+                      <td>{byId[p.client_id] || 'عميل غير معروف'}</td>
+                      <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
+                      <td className="amt">{fmtMoney(p.sale_price)} ر.س</td>
+                      <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ width: 70, height: 6, background: 'var(--surface-2)', borderRadius: 6, overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${p.progress || 0}%`, background: 'var(--green)', borderRadius: 6 }} /></span>{fmtNum(p.progress || 0)}%</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="pgrid">
+          {filtered.map((p) => {
             const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
             return (
               <div className="pcard" key={p.id} onClick={() => router.push(`/projects/${p.id}`)} style={{ cursor: 'pointer' }}>
@@ -138,6 +181,45 @@ export default function ProjectsPage() {
               </div>
             );
           })}
+          </div>
+        </>
+      ) : view === 'kanban' ? (
+        <div className="kanban">
+          {cols.map(([title, statuses]) => {
+            const rows = projects.filter((p) => statuses.includes(p.status));
+            return (
+              <div className="kcol" key={title}>
+                <div className="kh">{title}<span className="kc">{fmtNum(rows.length)}</span></div>
+                <div className="kbody">
+                  {rows.map((p) => (
+                    <div className="kcard" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>
+                      <h4>{p.title}</h4>
+                      <div className="km">{byId[p.client_id] || 'عميل غير معروف'} · {p.service_type || '—'}</div>
+                      <div className="kf"><span className="chk">{fmtNum(p.progress || 0)}%</span><span className="kp">{fmtMoney(p.sale_price)} ر.س</span></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="card">
+          <div className="calhead"><h3>يوليو 2026</h3><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>مواعيد التسليم والزيارات</span></div>
+          <div className="cal-week"><div>الأحد</div><div>الإثنين</div><div>الثلاثاء</div><div>الأربعاء</div><div>الخميس</div><div>الجمعة</div><div>السبت</div></div>
+          <div className="cal-grid">
+            {Array.from({ length: 3 }, (_, i) => <div className="cell empty" key={`e-${i}`} />)}
+            {Array.from({ length: 31 }, (_, i) => {
+              const day = i + 1;
+              const events = projects.filter((p) => Number((p.due_date || '').slice(8, 10)) === day);
+              return (
+                <div className="cell" key={day}>
+                  <span className="dn">{day}</span>
+                  {events.map((p) => <div className="cev prog" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>{p.title}</div>)}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

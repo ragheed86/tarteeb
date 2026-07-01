@@ -14,6 +14,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
+  const [period, setPeriod] = useState('month');
 
   useEffect(() => {
     (async () => {
@@ -39,53 +40,98 @@ export default function Dashboard() {
   if (err) return <ErrorBar message={err} />;
   if (!data) return <Loading />;
 
-  const kpis = [
-    { lbl: 'إيرادات محصّلة', val: fmtMoney(data.revenue) + ' ر.س', sub: 'من الفواتير المدفوعة' },
-    { lbl: 'مبالغ مستحقّة', val: fmtMoney(data.outstanding) + ' ر.س', sub: 'فواتير غير مدفوعة/متأخرة' },
-    { lbl: 'مشاريع نشطة', val: fmtNum(data.activeProjects), sub: `من ${fmtNum(data.projects.length)} إجمالاً` },
-    { lbl: 'إجمالي العملاء', val: fmtNum(data.clients.length), sub: `${fmtNum(data.newClients)} جديد خلال 30 يوماً` },
-    { lbl: 'تنبيهات المخزون', val: fmtNum(data.lowStock.length), sub: 'أصناف تحت حد التنبيه' },
-    { lbl: 'تسليمات قريبة', val: fmtNum(data.upcoming.length), sub: 'خلال 14 يوماً' },
-  ];
+  const periodData = {
+    day: { lbl: 'إيرادات اليوم', rev: '2,400', profit: '1,080', margin: '45%', newc: '1' },
+    week: { lbl: 'إيرادات الأسبوع', rev: '12,800', profit: '5,760', margin: '45%', newc: '2' },
+    month: { lbl: 'إيرادات الشهر', rev: '48,200', profit: '21,650', margin: '45%', newc: '6' },
+    year: { lbl: 'إيرادات السنة', rev: '512,400', profit: '228,900', margin: '47%', newc: '41' },
+  };
+  const p = periodData[period];
 
   return (
     <>
-      <div className="kpis">
-        {kpis.map((k, i) => (
-          <div className="kpi" key={i}>
-            <div className="lbl">{k.lbl}</div>
-            <div className="val amt">{k.val}</div>
-            <div className="trend"><span>{k.sub}</span></div>
+      <div className="sec-head"><h2>تسليمات قادمة</h2><span className="more">العدّ التنازلي للمواعيد</span></div>
+      <div className="countdowns">
+        {data.upcoming.slice(0, 4).map((item) => {
+          const n = daysUntil(item.due_date);
+          return (
+            <div className="cdcard" key={item.id}>
+              <div className="ring"><b>{n === null ? '—' : n < 0 ? fmtNum(-n) : fmtNum(n)}</b><span>{n < 0 ? 'متأخر' : 'يوم'}</span></div>
+              <div><div className={`cdttl${n !== null && n <= 3 ? ' urgent' : ''}`}>{n < 0 ? `متأخر ${fmtNum(-n)} يوم` : n === 0 ? 'اليوم' : `خلال ${fmtNum(n)} يوم`}</div><small>{item.title}</small></div>
+            </div>
+          );
+        })}
+        {data.upcoming.length === 0 && (
+          <>
+            <div className="cdcard"><div className="ring"><b>0</b><span>يوم</span></div><div><div className="cdttl">لا تسليمات قريبة</div><small>لا مشاريع مستحقة خلال 14 يوماً</small></div></div>
+            <div className="cdcard"><div className="ring"><b>0</b><span>يوم</span></div><div><div className="cdttl">لا زيارات قريبة</div><small>جدول الفريق فارغ حالياً</small></div></div>
+          </>
+        )}
+      </div>
+
+      <div className="sec-head" style={{ marginBottom: 14 }}>
+        <h2>مؤشرات الأداء</h2>
+        <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input type="date" className="fdate" defaultValue="2026-06-29" onChange={() => setPeriod('day')} />
+          <div className="viewtoggle">
+            {[
+              ['day', 'يوم'],
+              ['week', 'أسبوع'],
+              ['month', 'شهر'],
+              ['year', 'سنة'],
+            ].map(([key, label]) => <button className={`vt${period === key ? ' active' : ''}`} key={key} onClick={() => setPeriod(key)}>{label}</button>)}
           </div>
-        ))}
+        </div>
+      </div>
+      <div className="kpis" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+        <div className="kpi"><div className="lbl">{p.lbl}</div><div className="val">{p.rev} ر.س</div><div className="trend up">▲ مقابل الفترة السابقة</div></div>
+        <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val">{p.profit} ر.س</div><div className="trend"><span>بعد خصم كل التكاليف</span></div></div>
+        <div className="kpi"><div className="lbl">متوسط هامش الربح</div><div className="val">{p.margin}</div><div className="trend"><span>على مستوى المشاريع</span></div></div>
+        <div className="kpi"><div className="lbl">العملاء الجدد</div><div className="val">{p.newc}</div><div className="trend up">▲ مقابل الفترة السابقة</div></div>
+        <div className="kpi"><div className="lbl">مشاريع نشطة</div><div className="val">{fmtNum(data.activeProjects)}</div><div className="trend"><span>{fmtNum(data.upcoming.length)} تسلّم هذا الأسبوع</span></div></div>
+        <div className="kpi alert"><div className="lbl">تنبيهات المستودع</div><div className="val">{fmtNum(data.lowStock.length)}</div><div className="trend down">أصناف وصلت حد النفاد</div></div>
       </div>
 
       <div className="grid2">
-        {/* تسليمات قريبة */}
+        <div className="card">
+          <div className="sec-head"><h2>الإيرادات والأرباح</h2><span className="more">آخر 6 أشهر</span></div>
+          <div className="bars">
+            {[
+              ['يناير', '42%'], ['فبراير', '55%'], ['مارس', '48%'], ['أبريل', '68%'], ['مايو', '74%'], ['يونيو', '92%'],
+            ].map(([month, height]) => (
+              <div className={`bar${month === 'يونيو' ? ' cur' : ''}`} key={month}>
+                <div className="col"><div className="fill" style={{ height }} /></div><small>{month}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card">
+          <div className="sec-head"><h2>مصدر العملاء</h2></div>
+          {[
+            ['انستقرام', '52%', 'var(--gold)'],
+            ['تيك توك', '28%', 'var(--sage)'],
+            ['توصية صديق', '14%', 'var(--green)'],
+            ['أخرى', '6%', 'var(--faint)'],
+          ].map(([label, width, color]) => (
+            <div className="srcrow" key={label}><span style={{ width: 74 }}>{label}</span><div className="track"><div className="tf" style={{ width, background: color }} /></div><span className="pct">{width}</span></div>
+          ))}
+          <div className="note">أعلى ربحية فعلية من <b style={{ color: 'var(--green)' }}>توصية صديق</b> رغم قلة عددها</div>
+        </div>
+      </div>
+
+      <div className="grid2">
         <div className="card">
           <div className="sec-head"><h2>تسليمات قريبة</h2><span className="more">{fmtNum(data.upcoming.length)}</span></div>
-          {data.upcoming.length === 0 ? (
-            <Empty title="لا تسليمات قريبة" desc="لا مشاريع مستحقّة خلال 14 يوماً." />
-          ) : (
+          {data.upcoming.length === 0 ? <Empty title="لا تسليمات قريبة" desc="لا مشاريع مستحقّة خلال 14 يوماً." /> : (
             <div className="alert-list">
-              {data.upcoming.map((p) => {
-                const n = daysUntil(p.due_date);
-                const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
-                return (
-                  <div className="alert-row clickable" key={p.id} onClick={() => router.push(`/projects/${p.id}`)} style={{ cursor: 'pointer' }}>
-                    <span className="nm">{p.title}</span>
-                    <span className={`pill ${st.cls}`}>{st.label}</span>
-                    <span className="tag" style={{ color: n < 0 ? 'var(--neg)' : n <= 3 ? 'var(--gold)' : 'var(--muted)' }}>
-                      {n < 0 ? `متأخر ${fmtNum(-n)} يوم` : n === 0 ? 'اليوم' : `خلال ${fmtNum(n)} يوم`}
-                    </span>
-                  </div>
-                );
+              {data.upcoming.map((project) => {
+                const n = daysUntil(project.due_date);
+                const st = PROJECT_STATUS[project.status] || { label: project.status, cls: 'p-wait' };
+                return <div className="alert-row clickable" key={project.id} onClick={() => router.push(`/projects/${project.id}`)} style={{ cursor: 'pointer' }}><span className="nm">{project.title}</span><span className={`pill ${st.cls}`}>{st.label}</span><span className="tag" style={{ color: n < 0 ? 'var(--neg)' : n <= 3 ? 'var(--gold)' : 'var(--muted)' }}>{n < 0 ? `متأخر ${fmtNum(-n)} يوم` : n === 0 ? 'اليوم' : `خلال ${fmtNum(n)} يوم`}</span></div>;
               })}
             </div>
           )}
         </div>
-
-        {/* تنبيهات المخزون */}
         <div className="card">
           <div className="sec-head"><h2>تنبيهات المخزون</h2><span className="more">{fmtNum(data.lowStock.length)}</span></div>
           {data.lowStock.length === 0 ? (

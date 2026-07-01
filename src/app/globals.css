@@ -6,7 +6,22 @@
   --pine:#5B3DC4;--pine-2:#4E33AE;--green:#6C4DE0;--sage:#A78BF0;--sage-bg:#EDE7FB;
   --gold:#F0913E;--gold-bg:#FCEBD8;--ink:#272140;--muted:#7C7596;--faint:#ABA4C2;--line:#E9E5F5;
   --pos:#22A06B;--pos-bg:#DCF3E8;--neg:#E0566B;--neg-bg:#FBE3E8;
-  --r:16px;--display:"Readex Pro",sans-serif;--body:"IBM Plex Sans Arabic",sans-serif;
+  --r:16px;--display:"Readex Pro","Saudi Riyal",sans-serif;--body:"IBM Plex Sans Arabic","Saudi Riyal",sans-serif;
+}
+/* رمز الريال السعودي الجديد (U+20C1) — لا يدعمه أي خط نظام بعد، فنحمّله كخط مخصّص لهذا الحرف فقط */
+@font-face{
+  font-family:"Saudi Riyal";
+  src:url("/fonts/saudi-riyal-regular.woff2") format("woff2");
+  unicode-range:U+20C1;
+  font-weight:400;
+  font-display:swap;
+}
+@font-face{
+  font-family:"Saudi Riyal";
+  src:url("/fonts/saudi-riyal-bold.woff2") format("woff2");
+  unicode-range:U+20C1;
+  font-weight:600 700;
+  font-display:swap;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--body);color:var(--ink);line-height:1.6;-webkit-font-smoothing:antialiased;

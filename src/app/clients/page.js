@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { createClient, updateClient, removeClient, getClients, getEmployees } from '@/lib/data';
 import { fmtNum, CLIENT_STATUS, SOURCE_LABEL } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
@@ -62,10 +63,19 @@ function toForm(c) {
 }
 
 export default function ClientsPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ClientsPageInner />
+    </Suspense>
+  );
+}
+
+function ClientsPageInner() {
+  const searchParams = useSearchParams();
   const [clients, setClients] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [err, setErr] = useState('');
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(searchParams.get('district') || '');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null); // null = إضافة، كائن = تعديل
   const [form, setForm] = useState(EMPTY_FORM);

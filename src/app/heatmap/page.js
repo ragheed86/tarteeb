@@ -1,61 +1,138 @@
-const areas = [
-  ['السليمانية', '24 طلب', '86,000', 'var(--green)', '#fff'],
-  ['الملقا', '19 طلب', '72,000', 'var(--green)', '#fff'],
-  ['العليا', '17 طلب', '61,000', '#4C8068', '#fff'],
-  ['النرجس', '15 طلب', '54,000', 'var(--sage)', '#1f3b30'],
-  ['الياسمين', '12 طلب', '43,000', 'var(--sage)', '#1f3b30'],
-  ['قرطبة', '9 طلبات', '31,000', '#A7CCB8', '#1f3b30'],
-  ['حطين', '8 طلبات', '29,000', '#A7CCB8', '#1f3b30'],
-  ['الصحافة', '7 طلبات', '24,000', 'var(--sage-bg)', 'var(--muted)'],
-  ['الربيع', '6 طلبات', '20,000', 'var(--sage-bg)', 'var(--muted)'],
-  ['العقيق', '5 طلبات', '17,000', 'var(--surface-2)', 'var(--faint)'],
-  ['الورود', '4 طلبات', '13,000', 'var(--surface-2)', 'var(--faint)'],
-  ['المروج', '3 طلبات', '9,000', 'var(--surface-2)', 'var(--faint)'],
-];
+'use client';
+import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
+import { getClients, getProjects } from '@/lib/data';
+import { fmtMoney, fmtNum } from '@/lib/format';
+import { buildDistrictIndex, aggregateByDistrict } from '@/lib/heatmap/aggregate';
+import { METRICS, buildColorScale, BUCKET_COLORS, EMPTY_COLOR, DEMAND_LABELS } from '@/lib/heatmap/colors';
+import { Loading, Empty, ErrorBar } from '../ui';
+
+const RiyadhNeighborhoodMap = dynamic(() => import('./RiyadhNeighborhoodMap'), {
+  ssr: false,
+  loading: () => <div className="state"><div className="spinner" /></div>,
+});
 
 export default function HeatmapPage() {
+  const router = useRouter();
+  const [geojson, setGeojson] = useState(null);
+  const [clients, setClients] = useState(null);
+  const [projects, setProjects] = useState(null);
+  const [err, setErr] = useState('');
+  const [metricKey, setMetricKey] = useState('clients');
+  const [selectedId, setSelectedId] = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/riyadh-districts.geojson').then((r) => r.json()),
+      getClients(),
+      getProjects(),
+    ])
+      .then(([geo, c, p]) => { setGeojson(geo); setClients(c); setProjects(p); })
+      .catch((e) => setErr(e.message || 'تعذّر تحميل البيانات'));
+  }, []);
+
+  const index = useMemo(() => (geojson ? buildDistrictIndex(geojson) : null), [geojson]);
+  const statsById = useMemo(
+    () => (index && clients && projects ? aggregateByDistrict({ clients, projects, index }) : new Map()),
+    [index, clients, projects],
+  );
+  const metric = METRICS[metricKey];
+  const scale = useMemo(
+    () => buildColorScale(metricKey, [...statsById.values()].map((s) => metric.get(s))),
+    [statsById, metricKey, metric],
+  );
+
+  const topDistricts = useMemo(
+    () => [...statsById.entries()]
+      .map(([id, s]) => ({ id, ...s }))
+      .sort((a, b) => metric.get(b) - metric.get(a))
+      .slice(0, 10),
+    [statsById, metric],
+  );
+
+  const totals = useMemo(() => {
+    const rows = [...statsById.values()];
+    return {
+      activeDistricts: rows.length,
+      clients: rows.reduce((s, r) => s + r.clients, 0),
+      projects: rows.reduce((s, r) => s + r.projects, 0),
+      revenue: rows.reduce((s, r) => s + r.revenue, 0),
+    };
+  }, [statsById]);
+
+  const selected = selectedId ? { id: selectedId, ...(statsById.get(selectedId) || { nameAr: geojson?.features.find((f) => f.properties.district_id === selectedId)?.properties.name_ar, clients: 0, projects: 0, revenue: 0, avgContract: 0 }) } : null;
+
+  if (err) return <ErrorBar message={err} />;
+  if (!geojson || !clients || !projects) return <Loading />;
+
   return (
     <>
       <div className="sec-head">
         <h2>كثافة الطلبات حسب أحياء الرياض</h2>
-        <span className="more">آخر 6 أشهر</span>
+        <div className="viewtoggle" style={{ marginInlineStart: 'auto' }}>
+          {Object.entries(METRICS).map(([key, m]) => (
+            <button className={`vt${metricKey === key ? ' active' : ''}`} key={key} onClick={() => setMetricKey(key)}>{m.label}</button>
+          ))}
+        </div>
       </div>
+
+      <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+        <div className="kpi"><div className="lbl">أحياء فيها نشاط</div><div className="val">{fmtNum(totals.activeDistricts)}</div></div>
+        <div className="kpi pos"><div className="lbl">إجمالي العملاء</div><div className="val">{fmtNum(totals.clients)}</div></div>
+        <div className="kpi"><div className="lbl">إجمالي المشاريع</div><div className="val">{fmtNum(totals.projects)}</div></div>
+        <div className="kpi alert"><div className="lbl">قيمة العقود</div><div className="val">{fmtMoney(totals.revenue)} ⃁</div></div>
+      </div>
+
       <div className="hmwrap">
-        <div className="card">
-          <div className="hmgrid">
-            {areas.map(([name, count, revenue, bg, color]) => (
-              <div className="htile" style={{ background: bg, color }} key={name}>
-                <div className="hn">{name}</div>
-                <div>
-                  <div className="hv">{count}</div>
-                  <div className="hr">{revenue} ⃁</div>
-                </div>
-              </div>
-            ))}
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ position: 'relative', height: 520 }}>
+            <RiyadhNeighborhoodMap geojson={geojson} statsById={statsById} metric={metric} scale={scale} onSelect={setSelectedId} />
           </div>
-          <div className="legend">
-            قليل
+          <div className="legend" style={{ padding: '12px 16px' }}>
+            منخفض
             <span className="sw">
-              <i style={{ background: 'var(--surface-2)' }} />
-              <i style={{ background: 'var(--sage-bg)' }} />
-              <i style={{ background: '#A7CCB8' }} />
-              <i style={{ background: 'var(--sage)' }} />
-              <i style={{ background: '#4C8068' }} />
-              <i style={{ background: 'var(--green)' }} />
+              <i style={{ background: EMPTY_COLOR }} />
+              {BUCKET_COLORS.map((c) => <i key={c} style={{ background: c }} />)}
             </span>
-            كثيف
+            مرتفع جداً
           </div>
         </div>
-        <div className="card" style={{ height: 'fit-content' }}>
-          <div className="sec-head"><h2>أين تصرف ميزانية الإعلان؟</h2></div>
-          <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.8 }}>
-            أعلى كثافة طلبات في <b style={{ color: 'var(--green)' }}>السليمانية والملقا</b>، وجّه حملات انستقرام المدفوعة لهذه الأحياء.
-          </p>
-          <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.8, marginTop: 10 }}>
-            <b style={{ color: 'var(--gold)' }}>حطين والصحافة</b> طلب صاعد بهامش ربح أعلى، فرصة توسّع.
-          </p>
-          <div className="note" style={{ textAlign: 'start', marginTop: 14 }}>
-            تتصل بـ Google Maps في النسخة الفعلية لعرض خريطة جغرافية حيّة بدل الشبكة.
+
+        <div>
+          {selected ? (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="sec-head"><h2>{selected.nameAr}</h2></div>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}><span>العملاء</span><b className="amt">{fmtNum(selected.clients)}</b></div>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}><span>المشاريع</span><b className="amt">{fmtNum(selected.projects)}</b></div>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}><span>قيمة العقود</span><b className="amt">{fmtMoney(selected.revenue)} ⃁</b></div>
+              <div className="row" style={{ justifyContent: 'space-between', marginBottom: 14 }}><span>متوسط العقد</span><b className="amt">{fmtMoney(selected.avgContract)} ⃁</b></div>
+              <button className="btn ghost sm" style={{ width: '100%' }} onClick={() => router.push(`/clients?district=${encodeURIComponent(selected.nameAr.replace(/^حي /, ''))}`)}>
+                تصفّح عملاء هذا الحي
+              </button>
+            </div>
+          ) : (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <Empty title="اختر حياً" desc="اضغط على أي حي بالخريطة لعرض تفاصيله." />
+            </div>
+          )}
+
+          <div className="card">
+            <div className="sec-head"><h2>أعلى الأحياء</h2><span className="more">{metric.label}</span></div>
+            {topDistricts.length === 0 ? <Empty title="لا بيانات بعد" desc="أضف عملاء بأحياء الرياض لتظهر هنا." /> : (
+              <div className="alert-list">
+                {topDistricts.map((d) => (
+                  <div className="alert-row clickable" key={d.id} onClick={() => setSelectedId(d.id)} style={{ cursor: 'pointer' }}>
+                    <span className="nm">{d.nameAr}</span>
+                    <span className="tag amt">
+                      {DEMAND_LABELS[Math.max(0, Math.min(3, Math.round((metric.get(d) / (metric.get(topDistricts[0]) || 1)) * 3)))]}
+                      {' · '}
+                      {metric.kind === 'money' ? `${fmtMoney(metric.get(d))} ⃁` : fmtNum(metric.get(d))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -4,6 +4,24 @@ import AppShell from './AppShell';
 export const metadata = {
   title: 'ترتيب · نظام إدارة الأعمال',
   description: 'نظام ERP لشركة ترتيب لتنظيم المساحات — الرياض',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'ترتيب',
+  },
+  icons: {
+    icon: '/app-icon.svg',
+    apple: '/app-icon.svg',
+  },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#F5F3FD',
 };
 
 export default function RootLayout({ children }) {

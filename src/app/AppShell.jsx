@@ -27,6 +27,7 @@ const NAV = [
 ];
 
 const ALL = NAV.flatMap((g) => g.items);
+const MOBILE_NAV = ['/', '/clients', '/projects', '/warehouse', '/employees'];
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
@@ -100,6 +101,18 @@ export default function AppShell({ children }) {
         </header>
         <div className="content">{children}</div>
       </div>
+      <nav className="bottom-nav" aria-label="التنقل الرئيسي">
+        {ALL.filter((it) => MOBILE_NAV.includes(it.href)).map((it) => {
+          const Icon = it.icon;
+          const isActive = it.href === pathname;
+          return (
+            <Link key={it.href} href={it.href} className={isActive ? 'active' : ''}>
+              <Icon />
+              <span>{it.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
     </div>
   );
 }

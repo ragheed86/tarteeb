@@ -47,7 +47,7 @@ export default function AppShell({ children }) {
   useEffect(() => setOpen(false), [pathname]); // إغلاق القائمة عند التنقّل
 
   if (session === undefined) {
-    return <div className="login-wrap"><div className="spinner" /></div>;
+    return <Splash />;
   }
   if (session === null) {
     return <Login />;
@@ -113,6 +113,17 @@ export default function AppShell({ children }) {
           );
         })}
       </nav>
+    </div>
+  );
+}
+
+// ---------- شاشة البدء (splash) ----------
+function Splash() {
+  return (
+    <div className="splash">
+      <div className="mark"><span /><span /><span /><span /></div>
+      <h1>ترتيب</h1>
+      <div className="spinner" />
     </div>
   );
 }

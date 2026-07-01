@@ -12,12 +12,9 @@ export default function manifest() {
     dir: 'rtl',
     lang: 'ar',
     icons: [
-      {
-        src: '/app-icon.svg',
-        sizes: 'any',
-        type: 'image/svg+xml',
-        purpose: 'any maskable',
-      },
+      { src: '/app-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
     ],
   };
 }

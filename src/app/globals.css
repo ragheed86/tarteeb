@@ -274,6 +274,14 @@ tr.clickable{cursor:pointer}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .btn:disabled{opacity:.62;cursor:not-allowed}
 
+/* شاشة البدء */
+.splash{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:linear-gradient(135deg,#6C4DE0,#5B3DC4);animation:splashIn .3s ease both}
+.splash .mark{width:64px;height:64px}
+.splash .mark span{border-radius:9px}
+.splash h1{font-family:var(--display);font-size:24px;font-weight:600;color:#fff;letter-spacing:.5px}
+.splash .spinner{border-color:rgba(255,255,255,.28);border-top-color:#fff}
+@keyframes splashIn{from{opacity:0}to{opacity:1}}
+
 /* login */
 .login-wrap{min-height:100vh;display:grid;place-items:center;padding:24px}
 .login-card{background:rgba(255,255,255,.78);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.7);border-radius:20px;box-shadow:0 18px 50px rgba(91,61,196,.16);padding:38px 34px;width:100%;max-width:380px}
@@ -445,6 +453,9 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .chip,.settab{min-height:40px}
   .pill,.src{min-height:28px;align-items:center}
   a,button,label,select,input[type=checkbox]{touch-action:manipulation}
+  .x-btn{display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px}
+  .chip button{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px}
+  .back-link{min-height:44px}
 
   .kpis,.grid2,.pgrid,.countdowns,.costwrap,.hmwrap,.hmgrid,.inbox,.ptgrid,.kanban,.warehouse-stats{grid-template-columns:1fr!important;gap:12px}
   .kpis[style],.grid2[style],.pgrid[style],.ptgrid[style]{grid-template-columns:1fr!important}

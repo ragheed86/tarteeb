@@ -20,6 +20,8 @@ export default function WarehousePage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [productImage, setProductImage] = useState({ name: '', preview: '' });
+  const [barcodeImage, setBarcodeImage] = useState({ name: '', preview: '' });
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
 
@@ -34,7 +36,11 @@ export default function WarehousePage() {
   useEffect(() => { load(); }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
-  function openAdd() { setEditing(null); setForm(EMPTY); setFormErr(''); setOpen(true); }
+  function resetImages() {
+    setProductImage({ name: '', preview: '' });
+    setBarcodeImage({ name: '', preview: '' });
+  }
+  function openAdd() { setEditing(null); setForm(EMPTY); resetImages(); setFormErr(''); setOpen(true); }
   function openEdit(it) {
     setEditing(it);
     setForm({
@@ -42,9 +48,41 @@ export default function WarehousePage() {
       unit: it.unit || 'قطعة', quantity: it.quantity ?? '', reorder_level: it.reorder_level ?? '',
       unit_cost: it.unit_cost ?? '', supplier_id: it.supplier_id || '', warehouse_id: it.warehouse_id || '',
     });
+    resetImages();
     setFormErr(''); setOpen(true);
   }
-  function close() { if (!saving) { setOpen(false); setEditing(null); } }
+  function close() { if (!saving) { setOpen(false); setEditing(null); resetImages(); } }
+
+  function handleProductImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProductImage({ name: file.name, preview: URL.createObjectURL(file) });
+  }
+
+  async function handleBarcodeImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBarcodeImage({ name: file.name, preview: URL.createObjectURL(file) });
+    if (!('BarcodeDetector' in window)) {
+      setFormErr('تمت إضافة صورة الباركود. إذا لم يظهر الرقم تلقائياً أدخله يدوياً.');
+      return;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      const detector = new BarcodeDetector({
+        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'],
+      });
+      const codes = await detector.detect(bitmap);
+      if (codes[0]?.rawValue) {
+        set('barcode', codes[0].rawValue);
+        setFormErr('');
+      } else {
+        setFormErr('تمت إضافة صورة الباركود، لكن لم يتم قراءة الرقم تلقائياً.');
+      }
+    } catch {
+      setFormErr('تمت إضافة صورة الباركود، لكن لم يتم قراءة الرقم تلقائياً.');
+    }
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -79,13 +117,29 @@ export default function WarehousePage() {
   if (!d) return <Loading />;
 
   const { items, warehouses, categories, suppliers } = d;
+  const northWarehouseId = warehouses.find((w) => w.name === 'مستودع الشمال')?.id
+    || warehouses.find((w) => w.name !== 'مستودع الرياض')?.id;
+  function warehouseDisplayName(warehouse) {
+    if (warehouse.id === northWarehouseId && warehouse.name !== 'مستودع الرياض') return 'مستودع الشمال';
+    return warehouse.name;
+  }
   const catName = Object.fromEntries(categories.map((c) => [c.id, c.name]));
-  const whName = Object.fromEntries(warehouses.map((w) => [w.id, w.name]));
+  const whName = Object.fromEntries(warehouses.map((w) => [w.id, warehouseDisplayName(w)]));
   const supName = Object.fromEntries(suppliers.map((s) => [s.id, s.name]));
 
   const filtered = items.filter((it) =>
     (!fCat || it.category_id === fCat) && (!fWh || it.warehouse_id === fWh));
   const lowCount = items.filter((it) => Number(it.quantity) < Number(it.reorder_level)).length;
+  const warehouseStats = warehouses.map((warehouse) => {
+    const rows = items.filter((item) => item.warehouse_id === warehouse.id);
+    return {
+      id: warehouse.id,
+      name: warehouseDisplayName(warehouse),
+      count: rows.length,
+      cost: rows.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0), 0),
+    };
+  });
+  const visibleStats = warehouseStats.slice(0, 3);
 
   return (
     <>
@@ -100,9 +154,21 @@ export default function WarehousePage() {
         </select>
         <select className="filter-sel" value={fWh} onChange={(e) => setFWh(e.target.value)}>
           <option value="">كل المستودعات</option>
-          {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          {warehouses.map((w) => <option key={w.id} value={w.id}>{warehouseDisplayName(w)}</option>)}
         </select>
         <span className="more">{fmtNum(filtered.length)} صنف{lowCount > 0 ? ` · ${fmtNum(lowCount)} ناقص` : ''}</span>
+      </div>
+
+      <div className="warehouse-stats">
+        {visibleStats.map((warehouse) => (
+          <div className="warehouse-stat" key={warehouse.id}>
+            <div>
+              <b>{warehouse.name}</b>
+              <span>{fmtNum(warehouse.count)} صنف</span>
+            </div>
+            <strong className="amt">{fmtMoney(warehouse.cost)} ر.س</strong>
+          </div>
+        ))}
       </div>
 
       <div className="card" style={{ padding: '6px 0' }}>
@@ -153,7 +219,24 @@ export default function WarehousePage() {
             {formErr && <div className="errbar">{formErr}</div>}
             <div className="form-grid">
               <div className="field span-2"><label>اسم الصنف</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
+              <div className="field span-2">
+                <label>صورة المنتج</label>
+                <div className="upload-row">
+                  <label className="btn ghost sm" htmlFor="product-image">رفع صورة المنتج</label>
+                  <input id="product-image" type="file" accept="image/*" hidden onChange={handleProductImage} />
+                  {productImage.name && <span>{productImage.name}</span>}
+                </div>
+                {productImage.preview && <img className="upload-preview" src={productImage.preview} alt="صورة المنتج" />}
+              </div>
               <div className="field"><label>الباركود</label><input value={form.barcode} onChange={(e) => set('barcode', e.target.value)} dir="ltr" /></div>
+              <div className="field">
+                <label>تصوير الباركود</label>
+                <div className="upload-row">
+                  <label className="btn ghost sm" htmlFor="barcode-image">تصوير الباركود</label>
+                  <input id="barcode-image" type="file" accept="image/*" capture="environment" hidden onChange={handleBarcodeImage} />
+                </div>
+                {barcodeImage.preview && <img className="upload-preview barcode" src={barcodeImage.preview} alt="صورة الباركود" />}
+              </div>
               <div className="field"><label>الوحدة</label><input value={form.unit} onChange={(e) => set('unit', e.target.value)} /></div>
               <div className="field"><label>التصنيف</label>
                 <select value={form.category_id} onChange={(e) => set('category_id', e.target.value)}>
@@ -164,7 +247,7 @@ export default function WarehousePage() {
               <div className="field"><label>المستودع</label>
                 <select value={form.warehouse_id} onChange={(e) => set('warehouse_id', e.target.value)}>
                   <option value="">— بدون —</option>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                  {warehouses.map((w) => <option key={w.id} value={w.id}>{warehouseDisplayName(w)}</option>)}
                 </select>
               </div>
               <div className="field"><label>الكمية</label><input type="number" min="0" step="0.01" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} dir="ltr" /></div>

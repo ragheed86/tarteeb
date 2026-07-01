@@ -19,6 +19,22 @@ const EMPTY = {
   supervisor_id: '', start_date: '', due_date: '', progress: 0,
 };
 
+const EMPTY_ESTIMATE = {
+  workers_count: '',
+  worker_hours: '',
+  worker_rate: '',
+  supervisors_count: '',
+  supervisor_hours: '',
+  supervisor_rate: '',
+  materials_cost: '',
+  transport_cost: '',
+  other_cost: '',
+};
+
+function num(value) {
+  return Number(value) || 0;
+}
+
 export default function ProjectsPage() {
   const router = useRouter();
   const [state, setState] = useState(null);
@@ -26,6 +42,7 @@ export default function ProjectsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [estimate, setEstimate] = useState(EMPTY_ESTIMATE);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [view, setView] = useState('cards');
@@ -42,10 +59,12 @@ export default function ProjectsPage() {
   useEffect(() => { load(); }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+  function setEstimateField(k, v) { setEstimate((f) => ({ ...f, [k]: v })); }
 
   function openAdd() {
     setEditing(null);
     setForm({ ...EMPTY, client_id: state?.clients[0]?.id || '' });
+    setEstimate(EMPTY_ESTIMATE);
     setFormErr(''); setOpen(true);
   }
   function openEdit(p) {
@@ -55,6 +74,7 @@ export default function ProjectsPage() {
       sale_price: p.sale_price ?? '', status: p.status || 'quote', supervisor_id: p.supervisor_id || '',
       start_date: p.start_date || '', due_date: p.due_date || '', progress: p.progress ?? 0,
     });
+    setEstimate(EMPTY_ESTIMATE);
     setFormErr(''); setOpen(true);
   }
   function close() { if (!saving) { setOpen(false); setEditing(null); } }
@@ -108,6 +128,9 @@ export default function ProjectsPage() {
     ['جاري التنفيذ', ['in_progress']],
     ['تم التسليم', ['delivered', 'completed']],
   ];
+  const workerTotal = num(estimate.workers_count) * num(estimate.worker_hours) * num(estimate.worker_rate);
+  const supervisorTotal = num(estimate.supervisors_count) * num(estimate.supervisor_hours) * num(estimate.supervisor_rate);
+  const estimateTotal = workerTotal + supervisorTotal + num(estimate.materials_cost) + num(estimate.transport_cost) + num(estimate.other_cost);
 
   return (
     <>
@@ -227,7 +250,7 @@ export default function ProjectsPage() {
         <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && close()}>
           <form className="modal-card" onSubmit={submit}>
             <div className="modal-head">
-              <div><h2>{editing ? 'تعديل مشروع' : 'مشروع جديد'}</h2><p>ربط بعميل وتتبّع التقدّم</p></div>
+              <div><h2>{editing ? 'تعديل مشروع' : 'مشروع جديد'}</h2><p>ربط بعميل وتحديد حالة المشروع</p></div>
               <button className="icon-close" type="button" onClick={close} aria-label="إغلاق">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
               </button>
@@ -260,14 +283,14 @@ export default function ProjectsPage() {
                 </select>
               </div>
               <div className="field">
-                <label>المشرف</label>
+                <label>حجز المشرف</label>
                 <select value={form.supervisor_id} onChange={(e) => set('supervisor_id', e.target.value)}>
                   <option value="">— بدون —</option>
                   {employees.map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
                 </select>
               </div>
               <div className="field">
-                <label>التقدّم (%)</label>
+                <label>حالة المشروع (%)</label>
                 <input type="number" min="0" max="100" value={form.progress} onChange={(e) => set('progress', e.target.value)} dir="ltr" />
               </div>
               <div className="field">
@@ -277,6 +300,58 @@ export default function ProjectsPage() {
               <div className="field">
                 <label>موعد التسليم</label>
                 <input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} dir="ltr" />
+              </div>
+              <div className="estimate-box span-2">
+                <div className="estimate-head">
+                  <h3>جدول تقديري</h3>
+                  <span className="amt">{fmtMoney(estimateTotal)} ر.س</span>
+                </div>
+                <div className="estimate-grid">
+                  <div className="field">
+                    <label>عدد العاملين</label>
+                    <input type="number" min="0" step="1" value={estimate.workers_count} onChange={(e) => setEstimateField('workers_count', e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="field">
+                    <label>ساعات العامل</label>
+                    <input type="number" min="0" step="0.5" value={estimate.worker_hours} onChange={(e) => setEstimateField('worker_hours', e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="field">
+                    <label>سعر الساعة</label>
+                    <input type="number" min="0" step="0.01" value={estimate.worker_rate} onChange={(e) => setEstimateField('worker_rate', e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="estimate-total">
+                    <span>إجمالي العاملين</span>
+                    <b className="amt">{fmtMoney(workerTotal)} ر.س</b>
+                  </div>
+                  <div className="field">
+                    <label>عدد المشرفين</label>
+                    <input type="number" min="0" step="1" value={estimate.supervisors_count} onChange={(e) => setEstimateField('supervisors_count', e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="field">
+                    <label>ساعات المشرف</label>
+                    <input type="number" min="0" step="0.5" value={estimate.supervisor_hours} onChange={(e) => setEstimateField('supervisor_hours', e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="field">
+                    <label>سعر ساعة المشرف</label>
+                    <input type="number" min="0" step="0.01" value={estimate.supervisor_rate} onChange={(e) => setEstimateField('supervisor_rate', e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="estimate-total">
+                    <span>إجمالي المشرفين</span>
+                    <b className="amt">{fmtMoney(supervisorTotal)} ر.س</b>
+                  </div>
+                  <div className="field">
+                    <label>تكلفة المنتجات</label>
+                    <input type="number" min="0" step="0.01" value={estimate.materials_cost} onChange={(e) => setEstimateField('materials_cost', e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="field">
+                    <label>النقل</label>
+                    <input type="number" min="0" step="0.01" value={estimate.transport_cost} onChange={(e) => setEstimateField('transport_cost', e.target.value)} dir="ltr" />
+                  </div>
+                  <div className="field">
+                    <label>أخرى</label>
+                    <input type="number" min="0" step="0.01" value={estimate.other_cost} onChange={(e) => setEstimateField('other_cost', e.target.value)} dir="ltr" />
+                  </div>
+                </div>
               </div>
             </div>
             <div className="modal-actions">

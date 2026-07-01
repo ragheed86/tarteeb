@@ -32,5 +32,10 @@ export const INVOICE_STATUS = {
   overdue: { label: 'متأخرة', cls: 'p-cancel' },
 };
 export const SOURCE_LABEL = {
-  instagram: 'انستقرام', tiktok: 'تيك توك', referral: 'توصية صديق', other: 'أخرى',
+  instagram: 'انستقرام',
+  tiktok: 'تيك توك',
+  referral: 'توصية صديق',
+  client_referral: 'عن طريق عميل',
+  employee_referral: 'عن طريق موظف',
+  other: 'أخرى',
 };

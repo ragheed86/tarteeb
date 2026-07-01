@@ -1,14 +1,31 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { createClient, updateClient, removeClient, getClients } from '@/lib/data';
+import { createClient, updateClient, removeClient, getClients, getEmployees } from '@/lib/data';
 import { fmtNum, CLIENT_STATUS, SOURCE_LABEL } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
+
+const RIYADH_DISTRICTS = [
+  'العليا', 'السليمانية', 'الملز', 'المرسلات', 'النرجس', 'العارض',
+  'حطين', 'الملقا', 'الياسمين', 'الصحافة', 'النخيل', 'العقيق',
+  'الربيع', 'الغدير', 'الروضة', 'الريان', 'قرطبة', 'الحمراء',
+  'النسيم', 'الشفا', 'السويدي', 'لبن',
+];
+
+const SOURCE_OPTIONS = [
+  { value: 'instagram', label: 'انستقرام' },
+  { value: 'tiktok', label: 'تيك توك' },
+  { value: 'client_referral', label: 'عن طريق عميل' },
+  { value: 'employee_referral', label: 'عن طريق موظف' },
+  { value: 'referral', label: 'توصية صديق' },
+  { value: 'other', label: 'أخرى' },
+];
 
 const EMPTY_FORM = {
   name: '',
   phone: '',
   source: 'instagram',
+  source_ref: '',
   district: '',
   status: 'active',
   first_contact_at: '',
@@ -20,6 +37,7 @@ function toForm(c) {
     name: c.name || '',
     phone: c.phone || '',
     source: c.source || 'instagram',
+    source_ref: '',
     district: c.district || '',
     status: c.status || 'active',
     first_contact_at: c.first_contact_at || '',
@@ -29,6 +47,7 @@ function toForm(c) {
 
 export default function ClientsPage() {
   const [clients, setClients] = useState(null);
+  const [employees, setEmployees] = useState([]);
   const [err, setErr] = useState('');
   const [q, setQ] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -38,11 +57,37 @@ export default function ClientsPage() {
   const [formErr, setFormErr] = useState('');
 
   useEffect(() => {
-    getClients().then(setClients).catch((e) => setErr(e.message || 'تعذّر التحميل'));
+    Promise.all([getClients(), getEmployees()])
+      .then(([clientsData, employeesData]) => {
+        setClients(clientsData);
+        setEmployees(employeesData);
+      })
+      .catch((e) => setErr(e.message || 'تعذّر التحميل'));
   }, []);
 
   function updateField(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === 'source' ? { source_ref: '' } : null),
+    }));
+  }
+
+  function buildPayload() {
+    const refClient = clients?.find((c) => c.id === form.source_ref);
+    const refEmployee = employees.find((em) => em.id === form.source_ref);
+    const refName = form.source === 'client_referral'
+      ? refClient?.name
+      : form.source === 'employee_referral'
+        ? refEmployee?.name
+        : '';
+    const cleanNotes = form.notes
+      .split('\n')
+      .filter((line) => !line.startsWith('مصدر الإحالة:'))
+      .join('\n')
+      .trim();
+    const notes = refName ? [`مصدر الإحالة: ${refName}`, cleanNotes].filter(Boolean).join('\n') : cleanNotes;
+    return { ...form, notes };
   }
 
   function openAdd() {
@@ -76,11 +121,12 @@ export default function ClientsPage() {
     setSaving(true);
     setFormErr('');
     try {
+      const payload = buildPayload();
       if (editing) {
-        const updated = await updateClient(editing.id, form);
+        const updated = await updateClient(editing.id, payload);
         setClients((current) => (current || []).map((c) => (c.id === updated.id ? updated : c)));
       } else {
-        const client = await createClient(form);
+        const client = await createClient(payload);
         setClients((current) => [client, ...(current || [])]);
       }
       closeForm();
@@ -112,6 +158,7 @@ export default function ClientsPage() {
           .some((v) => String(v).toLowerCase().includes(term)),
       )
     : clients;
+  const sourceClients = clients.filter((c) => c.id !== editing?.id);
 
   return (
     <>
@@ -188,12 +235,29 @@ export default function ClientsPage() {
               <div className="field">
                 <label>المصدر</label>
                 <select value={form.source} onChange={(e) => updateField('source', e.target.value)}>
-                  <option value="instagram">انستقرام</option>
-                  <option value="tiktok">تيك توك</option>
-                  <option value="referral">توصية صديق</option>
-                  <option value="other">أخرى</option>
+                  {SOURCE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
+              {form.source === 'client_referral' && (
+                <div className="field">
+                  <label>اسم العميل المحيل</label>
+                  <select value={form.source_ref} onChange={(e) => updateField('source_ref', e.target.value)}>
+                    <option value="">اختر عميلاً…</option>
+                    {sourceClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+              {form.source === 'employee_referral' && (
+                <div className="field">
+                  <label>اسم الموظف</label>
+                  <select value={form.source_ref} onChange={(e) => updateField('source_ref', e.target.value)}>
+                    <option value="">اختر موظفاً…</option>
+                    {employees.map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
+                  </select>
+                </div>
+              )}
               <div className="field">
                 <label>الحالة</label>
                 <select value={form.status} onChange={(e) => updateField('status', e.target.value)}>
@@ -205,7 +269,12 @@ export default function ClientsPage() {
               </div>
               <div className="field">
                 <label>الحي</label>
-                <input value={form.district} onChange={(e) => updateField('district', e.target.value)} />
+                <select value={form.district} onChange={(e) => updateField('district', e.target.value)}>
+                  <option value="">اختر حي الرياض…</option>
+                  {RIYADH_DISTRICTS.map((district) => (
+                    <option key={district} value={district}>{district}</option>
+                  ))}
+                </select>
               </div>
               <div className="field">
                 <label>تاريخ أول تواصل</label>

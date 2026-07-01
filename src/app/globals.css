@@ -245,6 +245,15 @@ tr.clickable{cursor:pointer}
 .field textarea{resize:vertical;min-height:92px}
 .field select:focus,.field textarea:focus{border-color:var(--sage)}
 .span-2{grid-column:1 / -1}
+.estimate-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.estimate-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.estimate-head h3{font-family:var(--display);font-size:15px;font-weight:600}
+.estimate-head span{font-family:var(--display);font-weight:600;color:var(--green)}
+.estimate-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.estimate-grid .field{margin-bottom:0}
+.estimate-total{display:flex;flex-direction:column;justify-content:center;gap:3px;background:var(--surface-2);border-radius:10px;padding:10px 12px;min-height:68px}
+.estimate-total span{font-size:12px;color:var(--muted)}
+.estimate-total b{font-family:var(--display);font-size:15px;color:var(--ink)}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .btn:disabled{opacity:.62;cursor:not-allowed}
 
@@ -300,6 +309,15 @@ tr.clickable{cursor:pointer}
 /* ---------- فلاتر + صفوف تنبيه ---------- */
 .filter-sel{font-family:var(--body);font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;outline:none;cursor:pointer}
 .filter-sel:focus{border-color:var(--sage)}
+.warehouse-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.warehouse-stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.warehouse-stat b{display:block;font-size:14px;font-weight:600}
+.warehouse-stat span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.warehouse-stat strong{font-family:var(--display);font-size:16px;color:var(--green)}
+.upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.upload-row span{font-size:12px;color:var(--muted)}
+.upload-preview{width:100%;max-width:220px;height:140px;border:1px solid var(--line);border-radius:10px;object-fit:cover;background:var(--surface-2)}
+.upload-preview.barcode{height:86px;object-fit:contain}
 tr.row-low{background:rgba(224,86,107,.05)}
 tr.row-low:hover{background:rgba(224,86,107,.09)}
 .modal-card.modal-sm{width:min(440px,100%)}
@@ -353,6 +371,7 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
 }
 @media(max-width:640px){
   .kpis,.grid2,.pgrid{grid-template-columns:1fr!important}
+  .warehouse-stats,.estimate-grid{grid-template-columns:1fr}
   .form-grid{grid-template-columns:1fr}
   .span-2{grid-column:auto}
   .modal-actions{flex-direction:column-reverse}

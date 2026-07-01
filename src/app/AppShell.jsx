@@ -21,9 +21,6 @@ const NAV = [
     { href: '/invoices', label: 'الفواتير', icon: IconDoc, sub: 'الفواتير والمدفوعات' },
     { href: '/partners', label: 'حسابات الشركاء', icon: IconUsers, sub: 'توزيع الأرباح والسحوبات والأرصدة' },
   ] },
-  { group: 'التواصل', items: [
-    { href: '/inbox', label: 'الوارد الموحّد', icon: IconInbox, sub: 'كل قنوات التواصل في مكان واحد' },
-  ] },
   { group: 'النظام', items: [
     { href: '/settings', label: 'الإعدادات', icon: IconGear, sub: 'بيانات الشركة والموردون والرخص والصلاحيات' },
   ] },
@@ -160,5 +157,4 @@ function IconDoc() { return <svg viewBox="0 0 24 24" fill="none" stroke="current
 function IconWarehouse() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 21V9l9-5 9 5v12" /><path d="M7 21v-7h10v7M7 14h10" /></svg>; }
 function IconBadge() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="4" y="3" width="16" height="18" rx="2" /><circle cx="12" cy="9" r="2.4" /><path d="M8 17a4 4 0 0 1 8 0" /></svg>; }
 function IconPin() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" /></svg>; }
-function IconInbox() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 5h16v11H8l-4 3z" /><path d="M8 9h8M8 12h5" /></svg>; }
 function IconGear() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="3" /><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2l-.4-2.5H9.8l-.4 2.5a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.4 2.5h4.4l.4-2.5a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z" /></svg>; }

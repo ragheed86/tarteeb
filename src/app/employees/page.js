@@ -11,7 +11,7 @@ const WAGE = { fixed: 'ثابت', daily: 'يومي', hourly: 'بالساعة' };
 const STATUS = { active: { label: 'نشط', cls: 'p-prog' }, on_project: { label: 'في مشروع', cls: 'p-quote' }, inactive: { label: 'غير نشط', cls: 'p-wait' } };
 const DOC_TYPE = { national_id: 'هوية وطنية', iqama: 'إقامة', contract: 'عقد', health_cert: 'شهادة صحية', driving_license: 'رخصة قيادة', other: 'أخرى' };
 
-const EMPTY = { name: '', role: '', phone: '', wage: 'fixed', status: 'active', photo_url: '' };
+const EMPTY = { name: '', role: '', phone: '', national_id: '', wage: 'fixed', status: 'active', photo_url: '' };
 
 function daysUntil(d) {
   if (!d) return null;
@@ -31,6 +31,7 @@ export default function EmployeesPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [photoPreview, setPhotoPreview] = useState('');
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [docFor, setDocFor] = useState(null); // الموظف الذي تُعرض مستنداته
@@ -41,13 +42,23 @@ export default function EmployeesPage() {
   useEffect(() => { load(); }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
-  function openAdd() { setEditing(null); setForm(EMPTY); setFormErr(''); setOpen(true); }
+  function openAdd() { setEditing(null); setForm(EMPTY); setPhotoPreview(''); setFormErr(''); setOpen(true); }
   function openEdit(em) {
     setEditing(em);
-    setForm({ name: em.name || '', role: em.role || '', phone: em.phone || '', wage: em.wage || 'fixed', status: em.status || 'active', photo_url: em.photo_url || '' });
+    setForm({
+      name: em.name || '', role: em.role || '', phone: em.phone || '', national_id: em.national_id || '',
+      wage: em.wage || 'fixed', status: em.status || 'active', photo_url: em.photo_url || '',
+    });
+    setPhotoPreview('');
     setFormErr(''); setOpen(true);
   }
-  function close() { if (!saving) { setOpen(false); setEditing(null); } }
+  function close() { if (!saving) { setOpen(false); setEditing(null); setPhotoPreview(''); } }
+
+  function handlePhotoFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoPreview(URL.createObjectURL(file));
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -55,6 +66,7 @@ export default function EmployeesPage() {
     setSaving(true); setFormErr('');
     const payload = {
       name: form.name.trim(), role: form.role.trim() || null, phone: form.phone.trim() || null,
+      national_id: form.national_id.trim() || null,
       wage: form.wage, status: form.status, photo_url: form.photo_url.trim() || null,
     };
     try {
@@ -91,29 +103,35 @@ export default function EmployeesPage() {
       {emps.length === 0 ? (
         <div className="card"><Empty title="لا موظفين" desc="أضف أعضاء الفريق ومستنداتهم." /></div>
       ) : (
-        <div className="card" style={{ padding: '6px 0' }}>
-          <table>
-            <thead><tr><th>الموظف</th><th>الدور</th><th>الجوال</th><th>الأجر</th><th>الحالة</th><th></th></tr></thead>
-            <tbody>
-              {emps.map((em) => {
-                const st = STATUS[em.status] || { label: em.status, cls: 'p-wait' };
-                return (
-                  <tr key={em.id}>
-                    <td><span className="nm">{em.name}</span></td>
-                    <td>{em.role || '—'}</td>
-                    <td className="amt" dir="ltr" style={{ textAlign: 'start' }}>{em.phone || '—'}</td>
-                    <td>{WAGE[em.wage] || em.wage || '—'}</td>
-                    <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <button className="btn ghost sm" onClick={() => setDocFor(em)}>المستندات</button>
-                      <button className="btn ghost sm" style={{ marginInlineStart: 8 }} onClick={() => openEdit(em)}>تعديل</button>
-                      <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(em)}>حذف</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="pgrid">
+          {emps.map((em) => {
+            const st = STATUS[em.status] || { label: em.status, cls: 'p-wait' };
+            return (
+              <div className="pcard" key={em.id}>
+                <div className="ph">
+                  {em.photo_url ? (
+                    <img src={em.photo_url} alt={em.name} style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: 28, fontWeight: 600, color: 'var(--sage)' }}>{em.name?.trim()?.[0] || '؟'}</span>
+                  )}
+                </div>
+                <div className="pb">
+                  <h3>{em.name}</h3>
+                  <div className="cl">{em.role || 'بدون دور'}{em.national_id ? ` · هوية/إقامة ${em.national_id}` : ''}</div>
+                  <div className="row">
+                    <span className={`pill ${st.cls}`}>{st.label}</span>
+                    <span>{WAGE[em.wage] || em.wage || '—'}</span>
+                  </div>
+                  {em.phone && <div className="row" style={{ color: 'var(--muted)', fontSize: 12 }} dir="ltr"><span>{em.phone}</span></div>}
+                  <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                    <button className="btn ghost sm" onClick={() => setDocFor(em)}>المستندات</button>
+                    <button className="btn ghost sm" onClick={() => openEdit(em)}>تعديل</button>
+                    <button className="btn ghost sm" style={{ color: 'var(--neg)' }} onClick={() => del(em)}>حذف</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -131,6 +149,7 @@ export default function EmployeesPage() {
               <div className="field span-2"><label>الاسم</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
               <div className="field"><label>الدور</label><input value={form.role} onChange={(e) => set('role', e.target.value)} placeholder="مشرف / فني / محاسب…" /></div>
               <div className="field"><label>الجوال</label><input value={form.phone} onChange={(e) => set('phone', e.target.value)} dir="ltr" inputMode="tel" /></div>
+              <div className="field"><label>رقم الهوية/الإقامة</label><input value={form.national_id} onChange={(e) => set('national_id', e.target.value)} dir="ltr" inputMode="numeric" /></div>
               <div className="field"><label>نوع الأجر</label>
                 <select value={form.wage} onChange={(e) => set('wage', e.target.value)}>
                   {Object.entries(WAGE).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -141,7 +160,20 @@ export default function EmployeesPage() {
                   {Object.entries(STATUS).map(([v, o]) => <option key={v} value={v}>{o.label}</option>)}
                 </select>
               </div>
-              <div className="field span-2"><label>رابط الصورة (اختياري)</label><input value={form.photo_url} onChange={(e) => set('photo_url', e.target.value)} dir="ltr" /></div>
+              <div className="field span-2">
+                <label>صورة الموظف</label>
+                <div className="upload-row">
+                  <label className="btn ghost sm" htmlFor="employee-photo">رفع صورة الموظف</label>
+                  <input id="employee-photo" type="file" accept="image/*" hidden onChange={handlePhotoFile} />
+                  <input
+                    value={form.photo_url} onChange={(e) => set('photo_url', e.target.value)} dir="ltr"
+                    placeholder="أو الصق رابط الصورة المستضافة" style={{ flex: 1, minWidth: 200 }}
+                  />
+                </div>
+                {(photoPreview || form.photo_url) && (
+                  <img className="upload-preview" src={photoPreview || form.photo_url} alt="صورة الموظف" style={{ maxWidth: 140, borderRadius: '50%', aspectRatio: '1/1' }} />
+                )}
+              </div>
             </div>
             <div className="modal-actions">
               <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
@@ -159,10 +191,17 @@ export default function EmployeesPage() {
 function DocsModal({ employee, onClose }) {
   const [docs, setDocs] = useState(null);
   const [form, setForm] = useState({ doc_type: 'iqama', expiry_date: '', file_url: '' });
+  const [fileName, setFileName] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function load() { setDocs(await getEmployeeDocuments(employee.id)); }
   useEffect(() => { load(); }, [employee.id]);
+
+  function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+  }
 
   async function add(e) {
     e.preventDefault();
@@ -173,6 +212,7 @@ function DocsModal({ employee, onClose }) {
         expiry_date: form.expiry_date || null, file_url: form.file_url.trim() || null,
       });
       setForm({ doc_type: 'iqama', expiry_date: '', file_url: '' });
+      setFileName('');
       await load();
     } finally { setBusy(false); }
   }
@@ -208,12 +248,15 @@ function DocsModal({ employee, onClose }) {
             </tbody>
           </table>
         )}
-        <form onSubmit={add} className="inline-add" style={{ marginTop: 14 }}>
+        <form onSubmit={add} className="inline-add" style={{ marginTop: 14, flexWrap: 'wrap' }}>
           <select value={form.doc_type} onChange={(e) => setForm((f) => ({ ...f, doc_type: e.target.value }))} style={{ maxWidth: 150 }}>
             {Object.entries(DOC_TYPE).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <input type="date" value={form.expiry_date} onChange={(e) => setForm((f) => ({ ...f, expiry_date: e.target.value }))} dir="ltr" style={{ maxWidth: 160 }} />
-          <input placeholder="رابط الملف (اختياري)" dir="ltr" value={form.file_url} onChange={(e) => setForm((f) => ({ ...f, file_url: e.target.value }))} />
+          <label className="btn ghost sm" htmlFor="doc-file">رفع المستند</label>
+          <input id="doc-file" type="file" hidden onChange={handleFile} />
+          {fileName && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fileName}</span>}
+          <input placeholder="أو الصق رابط الملف" dir="ltr" value={form.file_url} onChange={(e) => setForm((f) => ({ ...f, file_url: e.target.value }))} />
           <button className="btn sm" disabled={busy}>إضافة</button>
         </form>
       </div>

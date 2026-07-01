@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import {
   getPartners, createPartner, updatePartner, removePartner,
-  getPartnerTransactions, createPartnerTransaction, removePartnerTransaction,
+  getPartnerTransactions, createPartnerTransaction, removePartnerTransaction, getEmployees,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
@@ -15,7 +15,7 @@ const TXN = {
   withdrawal: { label: 'سحب', sign: -1 },
 };
 
-const EMPTY_P = { name: '', share_percent: '' };
+const EMPTY_P = { employee_id: '', share_percent: '' };
 
 export default function PartnersPage() {
   const [d, setD] = useState(null);
@@ -32,22 +32,23 @@ export default function PartnersPage() {
 
   async function load() {
     try {
-      const [partners, txns] = await Promise.all([getPartners(), getPartnerTransactions()]);
-      setD({ partners, txns });
+      const [partners, txns, employees] = await Promise.all([getPartners(), getPartnerTransactions(), getEmployees()]);
+      setD({ partners, txns, employees });
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
   function openAdd() { setEditing(null); setForm(EMPTY_P); setFormErr(''); setOpen(true); }
-  function openEdit(p) { setEditing(p); setForm({ name: p.name || '', share_percent: p.share_percent ?? '' }); setFormErr(''); setOpen(true); }
+  function openEdit(p) { setEditing(p); setForm({ employee_id: p.employee_id || '', share_percent: p.share_percent ?? '' }); setFormErr(''); setOpen(true); }
   function close() { if (!saving) { setOpen(false); setEditing(null); } }
 
   async function submit(e) {
     e.preventDefault();
-    if (!form.name.trim()) { setFormErr('اسم الشريك مطلوب'); return; }
+    if (!form.employee_id) { setFormErr('اختر الموظف الشريك'); return; }
     setSaving(true); setFormErr('');
-    const payload = { name: form.name.trim(), share_percent: Number(form.share_percent) || 0 };
+    const employee = d.employees.find((em) => em.id === form.employee_id);
+    const payload = { name: employee?.name || '', employee_id: form.employee_id, share_percent: Number(form.share_percent) || 0 };
     try {
       if (editing) { const up = await updatePartner(editing.id, payload); setD((s) => ({ ...s, partners: s.partners.map((x) => (x.id === up.id ? up : x)) })); }
       else { const np = await createPartner(payload); setD((s) => ({ ...s, partners: [...s.partners, np] })); }
@@ -174,7 +175,15 @@ export default function PartnersPage() {
               </button>
             </div>
             {formErr && <div className="errbar">{formErr}</div>}
-            <div className="field"><label>اسم الشريك</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
+            <div className="field">
+              <label>الموظف الشريك</label>
+              <select value={form.employee_id} onChange={(e) => set('employee_id', e.target.value)} required autoFocus>
+                <option value="" disabled>اختر موظفاً…</option>
+                {d.employees
+                  .filter((em) => em.id === form.employee_id || !d.partners.some((p) => p.employee_id === em.id))
+                  .map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
+              </select>
+            </div>
             <div className="field"><label>نسبة الشراكة (%)</label><input type="number" min="0" max="100" step="0.01" value={form.share_percent} onChange={(e) => set('share_percent', e.target.value)} dir="ltr" /></div>
             <div className="modal-actions">
               <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>

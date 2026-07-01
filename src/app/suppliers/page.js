@@ -12,6 +12,7 @@ export default function SuppliersPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [logoPreview, setLogoPreview] = useState('');
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
 
@@ -21,9 +22,14 @@ export default function SuppliersPage() {
   useEffect(() => { load(); }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
-  function openAdd() { setEditing(null); setForm(EMPTY); setFormErr(''); setOpen(true); }
-  function openEdit(s) { setEditing(s); setForm({ name: s.name || '', category: s.category || '', city: s.city || '', logo_url: s.logo_url || '' }); setFormErr(''); setOpen(true); }
-  function close() { if (!saving) { setOpen(false); setEditing(null); } }
+  function openAdd() { setEditing(null); setForm(EMPTY); setLogoPreview(''); setFormErr(''); setOpen(true); }
+  function openEdit(s) { setEditing(s); setForm({ name: s.name || '', category: s.category || '', city: s.city || '', logo_url: s.logo_url || '' }); setLogoPreview(''); setFormErr(''); setOpen(true); }
+  function close() { if (!saving) { setOpen(false); setEditing(null); setLogoPreview(''); } }
+  function handleLogoFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoPreview(URL.createObjectURL(file));
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -93,7 +99,20 @@ export default function SuppliersPage() {
               <div className="field span-2"><label>اسم المورّد</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
               <div className="field"><label>التصنيف</label><input value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="تخزين / منظمات / أدوات" /></div>
               <div className="field"><label>المدينة</label><input value={form.city} onChange={(e) => set('city', e.target.value)} /></div>
-              <div className="field span-2"><label>رابط الشعار (اختياري)</label><input value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} dir="ltr" /></div>
+              <div className="field span-2">
+                <label>شعار المورّد</label>
+                <div className="upload-row">
+                  <label className="btn ghost sm" htmlFor="supplier-logo">رفع اللوجو</label>
+                  <input id="supplier-logo" type="file" accept="image/*" hidden onChange={handleLogoFile} />
+                  <input
+                    value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} dir="ltr"
+                    placeholder="أو الصق رابط الشعار المستضاف" style={{ flex: 1, minWidth: 200 }}
+                  />
+                </div>
+                {(logoPreview || form.logo_url) && (
+                  <img className="upload-preview" src={logoPreview || form.logo_url} alt="شعار المورّد" style={{ maxWidth: 140, height: 90, objectFit: 'contain', background: '#fff' }} />
+                )}
+              </div>
             </div>
             <div className="modal-actions">
               <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>

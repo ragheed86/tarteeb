@@ -89,6 +89,11 @@ export async function getProjectCosts(projectId) {
     .select('id,kind,label,amount,qty,hours,rate').eq('project_id', projectId);
   if (error) throw error; return data;
 }
+// كل بنود التكلفة لكل المشاريع دفعة واحدة — لحساب الربح الإجمالي بلوحة التحكم
+export async function getAllProjectCosts() {
+  const { data, error } = await supabase.from('project_costs').select('project_id,amount');
+  if (error) throw error; return data;
+}
 // يستبدل بنود الجدول التقديري فقط (عمالة/إشراف/مواد/نقل/أخرى) دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً
 export async function saveProjectCosts(projectId, rows) {
   const managedLabels = new Set(['عمالة', 'إشراف']);

@@ -1,14 +1,22 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getClients, getProjects, getInvoices, getInventory, getWarehouses } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS } from '@/lib/format';
+import { getClients, getProjects, getInvoices, getInventory, getAllProjectCosts } from '@/lib/data';
+import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from './ui';
 
 const ACTIVE = ['quote', 'preparing', 'in_progress'];
 const OPEN_DELIVERY = ['quote', 'preparing', 'in_progress', 'delivered'];
+const PERIOD_DAYS = { day: 1, week: 7, month: 30, year: 365 };
+const PERIOD_LABEL = { day: 'إيرادات اليوم', week: 'إيرادات الأسبوع', month: 'إيرادات الشهر', year: 'إيرادات السنة' };
+const ARABIC_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+const SOURCE_COLORS = ['var(--gold)', 'var(--sage)', 'var(--green)', 'var(--faint)', 'var(--pine)', 'var(--neg)'];
 
 function daysUntil(d) { return d ? Math.ceil((new Date(d).getTime() - Date.now()) / 86400000) : null; }
+function withinDays(date, days) {
+  if (!date) return false;
+  return (Date.now() - new Date(date).getTime()) / 86400000 <= days;
+}
 
 export default function Dashboard() {
   const router = useRouter();
@@ -19,18 +27,19 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [clients, projects, invoices, inventory, warehouses] = await Promise.all([
-          getClients(), getProjects(), getInvoices(), getInventory(), getWarehouses(),
+        const [clients, projects, invoices, inventory, costs] = await Promise.all([
+          getClients(), getProjects(), getInvoices(), getInventory(), getAllProjectCosts(),
         ]);
-        const revenue = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + Number(i.total || 0), 0);
-        const outstanding = invoices.filter((i) => i.status !== 'paid' && i.status !== 'draft').reduce((s, i) => s + Number(i.total || 0), 0);
         const activeProjects = projects.filter((p) => ACTIVE.includes(p.status)).length;
-        const newClients = clients.filter((c) => withinDays(c.created_at, 30)).length;
         const lowStock = inventory.filter((it) => Number(it.quantity) < Number(it.reorder_level));
         const upcoming = projects
           .filter((p) => OPEN_DELIVERY.includes(p.status) && p.due_date && daysUntil(p.due_date) !== null && daysUntil(p.due_date) <= 14)
           .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
-        setData({ clients, projects, invoices, warehouses, revenue, outstanding, activeProjects, newClients, lowStock, upcoming });
+
+        const costByProject = {};
+        for (const c of costs) costByProject[c.project_id] = (costByProject[c.project_id] || 0) + Number(c.amount || 0);
+
+        setData({ clients, projects, invoices, activeProjects, lowStock, upcoming, costByProject });
       } catch (e) {
         setErr(e.message || 'تعذّر تحميل البيانات');
       }
@@ -40,13 +49,34 @@ export default function Dashboard() {
   if (err) return <ErrorBar message={err} />;
   if (!data) return <Loading />;
 
-  const periodData = {
-    day: { lbl: 'إيرادات اليوم', rev: '2,400', profit: '1,080', margin: '45%', newc: '1' },
-    week: { lbl: 'إيرادات الأسبوع', rev: '12,800', profit: '5,760', margin: '45%', newc: '2' },
-    month: { lbl: 'إيرادات الشهر', rev: '48,200', profit: '21,650', margin: '45%', newc: '6' },
-    year: { lbl: 'إيرادات السنة', rev: '512,400', profit: '228,900', margin: '47%', newc: '41' },
-  };
-  const p = periodData[period];
+  const days = PERIOD_DAYS[period];
+  const periodRevenue = data.invoices
+    .filter((i) => i.status === 'paid' && withinDays(i.issue_at, days))
+    .reduce((s, i) => s + Number(i.total || 0), 0);
+  const periodProjects = data.projects.filter((p) => withinDays(p.due_date || p.created_at, days));
+  const periodSales = periodProjects.reduce((s, p) => s + Number(p.sale_price || 0), 0);
+  const periodProfit = periodProjects.reduce((s, p) => s + (Number(p.sale_price || 0) - (data.costByProject[p.id] || 0)), 0);
+  const periodMargin = periodSales > 0 ? Math.round((periodProfit / periodSales) * 100) : 0;
+  const periodNewClients = data.clients.filter((c) => withinDays(c.created_at, days)).length;
+
+  // إيرادات الفواتير المدفوعة لآخر 6 أشهر تقويمية
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    return { year: d.getFullYear(), month: d.getMonth(), label: ARABIC_MONTHS[d.getMonth()] };
+  });
+  const monthTotals = months.map((m) => data.invoices
+    .filter((i) => i.status === 'paid' && (() => { const d = new Date(i.issue_at); return d.getFullYear() === m.year && d.getMonth() === m.month; })())
+    .reduce((s, i) => s + Number(i.total || 0), 0));
+  const maxMonth = Math.max(...monthTotals, 1);
+
+  // توزيع مصدر العملاء الفعلي
+  const bySource = {};
+  for (const c of data.clients) { const key = c.source || 'other'; bySource[key] = (bySource[key] || 0) + 1; }
+  const totalClients = data.clients.length || 1;
+  const sourceRows = Object.entries(bySource)
+    .map(([key, count]) => ({ label: SOURCE_LABEL[key] || key, pct: Math.round((count / totalClients) * 100), count }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <>
@@ -62,60 +92,43 @@ export default function Dashboard() {
           );
         })}
         {data.upcoming.length === 0 && (
-          <>
-            <div className="cdcard"><div className="ring"><b>0</b><span>يوم</span></div><div><div className="cdttl">لا تسليمات قريبة</div><small>لا مشاريع مستحقة خلال 14 يوماً</small></div></div>
-            <div className="cdcard"><div className="ring"><b>0</b><span>يوم</span></div><div><div className="cdttl">لا زيارات قريبة</div><small>جدول الفريق فارغ حالياً</small></div></div>
-          </>
+          <div className="cdcard"><div className="ring"><b>0</b><span>يوم</span></div><div><div className="cdttl">لا تسليمات قريبة</div><small>لا مشاريع مستحقة خلال 14 يوماً</small></div></div>
         )}
       </div>
 
       <div className="sec-head" style={{ marginBottom: 14 }}>
         <h2>مؤشرات الأداء</h2>
-        <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input type="date" className="fdate" defaultValue="2026-06-29" onChange={() => setPeriod('day')} />
-          <div className="viewtoggle">
-            {[
-              ['day', 'يوم'],
-              ['week', 'أسبوع'],
-              ['month', 'شهر'],
-              ['year', 'سنة'],
-            ].map(([key, label]) => <button className={`vt${period === key ? ' active' : ''}`} key={key} onClick={() => setPeriod(key)}>{label}</button>)}
-          </div>
+        <div className="viewtoggle" style={{ marginInlineStart: 'auto' }}>
+          {[['day', 'يوم'], ['week', 'أسبوع'], ['month', 'شهر'], ['year', 'سنة']].map(([key, label]) => (
+            <button className={`vt${period === key ? ' active' : ''}`} key={key} onClick={() => setPeriod(key)}>{label}</button>
+          ))}
         </div>
       </div>
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-        <div className="kpi"><div className="lbl">{p.lbl}</div><div className="val">{p.rev} ⃁</div><div className="trend up">▲ مقابل الفترة السابقة</div></div>
-        <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val">{p.profit} ⃁</div><div className="trend"><span>بعد خصم كل التكاليف</span></div></div>
-        <div className="kpi"><div className="lbl">متوسط هامش الربح</div><div className="val">{p.margin}</div><div className="trend"><span>على مستوى المشاريع</span></div></div>
-        <div className="kpi"><div className="lbl">العملاء الجدد</div><div className="val">{p.newc}</div><div className="trend up">▲ مقابل الفترة السابقة</div></div>
-        <div className="kpi"><div className="lbl">مشاريع نشطة</div><div className="val">{fmtNum(data.activeProjects)}</div><div className="trend"><span>{fmtNum(data.upcoming.length)} تسلّم هذا الأسبوع</span></div></div>
+        <div className="kpi"><div className="lbl">{PERIOD_LABEL[period]}</div><div className="val">{fmtMoney(periodRevenue)} ⃁</div><div className="trend"><span>فواتير مدفوعة خلال الفترة</span></div></div>
+        <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val">{fmtMoney(periodProfit)} ⃁</div><div className="trend"><span>سعر البيع بعد خصم التكاليف</span></div></div>
+        <div className="kpi"><div className="lbl">هامش الربح</div><div className="val">{fmtNum(periodMargin)}%</div><div className="trend"><span>على مستوى المشاريع</span></div></div>
+        <div className="kpi"><div className="lbl">العملاء الجدد</div><div className="val">{fmtNum(periodNewClients)}</div><div className="trend"><span>خلال الفترة المختارة</span></div></div>
+        <div className="kpi"><div className="lbl">مشاريع نشطة</div><div className="val">{fmtNum(data.activeProjects)}</div><div className="trend"><span>{fmtNum(data.upcoming.length)} تسليم قريب</span></div></div>
         <div className="kpi alert"><div className="lbl">تنبيهات المستودع</div><div className="val">{fmtNum(data.lowStock.length)}</div><div className="trend down">أصناف وصلت حد النفاد</div></div>
       </div>
 
       <div className="grid2">
         <div className="card">
-          <div className="sec-head"><h2>الإيرادات والأرباح</h2><span className="more">آخر 6 أشهر</span></div>
+          <div className="sec-head"><h2>الإيرادات المحصّلة</h2><span className="more">آخر 6 أشهر</span></div>
           <div className="bars">
-            {[
-              ['يناير', '42%'], ['فبراير', '55%'], ['مارس', '48%'], ['أبريل', '68%'], ['مايو', '74%'], ['يونيو', '92%'],
-            ].map(([month, height]) => (
-              <div className={`bar${month === 'يونيو' ? ' cur' : ''}`} key={month}>
-                <div className="col"><div className="fill" style={{ height }} /></div><small>{month}</small>
+            {months.map((m, i) => (
+              <div className={`bar${i === months.length - 1 ? ' cur' : ''}`} key={`${m.year}-${m.month}`}>
+                <div className="col"><div className="fill" style={{ height: `${Math.round((monthTotals[i] / maxMonth) * 100)}%` }} /></div><small>{m.label}</small>
               </div>
             ))}
           </div>
         </div>
         <div className="card">
           <div className="sec-head"><h2>مصدر العملاء</h2></div>
-          {[
-            ['انستقرام', '52%', 'var(--gold)'],
-            ['تيك توك', '28%', 'var(--sage)'],
-            ['توصية صديق', '14%', 'var(--green)'],
-            ['أخرى', '6%', 'var(--faint)'],
-          ].map(([label, width, color]) => (
-            <div className="srcrow" key={label}><span style={{ width: 74 }}>{label}</span><div className="track"><div className="tf" style={{ width, background: color }} /></div><span className="pct">{width}</span></div>
+          {sourceRows.length === 0 ? <Empty title="لا عملاء بعد" desc="أضف عملاء لعرض توزيع مصادرهم." /> : sourceRows.map((row, i) => (
+            <div className="srcrow" key={row.label}><span style={{ width: 74 }}>{row.label}</span><div className="track"><div className="tf" style={{ width: `${row.pct}%`, background: SOURCE_COLORS[i % SOURCE_COLORS.length] }} /></div><span className="pct">{row.pct}%</span></div>
           ))}
-          <div className="note">أعلى ربحية فعلية من <b style={{ color: 'var(--green)' }}>توصية صديق</b> رغم قلة عددها</div>
         </div>
       </div>
 
@@ -176,9 +189,4 @@ export default function Dashboard() {
       </div>
     </>
   );
-}
-
-function withinDays(date, days) {
-  if (!date) return false;
-  return (Date.now() - new Date(date).getTime()) / 86400000 <= days;
 }

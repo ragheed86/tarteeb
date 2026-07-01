@@ -397,7 +397,7 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .topbar .pt{font-size:18px}
 }
 
-@media(max-width:540px){
+@media(max-width:768px){
   body{background:#F7F5FD;background-attachment:scroll;overscroll-behavior-y:none}
   body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top);background:#F7F5FD;z-index:120;pointer-events:none}
   .app{display:block;min-height:100dvh}
@@ -512,6 +512,6 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .modal-card,.modal-card.modal-sm{max-height:92dvh}
 }
 
-@media(max-width:540px) and (prefers-reduced-motion:reduce){
+@media(max-width:768px) and (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
 }

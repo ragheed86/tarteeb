@@ -94,16 +94,24 @@ export async function getAllProjectCosts() {
   const { data, error } = await supabase.from('project_costs').select('project_id,amount');
   if (error) throw error; return data;
 }
-// يستبدل بنود الجدول التقديري فقط (عمالة/إشراف/مواد/نقل/أخرى) دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً
-export async function saveProjectCosts(projectId, rows) {
+// بنود «الجدول التقديري» (عمالة/إشراف/مواد/نقل/أخرى بلا وصف مخصّص) مقابل بنود التكلفة الحرة
+// التي يضيفها المستخدم يدوياً بنوع ووصف ومبلغ من اختياره.
+function isManagedCostRow(c) {
   const managedLabels = new Set(['عمالة', 'إشراف']);
   const managedKinds = new Set(['materials', 'transport', 'other']);
+  return (c.kind === 'labor' && managedLabels.has(c.label)) || (managedKinds.has(c.kind) && !c.label);
+}
+export function splitManagedCosts(costs) {
+  const managed = []; const adhoc = [];
+  for (const c of costs || []) (isManagedCostRow(c) ? managed : adhoc).push(c);
+  return { managed, adhoc };
+}
+// يستبدل بنود الجدول التقديري فقط دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً
+export async function saveProjectCosts(projectId, rows) {
   const { data: existing, error: fetchErr } = await supabase.from('project_costs')
     .select('id,kind,label').eq('project_id', projectId);
   if (fetchErr) throw fetchErr;
-  const idsToDelete = (existing || [])
-    .filter((c) => (c.kind === 'labor' && managedLabels.has(c.label)) || (managedKinds.has(c.kind) && !c.label))
-    .map((c) => c.id);
+  const idsToDelete = splitManagedCosts(existing).managed.map((c) => c.id);
   if (idsToDelete.length) {
     const { error: delErr } = await supabase.from('project_costs').delete().in('id', idsToDelete);
     if (delErr) throw delErr;

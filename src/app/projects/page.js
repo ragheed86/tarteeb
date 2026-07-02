@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
   getProjects, getClients, createProject, updateProject, removeProject,
   getProjectCosts, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
+  createProjectCost, removeProjectCost, splitManagedCosts,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
@@ -16,6 +17,9 @@ const STATUS_OPTS = [
   { value: 'completed', label: 'مكتمل' },
   { value: 'cancelled', label: 'ملغي' },
 ];
+
+const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
+const EMPTY_EXTRA_COST = { kind: 'labor', label: '', amount: '' };
 
 const EMPTY = {
   title: '', client_id: '', service_type: '', sale_price: '', status: 'quote',
@@ -46,6 +50,8 @@ export default function ProjectsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [estimate, setEstimate] = useState(EMPTY_ESTIMATE);
+  const [extraCosts, setExtraCosts] = useState([]); // بنود تكلفة حرة: { id, kind, label, amount }
+  const [extraForm, setExtraForm] = useState(EMPTY_EXTRA_COST);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [view, setView] = useState('cards');
@@ -63,11 +69,26 @@ export default function ProjectsPage() {
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
   function setEstimateField(k, v) { setEstimate((f) => ({ ...f, [k]: v })); }
+  function setExtraField(k, v) { setExtraForm((f) => ({ ...f, [k]: v })); }
+
+  function addExtraCost() {
+    const amount = Number(extraForm.amount) || 0;
+    if (amount <= 0) return;
+    setExtraCosts((c) => [...c, { id: null, kind: extraForm.kind, label: extraForm.label.trim(), amount }]);
+    setExtraForm(EMPTY_EXTRA_COST);
+  }
+  async function removeExtraCost(item) {
+    if (item.id) {
+      try { await removeProjectCost(item.id); } catch { /* تجاهل فشل الحذف */ }
+    }
+    setExtraCosts((c) => c.filter((x) => x !== item));
+  }
 
   function openAdd() {
     setEditing(null);
     setForm({ ...EMPTY, client_id: state?.clients[0]?.id || '' });
     setEstimate(EMPTY_ESTIMATE);
+    setExtraCosts([]); setExtraForm(EMPTY_EXTRA_COST);
     setFormErr(''); setOpen(true);
   }
   async function openEdit(p) {
@@ -78,11 +99,14 @@ export default function ProjectsPage() {
       start_date: p.start_date || '', due_date: p.due_date || '', progress: p.progress ?? 0,
     });
     setEstimate(EMPTY_ESTIMATE);
+    setExtraCosts([]); setExtraForm(EMPTY_EXTRA_COST);
     setFormErr(''); setOpen(true);
     try {
       const costs = await getProjectCosts(p.id);
-      setEstimate(costRowsToEstimate(costs));
-    } catch { /* تجاهل: يبقى الجدول التقديري فارغاً إذا تعذّر التحميل */ }
+      const { managed, adhoc } = splitManagedCosts(costs);
+      setEstimate(costRowsToEstimate(managed));
+      setExtraCosts(adhoc.map((c) => ({ id: c.id, kind: c.kind, label: c.label || '', amount: c.amount })));
+    } catch { /* تجاهل: تبقى بنود التكلفة فارغة إذا تعذّر التحميل */ }
   }
   function close() { if (!saving) { setOpen(false); setEditing(null); } }
 
@@ -113,6 +137,10 @@ export default function ProjectsPage() {
         projectId = np.id;
       }
       await saveProjectCosts(projectId, estimateToCostRows(estimate));
+      const newExtraCosts = extraCosts.filter((c) => !c.id);
+      await Promise.all(newExtraCosts.map((c) => createProjectCost({
+        project_id: projectId, kind: c.kind, label: c.label || null, amount: c.amount,
+      })));
       close();
     } catch (e2) { setFormErr(e2.message || 'تعذّر الحفظ'); }
     finally { setSaving(false); }
@@ -141,6 +169,7 @@ export default function ProjectsPage() {
   const workerTotal = num(estimate.workers_count) * num(estimate.worker_hours) * num(estimate.worker_rate);
   const supervisorTotal = num(estimate.supervisors_count) * num(estimate.supervisor_hours) * num(estimate.supervisor_rate);
   const estimateTotal = workerTotal + supervisorTotal + num(estimate.materials_cost) + num(estimate.transport_cost) + num(estimate.other_cost);
+  const extraCostsTotal = extraCosts.reduce((s, c) => s + num(c.amount), 0);
 
   return (
     <>
@@ -354,6 +383,34 @@ export default function ProjectsPage() {
                     <label>أخرى</label>
                     <input type="number" min="0" step="0.01" value={estimate.other_cost} onChange={(e) => setEstimateField('other_cost', e.target.value)} dir="ltr" />
                   </div>
+                </div>
+              </div>
+
+              <div className="estimate-box span-2">
+                <div className="estimate-head">
+                  <h3>بنود تكلفة إضافية</h3>
+                  <span className="amt">{fmtMoney(extraCostsTotal)} ⃁</span>
+                </div>
+                {extraCosts.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    {extraCosts.map((c, i) => (
+                      <div className="cost-line" key={c.id || `new-${i}`}>
+                        <div className="lft">{COST_KIND[c.kind] || c.kind}{c.label ? ` · ${c.label}` : ''}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <b className="amt">{fmtMoney(c.amount)} ⃁</b>
+                          <button type="button" className="x-btn" onClick={() => removeExtraCost(c)}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="inline-add">
+                  <select value={extraForm.kind} onChange={(e) => setExtraField('kind', e.target.value)} style={{ maxWidth: 130 }}>
+                    {Object.entries(COST_KIND).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                  <input placeholder="وصف (اختياري)" value={extraForm.label} onChange={(e) => setExtraField('label', e.target.value)} />
+                  <input type="number" min="0" step="0.01" placeholder="المبلغ" dir="ltr" style={{ maxWidth: 120 }} value={extraForm.amount} onChange={(e) => setExtraField('amount', e.target.value)} />
+                  <button type="button" className="btn sm" onClick={addExtraCost}>إضافة</button>
                 </div>
               </div>
             </div>

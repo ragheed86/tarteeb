@@ -57,6 +57,7 @@ export default function ProjectsPage() {
   const [view, setView] = useState('cards');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [q, setQ] = useState('');
 
   async function load() {
     try {
@@ -153,18 +154,29 @@ export default function ProjectsPage() {
     catch (e2) { setErr(e2.message || 'تعذّر الحذف'); }
   }
 
+  async function moveToStatus(projectId, status) {
+    const current = state?.projects.find((x) => x.id === projectId);
+    if (!current || current.status === status) return;
+    try {
+      const up = await updateProject(projectId, { status });
+      setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === up.id ? up : x)) }));
+    } catch (e2) { setErr(e2.message || 'تعذّر تحديث الحالة'); }
+  }
+
   if (err) return <ErrorBar message={err} />;
   if (!state) return <Loading />;
 
   const { projects, clients, byId } = state;
-  const filtered = projects.filter((p) => {
+  const term = q.trim().toLowerCase();
+  const searched = projects.filter((p) => !term || `${p.title} ${byId[p.client_id] || ''}`.toLowerCase().includes(term));
+  const filtered = searched.filter((p) => {
     const d = p.due_date || p.start_date || '';
     return (!from || d >= from) && (!to || d <= to);
   });
   const cols = [
-    ['قيد التجهيز', ['quote', 'preparing']],
-    ['جاري التنفيذ', ['in_progress']],
-    ['تم التسليم', ['delivered', 'completed']],
+    ['قيد التجهيز', ['quote', 'preparing'], 'preparing'],
+    ['جاري التنفيذ', ['in_progress'], 'in_progress'],
+    ['تم التسليم', ['delivered', 'completed'], 'delivered'],
   ];
   const workerTotal = num(estimate.workers_count) * num(estimate.worker_hours) * num(estimate.worker_rate);
   const supervisorTotal = num(estimate.supervisors_count) * num(estimate.supervisor_hours) * num(estimate.supervisor_rate);
@@ -178,6 +190,10 @@ export default function ProjectsPage() {
           <button className={`vt${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')}>بطاقات</button>
           <button className={`vt${view === 'kanban' ? ' active' : ''}`} onClick={() => setView('kanban')}>كانبان</button>
           <button className={`vt${view === 'calendar' ? ' active' : ''}`} onClick={() => setView('calendar')}>تقويم</button>
+        </div>
+        <div className="search" style={{ marginInlineStart: 0, width: 220 }}>
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
+          <input placeholder="بحث بعنوان المشروع أو العميل…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>من</span>
         <input type="date" className="fdate" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -247,14 +263,29 @@ export default function ProjectsPage() {
         </>
       ) : view === 'kanban' ? (
         <div className="kanban">
-          {cols.map(([title, statuses]) => {
-            const rows = projects.filter((p) => statuses.includes(p.status));
+          {cols.map(([title, statuses, dropStatus]) => {
+            const rows = searched.filter((p) => statuses.includes(p.status));
             return (
-              <div className="kcol" key={title}>
+              <div
+                className="kcol"
+                key={title}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const id = e.dataTransfer.getData('text/plain');
+                  if (id) moveToStatus(id, dropStatus);
+                }}
+              >
                 <div className="kh">{title}<span className="kc">{fmtNum(rows.length)}</span></div>
                 <div className="kbody">
                   {rows.map((p) => (
-                    <div className="kcard" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>
+                    <div
+                      className="kcard"
+                      key={p.id}
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData('text/plain', p.id)}
+                      onClick={() => router.push(`/projects/${p.id}`)}
+                    >
                       <h4>{p.title}</h4>
                       <div className="km">{byId[p.client_id] || 'عميل غير معروف'} · {p.service_type || '—'}</div>
                       <div className="kf"><span className="chk">{fmtNum(p.progress || 0)}%</span><span className="kp">{fmtMoney(p.sale_price)} ⃁</span></div>
@@ -273,7 +304,7 @@ export default function ProjectsPage() {
             {Array.from({ length: 3 }, (_, i) => <div className="cell empty" key={`e-${i}`} />)}
             {Array.from({ length: 31 }, (_, i) => {
               const day = i + 1;
-              const events = projects.filter((p) => Number((p.due_date || '').slice(8, 10)) === day);
+              const events = searched.filter((p) => Number((p.due_date || '').slice(8, 10)) === day);
               return (
                 <div className="cell" key={day}>
                   <span className="dn">{day}</span>

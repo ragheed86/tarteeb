@@ -2,11 +2,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  getProjects, getClients, createProject, updateProject, removeProject,
-  getProjectCosts, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
-  createProjectCost, removeProjectCost, splitManagedCosts,
+  getProjects, getClients, getInvoices, createProject, updateProject, removeProject,
 } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS } from '@/lib/format';
+import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, displayProgress, progressForStatus, DONE_STATUSES } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
 
 const STATUS_OPTS = [
@@ -18,28 +16,56 @@ const STATUS_OPTS = [
   { value: 'cancelled', label: 'ملغي' },
 ];
 
-const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
-const EMPTY_EXTRA_COST = { kind: 'labor', label: '', amount: '' };
-
 const EMPTY = {
   title: '', client_id: '', service_type: '', sale_price: '', status: 'quote',
   start_date: '', due_date: '', progress: 0,
 };
+const PAGE_SIZE = 10;
 
-const EMPTY_ESTIMATE = {
-  workers_count: '',
-  worker_hours: '',
-  worker_rate: '',
-  supervisors_count: '',
-  supervisor_hours: '',
-  supervisor_rate: '',
-  materials_cost: '',
-  transport_cost: '',
-  other_cost: '',
-};
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
-function num(value) {
-  return Number(value) || 0;
+function currentMonthRange() {
+  const now = new Date();
+  return {
+    from: isoLocal(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: isoLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
+function normalizeSearch(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[إأآا]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function projectOverlapsRange(project, from, to) {
+  if (!from && !to) return true;
+  const start = project.start_date || project.due_date || '';
+  const end = project.due_date || project.start_date || '';
+  if (!start && !end) return false;
+  if (from && end && end < from) return false;
+  if (to && start && start > to) return false;
+  return true;
+}
+
+function calendarMeta(anchorDate) {
+  const [year, month] = anchorDate.split('-').map(Number);
+  const first = new Date(year, month - 1, 1);
+  return {
+    label: new Intl.DateTimeFormat('ar-SA-u-nu-latn', { month: 'long', year: 'numeric' }).format(first),
+    emptyCells: first.getDay(),
+    days: new Date(year, month, 0).getDate(),
+    prefix: `${year}-${String(month).padStart(2, '0')}`,
+  };
 }
 
 export default function ProjectsPage() {
@@ -49,65 +75,47 @@ export default function ProjectsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
-  const [estimate, setEstimate] = useState(EMPTY_ESTIMATE);
-  const [extraCosts, setExtraCosts] = useState([]); // بنود تكلفة حرة: { id, kind, label, amount }
-  const [extraForm, setExtraForm] = useState(EMPTY_EXTRA_COST);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [view, setView] = useState('cards');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [showAll, setShowAll] = useState(false);
 
   async function load() {
     try {
-      const [projects, clients] = await Promise.all([getProjects(), getClients()]);
+      const [projects, clients, invoices] = await Promise.all([getProjects(), getClients(), getInvoices().catch(() => [])]);
       const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
-      setState({ projects, clients, byId });
+      // السعر النهائي = مجموع فواتير المشروع الصادرة (غير المسودّة)
+      const finalByProject = {};
+      for (const inv of invoices || []) {
+        if (inv.project_id && inv.status && inv.status !== 'draft') {
+          finalByProject[inv.project_id] = (finalByProject[inv.project_id] || 0) + Number(inv.total || 0);
+        }
+      }
+      setState({ projects, clients, byId, finalByProject });
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
+  useEffect(() => { setPage(1); }, [q, from, to, view]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
-  function setEstimateField(k, v) { setEstimate((f) => ({ ...f, [k]: v })); }
-  function setExtraField(k, v) { setExtraForm((f) => ({ ...f, [k]: v })); }
-
-  function addExtraCost() {
-    const amount = Number(extraForm.amount) || 0;
-    if (amount <= 0) return;
-    setExtraCosts((c) => [...c, { id: null, kind: extraForm.kind, label: extraForm.label.trim(), amount }]);
-    setExtraForm(EMPTY_EXTRA_COST);
-  }
-  async function removeExtraCost(item) {
-    if (item.id) {
-      try { await removeProjectCost(item.id); } catch { /* تجاهل فشل الحذف */ }
-    }
-    setExtraCosts((c) => c.filter((x) => x !== item));
-  }
 
   function openAdd() {
     setEditing(null);
     setForm({ ...EMPTY, client_id: state?.clients[0]?.id || '' });
-    setEstimate(EMPTY_ESTIMATE);
-    setExtraCosts([]); setExtraForm(EMPTY_EXTRA_COST);
     setFormErr(''); setOpen(true);
   }
-  async function openEdit(p) {
+  function openEdit(p) {
     setEditing(p);
     setForm({
       title: p.title || '', client_id: p.client_id || '', service_type: p.service_type || '',
       sale_price: p.sale_price ?? '', status: p.status || 'quote',
       start_date: p.start_date || '', due_date: p.due_date || '', progress: p.progress ?? 0,
     });
-    setEstimate(EMPTY_ESTIMATE);
-    setExtraCosts([]); setExtraForm(EMPTY_EXTRA_COST);
     setFormErr(''); setOpen(true);
-    try {
-      const costs = await getProjectCosts(p.id);
-      const { managed, adhoc } = splitManagedCosts(costs);
-      setEstimate(costRowsToEstimate(managed));
-      setExtraCosts(adhoc.map((c) => ({ id: c.id, kind: c.kind, label: c.label || '', amount: c.amount })));
-    } catch { /* تجاهل: تبقى بنود التكلفة فارغة إذا تعذّر التحميل */ }
   }
   function close() { if (!saving) { setOpen(false); setEditing(null); } }
 
@@ -124,24 +132,16 @@ export default function ProjectsPage() {
       status: form.status,
       start_date: form.start_date || null,
       due_date: form.due_date || null,
-      progress: Math.max(0, Math.min(100, Number(form.progress) || 0)),
+      progress: progressForStatus(form.status, form.progress),
     };
     try {
-      let projectId;
       if (editing) {
         const up = await updateProject(editing.id, payload);
         setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === up.id ? up : x)) }));
-        projectId = up.id;
       } else {
         const np = await createProject(payload);
         setState((s) => ({ ...s, projects: [np, ...s.projects] }));
-        projectId = np.id;
       }
-      await saveProjectCosts(projectId, estimateToCostRows(estimate));
-      const newExtraCosts = extraCosts.filter((c) => !c.id);
-      await Promise.all(newExtraCosts.map((c) => createProjectCost({
-        project_id: projectId, kind: c.kind, label: c.label || null, amount: c.amount,
-      })));
       close();
     } catch (e2) { setFormErr(e2.message || 'تعذّر الحفظ'); }
     finally { setSaving(false); }
@@ -158,7 +158,7 @@ export default function ProjectsPage() {
     const current = state?.projects.find((x) => x.id === projectId);
     if (!current || current.status === status) return;
     try {
-      const up = await updateProject(projectId, { status });
+      const up = await updateProject(projectId, { status, progress: progressForStatus(status, current.progress) });
       setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === up.id ? up : x)) }));
     } catch (e2) { setErr(e2.message || 'تعذّر تحديث الحالة'); }
   }
@@ -166,23 +166,56 @@ export default function ProjectsPage() {
   if (err) return <ErrorBar message={err} />;
   if (!state) return <Loading />;
 
-  const { projects, clients, byId } = state;
-  const term = q.trim().toLowerCase();
-  const searched = projects.filter((p) => !term || `${p.title} ${byId[p.client_id] || ''}`.toLowerCase().includes(term));
-  const filtered = searched.filter((p) => {
-    const d = p.due_date || p.start_date || '';
-    return (!from || d >= from) && (!to || d <= to);
-  });
+  const { projects, clients, byId, finalByProject } = state;
+  const clientsById = Object.fromEntries(clients.map((c) => [c.id, c]));
+  const term = normalizeSearch(q);
+  const hasQuery = term.length > 0;
+  const hasDateFilter = Boolean(from || to);
+  const isBrowsing = showAll || hasQuery || hasDateFilter;
+  const filtered = isBrowsing ? projects.filter((p) => {
+    const client = clientsById[p.client_id];
+    const searchText = normalizeSearch([
+      p.title,
+      p.service_type,
+      p.status,
+      p.id,
+      p.client_id,
+      byId[p.client_id],
+      client?.name,
+      client?.code,
+      client?.phone,
+      client?.district,
+      p.start_date,
+      p.due_date,
+      p.created_at,
+      fmtDate(p.start_date),
+      fmtDate(p.due_date),
+      fmtDate(p.created_at),
+    ].filter(Boolean).join(' '));
+    return (!term || searchText.includes(term)) && projectOverlapsRange(p, from, to);
+  }) : [];
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageProjects = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const firstPageDate = pageProjects.find((p) => p.due_date || p.start_date)?.due_date
+    || pageProjects.find((p) => p.due_date || p.start_date)?.start_date;
+  const cal = calendarMeta(from || to || firstPageDate || isoLocal(new Date()));
+  const resetCurrentMonth = () => {
+    const next = currentMonthRange();
+    setFrom(next.from);
+    setTo(next.to);
+  };
+  const showAllProjects = () => {
+    setFrom('');
+    setTo('');
+    setQ('');
+  };
   const cols = [
     ['قيد التجهيز', ['quote', 'preparing'], 'preparing'],
     ['جاري التنفيذ', ['in_progress'], 'in_progress'],
     ['تم التسليم', ['delivered', 'completed'], 'delivered'],
   ];
-  const workerTotal = num(estimate.workers_count) * num(estimate.worker_hours) * num(estimate.worker_rate);
-  const supervisorTotal = num(estimate.supervisors_count) * num(estimate.supervisor_hours) * num(estimate.supervisor_rate);
-  const estimateTotal = workerTotal + supervisorTotal + num(estimate.materials_cost) + num(estimate.transport_cost) + num(estimate.other_cost);
-  const extraCostsTotal = extraCosts.reduce((s, c) => s + num(c.amount), 0);
-
   return (
     <>
       <div className="toolbar">
@@ -193,19 +226,22 @@ export default function ProjectsPage() {
         </div>
         <div className="search" style={{ marginInlineStart: 0, width: 220 }}>
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
-          <input placeholder="بحث بعنوان المشروع أو العميل…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder="بحث بالمشروع أو العميل أو التاريخ…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>من</span>
         <input type="date" className="fdate" value={from} onChange={(e) => setFrom(e.target.value)} />
         <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>إلى</span>
         <input type="date" className="fdate" value={to} onChange={(e) => setTo(e.target.value)} />
-        <button className="chip" onClick={() => { setFrom(''); setTo(''); }}>مسح</button>
+        <button className="chip" onClick={resetCurrentMonth}>هذا الشهر</button>
+        <button className={`chip${!from && !to && !q ? ' active' : ''}`} onClick={showAllProjects}>عرض كل المشاريع</button>
         <button className="btn" style={{ marginInlineStart: 'auto' }} onClick={openAdd}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
           مشروع جديد
         </button>
       </div>
-      <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-4px 0 16px' }}>اسحب المشاريع في كانبان أو التقويم لإعادة جدولتها · فلتر التواريخ يطبّق على طريقة البطاقات.</div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-4px 0 16px' }}>
+        {!from && !to ? 'يعرض كل المشاريع' : 'يعرض المشاريع ضمن نطاق التاريخ المحدد'} · البحث يعمل باسم المشروع أو العميل أو التاريخ · {fmtNum(filtered.length)} نتيجة
+      </div>
 
       {projects.length === 0 ? (
         <div className="card"><Empty title="لا توجد مشاريع بعد" desc="أنشئ أول مشروع لربطه بعميل وتتبّع تقدّمه." /></div>
@@ -214,17 +250,30 @@ export default function ProjectsPage() {
           <div className="sec-head"><h2>ملخص المشاريع</h2><span className="more">اضغط أي صف للتفاصيل</span></div>
           <div className="card" style={{ padding: '6px 0', overflowX: 'auto', marginBottom: 20 }}>
             <table>
-              <thead><tr><th>المشروع</th><th>العميل</th><th>الحالة</th><th>سعر البيع</th><th>التقدّم</th></tr></thead>
+              <thead><tr><th>المشروع</th><th>العميل</th><th>الحالة</th><th>تاريخ التسليم</th><th>السعر المبدئي</th><th>سعر البيع النهائي</th><th>التقدّم</th></tr></thead>
               <tbody>
-                {filtered.map((p) => {
+              {pageProjects.map((p) => {
                   const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
                   return (
                     <tr className="clickable" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>
                       <td className="nm">{p.title}</td>
                       <td>{byId[p.client_id] || 'عميل غير معروف'}</td>
-                      <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <select
+                          className={`status-select pill ${st.cls}`}
+                          value={p.status || 'quote'}
+                          onChange={(e) => moveToStatus(p.id, e.target.value)}
+                          aria-label={`حالة ${p.title}`}
+                        >
+                          {Object.entries(PROJECT_STATUS).map(([value, meta]) => (
+                            <option key={value} value={value}>{meta.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(p.due_date)}</td>
                       <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
-                      <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ width: 70, height: 6, background: 'var(--surface-2)', borderRadius: 6, overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${p.progress || 0}%`, background: 'var(--green)', borderRadius: 6 }} /></span>{fmtNum(p.progress || 0)}%</span></td>
+                      <td className="amt">{finalByProject?.[p.id] ? `${fmtMoney(finalByProject[p.id])} ⃁` : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                      <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ width: 70, height: 6, background: 'var(--surface-2)', borderRadius: 6, overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${displayProgress(p)}%`, background: 'var(--green)', borderRadius: 6 }} /></span>{fmtNum(displayProgress(p))}%</span></td>
                     </tr>
                   );
                 })}
@@ -232,7 +281,7 @@ export default function ProjectsPage() {
             </table>
           </div>
           <div className="pgrid">
-          {filtered.map((p) => {
+          {pageProjects.map((p) => {
             const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
             return (
               <div className="pcard" key={p.id} onClick={() => router.push(`/projects/${p.id}`)} style={{ cursor: 'pointer' }}>
@@ -244,12 +293,22 @@ export default function ProjectsPage() {
                   <div className="cl">{byId[p.client_id] || 'عميل غير معروف'} · {p.service_type || '—'}</div>
                   <div className="row">
                     <span className="price amt">{fmtMoney(p.sale_price)} ⃁</span>
-                    <span className={`pill ${st.cls}`}>{st.label}</span>
+                    <select
+                      className={`status-select pill ${st.cls}`}
+                      value={p.status || 'quote'}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => { e.stopPropagation(); moveToStatus(p.id, e.target.value); }}
+                      aria-label={`حالة ${p.title}`}
+                    >
+                      {Object.entries(PROJECT_STATUS).map(([value, meta]) => (
+                        <option key={value} value={value}>{meta.label}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="prog"><i style={{ width: `${p.progress || 0}%` }} /></div>
+                  <div className="prog"><i style={{ width: `${displayProgress(p)}%` }} /></div>
                   <div className="row" style={{ color: 'var(--muted)', fontSize: 12 }}>
                     <span>التسليم: {fmtDate(p.due_date)}</span>
-                    <span className="amt">{fmtNum(p.progress || 0)}%</span>
+                    <span className="amt">{fmtNum(displayProgress(p))}%</span>
                   </div>
                   <div className="row" style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
                     <button className="btn ghost sm" onClick={() => openEdit(p)}>تعديل</button>
@@ -264,7 +323,7 @@ export default function ProjectsPage() {
       ) : view === 'kanban' ? (
         <div className="kanban">
           {cols.map(([title, statuses, dropStatus]) => {
-            const rows = searched.filter((p) => statuses.includes(p.status));
+            const rows = pageProjects.filter((p) => statuses.includes(p.status));
             return (
               <div
                 className="kcol"
@@ -288,7 +347,7 @@ export default function ProjectsPage() {
                     >
                       <h4>{p.title}</h4>
                       <div className="km">{byId[p.client_id] || 'عميل غير معروف'} · {p.service_type || '—'}</div>
-                      <div className="kf"><span className="chk">{fmtNum(p.progress || 0)}%</span><span className="kp">{fmtMoney(p.sale_price)} ⃁</span></div>
+                      <div className="kf"><span className="chk">{fmtNum(displayProgress(p))}%</span><span className="kp">{fmtMoney(p.sale_price)} ⃁</span></div>
                     </div>
                   ))}
                 </div>
@@ -298,13 +357,14 @@ export default function ProjectsPage() {
         </div>
       ) : (
         <div className="card">
-          <div className="calhead"><h3>يوليو 2026</h3><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>مواعيد التسليم والزيارات</span></div>
+          <div className="calhead"><h3>{cal.label}</h3><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>مواعيد التسليم والزيارات</span></div>
           <div className="cal-week"><div>الأحد</div><div>الإثنين</div><div>الثلاثاء</div><div>الأربعاء</div><div>الخميس</div><div>الجمعة</div><div>السبت</div></div>
           <div className="cal-grid">
-            {Array.from({ length: 3 }, (_, i) => <div className="cell empty" key={`e-${i}`} />)}
-            {Array.from({ length: 31 }, (_, i) => {
+            {Array.from({ length: cal.emptyCells }, (_, i) => <div className="cell empty" key={`e-${i}`} />)}
+            {Array.from({ length: cal.days }, (_, i) => {
               const day = i + 1;
-              const events = searched.filter((p) => Number((p.due_date || '').slice(8, 10)) === day);
+              const dayIso = `${cal.prefix}-${String(day).padStart(2, '0')}`;
+              const events = pageProjects.filter((p) => (p.due_date || p.start_date || '') === dayIso);
               return (
                 <div className="cell" key={day}>
                   <span className="dn">{day}</span>
@@ -316,9 +376,20 @@ export default function ProjectsPage() {
         </div>
       )}
 
+      {projects.length > 0 && (
+        <div className="pagination">
+          <button className="btn ghost sm" type="button" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>السابق</button>
+          <span>
+            صفحة <b className="amt">{fmtNum(currentPage)}</b> من <b className="amt">{fmtNum(totalPages)}</b>
+            {' '}· يظهر {fmtNum(pageProjects.length)} من {fmtNum(filtered.length)}
+          </span>
+          <button className="btn ghost sm" type="button" disabled={currentPage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>التالي</button>
+        </div>
+      )}
+
       {open && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <form className="modal-card" onSubmit={submit}>
+          <form className="modal-card project-modal" onSubmit={submit}>
             <div className="modal-head">
               <div><h2>{editing ? 'تعديل مشروع' : 'مشروع جديد'}</h2><p>ربط بعميل وتحديد حالة المشروع</p></div>
               <button className="icon-close" type="button" onClick={close} aria-label="إغلاق">
@@ -326,124 +397,63 @@ export default function ProjectsPage() {
               </button>
             </div>
             {formErr && <div className="errbar">{formErr}</div>}
-            <div className="form-grid">
-              <div className="field span-2">
-                <label>عنوان المشروع</label>
-                <input value={form.title} onChange={(e) => set('title', e.target.value)} required autoFocus />
-              </div>
-              <div className="field">
-                <label>العميل</label>
-                <select value={form.client_id} onChange={(e) => set('client_id', e.target.value)} required>
-                  <option value="" disabled>اختر عميلاً…</option>
-                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>نوع الخدمة</label>
-                <input value={form.service_type} onChange={(e) => set('service_type', e.target.value)} placeholder="دواليب / مطبخ / نقل…" />
-              </div>
-              <div className="field">
-                <label>قيمة العقد (⃁)</label>
-                <input type="number" min="0" step="0.01" value={form.sale_price} onChange={(e) => set('sale_price', e.target.value)} dir="ltr" />
-              </div>
-              <div className="field">
-                <label>الحالة</label>
-                <select value={form.status} onChange={(e) => set('status', e.target.value)}>
-                  {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>حالة المشروع (%)</label>
-                <input type="number" min="0" max="100" value={form.progress} onChange={(e) => set('progress', e.target.value)} dir="ltr" />
-              </div>
-              <div className="field">
-                <label>تاريخ البدء</label>
-                <input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} dir="ltr" />
-              </div>
-              <div className="field">
-                <label>موعد التسليم</label>
-                <input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} dir="ltr" />
-              </div>
-              <div className="estimate-box span-2">
-                <div className="estimate-head">
-                  <h3>جدول تقديري</h3>
-                  <span className="amt">{fmtMoney(estimateTotal)} ⃁</span>
+            <div className="project-form-stack">
+              <section className="project-section">
+                <div className="section-title">
+                  <h3>بيانات المشروع</h3>
+                  <span>العميل، الخدمة، الحالة، والتواريخ</span>
                 </div>
-                <div className="estimate-grid">
-                  <div className="field">
-                    <label>عدد العاملين</label>
-                    <input type="number" min="0" step="1" value={estimate.workers_count} onChange={(e) => setEstimateField('workers_count', e.target.value)} dir="ltr" />
+                <div className="form-grid project-info-grid">
+                  <div className="field span-2">
+                    <label>عنوان المشروع</label>
+                    <input value={form.title} onChange={(e) => set('title', e.target.value)} required autoFocus />
                   </div>
                   <div className="field">
-                    <label>ساعات العامل</label>
-                    <input type="number" min="0" step="0.5" value={estimate.worker_hours} onChange={(e) => setEstimateField('worker_hours', e.target.value)} dir="ltr" />
+                    <label>العميل</label>
+                    <select value={form.client_id} onChange={(e) => set('client_id', e.target.value)} required>
+                      <option value="" disabled>اختر عميلاً…</option>
+                      {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
                   </div>
                   <div className="field">
-                    <label>سعر الساعة</label>
-                    <input type="number" min="0" step="0.01" value={estimate.worker_rate} onChange={(e) => setEstimateField('worker_rate', e.target.value)} dir="ltr" />
-                  </div>
-                  <div className="estimate-total">
-                    <span>إجمالي العاملين</span>
-                    <b className="amt">{fmtMoney(workerTotal)} ⃁</b>
+                    <label>نوع الخدمة</label>
+                    <input value={form.service_type} onChange={(e) => set('service_type', e.target.value)} placeholder="دواليب / مطبخ / نقل…" />
                   </div>
                   <div className="field">
-                    <label>عدد المشرفين</label>
-                    <input type="number" min="0" step="1" value={estimate.supervisors_count} onChange={(e) => setEstimateField('supervisors_count', e.target.value)} dir="ltr" />
+                    <label>قيمة العقد (⃁)</label>
+                    <input type="number" min="0" step="0.01" value={form.sale_price} onChange={(e) => set('sale_price', e.target.value)} dir="ltr" />
                   </div>
                   <div className="field">
-                    <label>ساعات المشرف</label>
-                    <input type="number" min="0" step="0.5" value={estimate.supervisor_hours} onChange={(e) => setEstimateField('supervisor_hours', e.target.value)} dir="ltr" />
+                    <label>الحالة</label>
+                    <select value={form.status} onChange={(e) => set('status', e.target.value)}>
+                      {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
                   </div>
                   <div className="field">
-                    <label>سعر ساعة المشرف</label>
-                    <input type="number" min="0" step="0.01" value={estimate.supervisor_rate} onChange={(e) => setEstimateField('supervisor_rate', e.target.value)} dir="ltr" />
+                    <label>نسبة التقدّم (%)</label>
+                    <input
+                      type="number" min="0" max="100"
+                      value={DONE_STATUSES.includes(form.status) ? 100 : form.progress}
+                      onChange={(e) => set('progress', e.target.value)}
+                      dir="ltr"
+                      disabled={DONE_STATUSES.includes(form.status)}
+                    />
+                    {DONE_STATUSES.includes(form.status) && (
+                      <small style={{ color: 'var(--muted)', fontSize: 12 }}>يُضبط تلقائياً على 100% عند التسليم أو الاكتمال</small>
+                    )}
                   </div>
-                  <div className="estimate-total">
-                    <span>إجمالي المشرفين</span>
-                    <b className="amt">{fmtMoney(supervisorTotal)} ⃁</b>
-                  </div>
-                  <div className="field">
-                    <label>تكلفة المنتجات</label>
-                    <input type="number" min="0" step="0.01" value={estimate.materials_cost} onChange={(e) => setEstimateField('materials_cost', e.target.value)} dir="ltr" />
-                  </div>
-                  <div className="field">
-                    <label>النقل</label>
-                    <input type="number" min="0" step="0.01" value={estimate.transport_cost} onChange={(e) => setEstimateField('transport_cost', e.target.value)} dir="ltr" />
-                  </div>
-                  <div className="field">
-                    <label>أخرى</label>
-                    <input type="number" min="0" step="0.01" value={estimate.other_cost} onChange={(e) => setEstimateField('other_cost', e.target.value)} dir="ltr" />
+                  <div className="date-pair">
+                    <div className="field">
+                      <label>تاريخ البدء</label>
+                      <input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} dir="ltr" />
+                    </div>
+                    <div className="field">
+                      <label>موعد التسليم</label>
+                      <input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} dir="ltr" />
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="estimate-box span-2">
-                <div className="estimate-head">
-                  <h3>بنود تكلفة إضافية</h3>
-                  <span className="amt">{fmtMoney(extraCostsTotal)} ⃁</span>
-                </div>
-                {extraCosts.length > 0 && (
-                  <div style={{ marginBottom: 12 }}>
-                    {extraCosts.map((c, i) => (
-                      <div className="cost-line" key={c.id || `new-${i}`}>
-                        <div className="lft">{COST_KIND[c.kind] || c.kind}{c.label ? ` · ${c.label}` : ''}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <b className="amt">{fmtMoney(c.amount)} ⃁</b>
-                          <button type="button" className="x-btn" onClick={() => removeExtraCost(c)}>✕</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="inline-add">
-                  <select value={extraForm.kind} onChange={(e) => setExtraField('kind', e.target.value)} style={{ maxWidth: 130 }}>
-                    {Object.entries(COST_KIND).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                  <input placeholder="وصف (اختياري)" value={extraForm.label} onChange={(e) => setExtraField('label', e.target.value)} />
-                  <input type="number" min="0" step="0.01" placeholder="المبلغ" dir="ltr" style={{ maxWidth: 120 }} value={extraForm.amount} onChange={(e) => setExtraField('amount', e.target.value)} />
-                  <button type="button" className="btn sm" onClick={addExtraCost}>إضافة</button>
-                </div>
-              </div>
+              </section>
             </div>
             <div className="modal-actions">
               <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>

@@ -8,7 +8,9 @@ export function fmtMoney(n) {
 }
 export function fmtDate(d) {
   if (!d) return '—';
-  return new Intl.DateTimeFormat('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(d));
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return String(d);
+  return new Intl.DateTimeFormat('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
 }
 
 // خرائط الحالات → أصناف الـ pill والتسميات العربية
@@ -26,6 +28,27 @@ export const PROJECT_STATUS = {
   completed: { label: 'مكتمل', cls: 'p-done' },
   cancelled: { label: 'ملغي', cls: 'p-cancel' },
 };
+
+// الحالات التي تعني أن العمل انتهى فعلياً — الحالة هي مصدر الحقيقة لاكتمال التقدّم
+export const DONE_STATUSES = ['delivered', 'completed'];
+// المشاريع التي ما زال تسليمها معلّقاً (تظهر في «التسليمات القادمة» وتُعدّ نشطة)
+export const OPEN_DELIVERY_STATUSES = ['quote', 'preparing', 'in_progress'];
+
+function clampProgress(value) {
+  return Math.max(0, Math.min(100, Number(value) || 0));
+}
+
+// نسبة التقدّم المعروضة: مكتمل/مُسلّم = 100% دائماً، وإلا القيمة المُدخلة يدوياً
+export function displayProgress(project) {
+  if (DONE_STATUSES.includes(project?.status)) return 100;
+  return clampProgress(project?.progress);
+}
+
+// نسبة التقدّم التي تُحفظ عند تغيير الحالة: تُثبَّت على 100% عند الاكتمال/التسليم
+export function progressForStatus(status, currentProgress) {
+  if (DONE_STATUSES.includes(status)) return 100;
+  return clampProgress(currentProgress);
+}
 export const INVOICE_STATUS = {
   draft: { label: 'مسودة', cls: 'p-wait' },
   unpaid: { label: 'غير مدفوعة', cls: 'p-quote' },

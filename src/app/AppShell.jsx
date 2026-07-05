@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase, supabaseReady } from '@/lib/supabase';
+import {
+  ALL_PERMISSIONS, ROLE_LABELS, canAccess, isPrimaryAdmin, normalizePermissions, permissionForPath,
+} from '@/lib/permissions';
 
 // ---------- خريطة التنقّل والعناوين ----------
 const NAV = [
@@ -32,6 +35,7 @@ const MOBILE_NAV = ['/', '/clients', '/projects', '/warehouse', '/employees'];
 export default function AppShell({ children }) {
   const pathname = usePathname();
   const [session, setSession] = useState(undefined); // undefined=يحمّل، null=خارج
+  const [access, setAccess] = useState(undefined);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -44,18 +48,64 @@ export default function AppShell({ children }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAccess() {
+      if (!session) {
+        setAccess(session === null ? null : undefined);
+        return;
+      }
+      setAccess(undefined);
+      const email = session.user?.email || '';
+      try {
+        const { data, error } = await supabase
+          .from('app_user_access')
+          .select('user_id,email,display_name,role,permissions,active')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        if (error) throw error;
+        const primary = isPrimaryAdmin(email);
+        if (!cancelled) {
+          setAccess({
+            user_id: session.user.id,
+            email,
+            display_name: data?.display_name || '',
+            role: primary ? 'admin' : data?.role || 'viewer',
+            permissions: primary ? ALL_PERMISSIONS : normalizePermissions(data?.permissions || [], email),
+            active: primary ? true : data?.active === true,
+            isPrimaryAdmin: primary,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setAccess(isPrimaryAdmin(email)
+            ? { user_id: session.user.id, email, role: 'admin', permissions: ALL_PERMISSIONS, active: true, isPrimaryAdmin: true }
+            : null);
+        }
+      }
+    }
+    loadAccess();
+    return () => { cancelled = true; };
+  }, [session]);
+
   useEffect(() => setOpen(false), [pathname]); // إغلاق القائمة عند التنقّل
 
-  if (session === undefined) {
+  if (session === undefined || (session && access === undefined)) {
     return <Splash />;
   }
   if (session === null) {
     return (<><Login /><IOSInstallBanner /></>);
   }
 
-  const active = ALL.find((i) => i.href === pathname) || ALL[0];
+  const visibleNav = NAV
+    .map((group) => ({ ...group, items: group.items.filter((item) => canAccess(access, permissionForPath(item.href))) }))
+    .filter((group) => group.items.length > 0);
+  const visibleAll = visibleNav.flatMap((g) => g.items);
+  const active = ALL.find((i) => i.href === pathname) || visibleAll[0] || ALL[0];
   const email = session.user?.email || '';
   const initial = (email[0] || 'ر').toUpperCase();
+  const currentPermission = permissionForPath(pathname);
+  const allowed = canAccess(access, currentPermission);
 
   return (
     <div className="app">
@@ -65,7 +115,7 @@ export default function AppShell({ children }) {
           <div><h1>ترتيب</h1><small>نظام إدارة الأعمال</small></div>
         </div>
         <nav className="nav">
-          {NAV.map((g, gi) => (
+          {visibleNav.map((g, gi) => (
             <div key={gi}>
               {g.group && <div className="nav-label">{g.group}</div>}
               {g.items.map((it) => {
@@ -82,7 +132,7 @@ export default function AppShell({ children }) {
         </nav>
         <div className="side-foot">
           <div className="avatar">{initial}</div>
-          <div>المدير<br /><small>{email}</small></div>
+          <div>{ROLE_LABELS[access?.role] || 'مستخدم'}<br /><small>{email}</small></div>
           <button className="logout" onClick={() => supabase.auth.signOut()}>خروج</button>
         </div>
       </aside>
@@ -94,15 +144,11 @@ export default function AppShell({ children }) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
           <div className="pt">{active.label}<small>{active.sub}</small></div>
-          <div className="search">
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
-            <input placeholder="ابحث عن عميل أو مشروع..." />
-          </div>
         </header>
-        <div className="content">{children}</div>
+        <div className="content">{allowed ? children : <AccessDenied permission={currentPermission} />}</div>
       </div>
       <nav className="bottom-nav" aria-label="التنقل الرئيسي">
-        {ALL.filter((it) => MOBILE_NAV.includes(it.href)).map((it) => {
+        {visibleAll.filter((it) => MOBILE_NAV.includes(it.href)).map((it) => {
           const Icon = it.icon;
           const isActive = it.href === pathname;
           return (
@@ -114,6 +160,16 @@ export default function AppShell({ children }) {
         })}
       </nav>
       <IOSInstallBanner />
+    </div>
+  );
+}
+
+function AccessDenied() {
+  return (
+    <div className="card access-denied">
+      <div className="mark"><span /><span /><span /><span /></div>
+      <h2>لا تملك صلاحية الوصول</h2>
+      <p>اطلب من الأدمن الأساسي تعديل صلاحيات حسابك من الإعدادات.</p>
     </div>
   );
 }
@@ -164,6 +220,17 @@ function Splash() {
   );
 }
 
+// ---------- شعار ترتيب (نسخة متجهة من الشعار المرفق) ----------
+function TarteebLogo({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 560 168" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ترتيب">
+      <path d="M182 54 C 244 28, 322 28, 392 50" fill="none" stroke="#F0A896" strokeWidth="2.4" strokeLinecap="round" />
+      <text x="280" y="106" textAnchor="middle" fontFamily="'Julius Sans One', sans-serif" fontSize="76" letterSpacing="10" fill="#F0A896">TARTEEB</text>
+      <text x="280" y="144" textAnchor="middle" fontFamily="'Julius Sans One', sans-serif" fontSize="16.5" letterSpacing="11" fill="#83C0B4">ARRANGE &amp; ORGANIZE</text>
+    </svg>
+  );
+}
+
 // ---------- شاشة الدخول ----------
 function Login() {
   const [email, setEmail] = useState('');
@@ -186,8 +253,7 @@ function Login() {
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
         <div className="lhead">
-          <div className="mark"><span /><span /><span /><span /></div>
-          <h1>ترتيب</h1>
+          <TarteebLogo className="login-logo" />
           <small>سجّل الدخول للوصول إلى نظام إدارة الأعمال</small>
         </div>
         {!supabaseReady && <div className="errbar">إعدادات Supabase غير مكتملة في بيئة التشغيل</div>}

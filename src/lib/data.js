@@ -99,19 +99,30 @@ export async function getAllProjectCosts() {
 function isManagedCostRow(c) {
   const managedLabels = new Set(['عمالة', 'إشراف']);
   const managedKinds = new Set(['materials', 'transport', 'other']);
-  return (c.kind === 'labor' && managedLabels.has(c.label)) || (managedKinds.has(c.kind) && !c.label);
+  return (c.kind === 'labor' && (managedLabels.has(c.label) || String(c.label || '').startsWith('عمالة:')))
+    || (c.kind === 'materials' && (!c.label || String(c.label || '').startsWith('منتج:')))
+    || (managedKinds.has(c.kind) && !c.label);
+}
+function isDailyCostRow(c) {
+  return String(c.label || '').startsWith('يومي:');
 }
 export function splitManagedCosts(costs) {
   const managed = []; const adhoc = [];
-  for (const c of costs || []) (isManagedCostRow(c) ? managed : adhoc).push(c);
+  for (const c of costs || []) ((isManagedCostRow(c) || isDailyCostRow(c)) ? managed : adhoc).push(c);
   return { managed, adhoc };
 }
 // يستبدل بنود الجدول التقديري فقط دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً
-export async function saveProjectCosts(projectId, rows) {
+export async function saveProjectCosts(projectId, rows, options = {}) {
+  const scope = options.scope || 'estimate';
   const { data: existing, error: fetchErr } = await supabase.from('project_costs')
     .select('id,kind,label').eq('project_id', projectId);
   if (fetchErr) throw fetchErr;
-  const idsToDelete = splitManagedCosts(existing).managed.map((c) => c.id);
+  const idsToDelete = (existing || [])
+    .filter((c) => {
+      if (scope === 'daily') return isDailyCostRow(c) || isManagedCostRow(c);
+      return isManagedCostRow(c) && !isDailyCostRow(c);
+    })
+    .map((c) => c.id);
   if (idsToDelete.length) {
     const { error: delErr } = await supabase.from('project_costs').delete().in('id', idsToDelete);
     if (delErr) throw delErr;
@@ -125,29 +136,165 @@ export async function saveProjectCosts(projectId, rows) {
 // جدول تقديري (عمالة/إشراف/مواد/نقل/أخرى) <-> بنود project_costs
 export function estimateToCostRows(estimate) {
   const n = (v) => Number(v) || 0;
+  if (Array.isArray(estimate.dailyRows)) {
+    const rows = [];
+    for (const day of estimate.dailyRows) {
+      for (const r of day.laborRows || []) {
+        const workerCount = n(r.workerCount ?? r.count ?? r.qty ?? (r.person ? 1 : 0));
+        const amount = workerCount * n(r.hours) * n(r.rate);
+        const worker = String(r.worker || '').trim();
+        rows.push({
+          kind: 'labor',
+          label: `يومي: ${day.date} · عمالة: ${workerCount || 0} عامل${worker ? ` · الموظف: ${worker}` : ''}`,
+          qty: workerCount,
+          hours: n(r.hours),
+          rate: n(r.rate),
+          amount,
+        });
+      }
+      for (const r of day.productRows || []) {
+        const supplier = r.supplierName ? ` · المورد: ${r.supplierName}` : '';
+        const sale = n(r.salePrice) ? ` · البيع: ${n(r.salePrice)}` : '';
+        const pct = n(r.markupPercent) ? ` · النسبة: ${n(r.markupPercent)}%` : '';
+        rows.push({
+          kind: 'materials',
+          label: `يومي: ${day.date} · منتج: ${r.product || 'منتج'}${supplier}${sale}${pct}`,
+          amount: n(r.purchasePrice),
+        });
+      }
+      for (const r of day.transportRows || []) {
+        rows.push({ kind: 'transport', label: `يومي: ${day.date} · نقل: ${r.note || 'نقل'}`, amount: n(r.amount) });
+      }
+      for (const r of day.otherRows || []) {
+        rows.push({ kind: 'other', label: `يومي: ${day.date} · أخرى: ${r.note || 'مصروف'}`, amount: n(r.amount) });
+      }
+    }
+    return rows.filter((r) => r.amount > 0);
+  }
+
+  const laborSource = Array.isArray(estimate.laborRows)
+    ? estimate.laborRows
+    : [
+      { label: 'عامل', count: estimate.workers_count, hours: estimate.worker_hours, rate: estimate.worker_rate },
+      { label: 'مشرف', count: estimate.supervisors_count, hours: estimate.supervisor_hours, rate: estimate.supervisor_rate },
+    ];
+  const laborRows = laborSource.map((r) => ({
+    kind: 'labor',
+    label: `عمالة: ${r.label || 'بند'}`,
+    qty: n(r.count),
+    hours: n(r.hours),
+    rate: n(r.rate),
+  })).map((r) => ({ ...r, amount: r.qty * r.hours * r.rate }));
+
+  const productRows = (estimate.productRows || []).map((r) => {
+    const supplier = r.supplierName ? ` · المورد: ${r.supplierName}` : '';
+    const sale = n(r.salePrice) ? ` · البيع: ${n(r.salePrice)}` : '';
+    const pct = n(r.markupPercent) ? ` · النسبة: ${n(r.markupPercent)}%` : '';
+    return {
+      kind: 'materials',
+      label: `منتج: ${r.product || 'منتج'}${supplier}${sale}${pct}`,
+      amount: n(r.purchasePrice),
+    };
+  });
+
   const rows = [
-    { kind: 'labor', label: 'عمالة', qty: n(estimate.workers_count), hours: n(estimate.worker_hours), rate: n(estimate.worker_rate) },
-    { kind: 'labor', label: 'إشراف', qty: n(estimate.supervisors_count), hours: n(estimate.supervisor_hours), rate: n(estimate.supervisor_rate) },
-    { kind: 'materials', label: null, qty: null, hours: null, rate: null, amount: n(estimate.materials_cost) },
+    ...laborRows,
+    ...productRows,
     { kind: 'transport', label: null, qty: null, hours: null, rate: null, amount: n(estimate.transport_cost) },
     { kind: 'other', label: null, qty: null, hours: null, rate: null, amount: n(estimate.other_cost) },
-  ].map((r) => ({ ...r, amount: r.amount ?? r.qty * r.hours * r.rate }));
+  ];
   return rows.filter((r) => r.amount > 0);
 }
 export function costRowsToEstimate(rows) {
+  const n = (v) => Number(v) || 0;
   const estimate = {
     workers_count: '', worker_hours: '', worker_rate: '',
     supervisors_count: '', supervisor_hours: '', supervisor_rate: '',
     materials_cost: '', transport_cost: '', other_cost: '',
+    laborRows: [], productRows: [], dailyRows: [],
   };
+  const dailyByDate = new Map();
+  const ensureDay = (date) => {
+    if (!dailyByDate.has(date)) {
+      dailyByDate.set(date, { date, laborRows: [], productRows: [], transportRows: [], otherRows: [] });
+    }
+    return dailyByDate.get(date);
+  };
+
   for (const r of rows || []) {
-    if (r.kind === 'labor' && r.label === 'عمالة') {
-      estimate.workers_count = r.qty ?? ''; estimate.worker_hours = r.hours ?? ''; estimate.worker_rate = r.rate ?? '';
-    } else if (r.kind === 'labor' && r.label === 'إشراف') {
-      estimate.supervisors_count = r.qty ?? ''; estimate.supervisor_hours = r.hours ?? ''; estimate.supervisor_rate = r.rate ?? '';
-    } else if (r.kind === 'materials') estimate.materials_cost = r.amount ?? '';
+    const labelText = String(r.label || '');
+    if (labelText.startsWith('يومي:')) {
+      const parts = labelText.split(' · ');
+      const date = parts[0].replace('يومي:', '').trim();
+      const day = ensureDay(date);
+      const findPart = (prefix) => parts.find((p) => p.startsWith(prefix))?.replace(prefix, '').trim() || '';
+      const dailyNote = () => parts.slice(1).join(' · ').trim() || labelText.replace(/^يومي:\s*[^·]+ ·?\s*/, '').trim();
+      if (r.kind === 'labor') {
+        const hasHourlyDetails = n(r.qty) > 0 && n(r.hours) > 0 && n(r.rate) > 0;
+        if (hasHourlyDetails) {
+          day.laborRows.push({
+            id: r.id || `labor-${day.laborRows.length}`,
+            workerCount: r.qty ?? (findPart('عمالة:').match(/\d+(\.\d+)?/)?.[0] || ''),
+            worker: findPart('الموظف:') || '',
+            hours: r.hours ?? '',
+            rate: r.rate ?? '',
+          });
+        } else if (n(r.amount) > 0) {
+          day.otherRows.push({
+            id: r.id || `other-${day.otherRows.length}`,
+            note: findPart('مشرف:') || findPart('عمالة:') || dailyNote() || 'مصروف عمالة',
+            amount: r.amount ?? '',
+          });
+        }
+      } else if (r.kind === 'materials') {
+        day.productRows.push({
+          id: r.id || `product-${day.productRows.length}`,
+          product: findPart('منتج:') || dailyNote() || '',
+          supplierName: findPart('المورد:') || '',
+          purchasePrice: r.amount ?? '',
+          salePrice: findPart('البيع:') || '',
+          markupPercent: findPart('النسبة:').replace('%', '') || '',
+        });
+      } else if (r.kind === 'transport') {
+        day.transportRows.push({ id: r.id || `transport-${day.transportRows.length}`, note: findPart('نقل:') || '', amount: r.amount ?? '' });
+      } else if (r.kind === 'other') {
+        day.otherRows.push({ id: r.id || `other-${day.otherRows.length}`, note: findPart('أخرى:') || '', amount: r.amount ?? '' });
+      }
+    } else if (r.kind === 'labor') {
+      const label = String(r.label || '').replace(/^عمالة:\s*/, '') || 'بند';
+      const row = { id: r.id || `labor-${estimate.laborRows.length}`, label, count: r.qty ?? '', hours: r.hours ?? '', rate: r.rate ?? '' };
+      estimate.laborRows.push(row);
+      if (label.includes('مشرف') && !estimate.supervisors_count) {
+        estimate.supervisors_count = r.qty ?? ''; estimate.supervisor_hours = r.hours ?? ''; estimate.supervisor_rate = r.rate ?? '';
+      } else if (!estimate.workers_count) {
+        estimate.workers_count = r.qty ?? ''; estimate.worker_hours = r.hours ?? ''; estimate.worker_rate = r.rate ?? '';
+      }
+    } else if (r.kind === 'materials') {
+      const label = String(r.label || '');
+      if (label.startsWith('منتج:')) {
+        const parts = Object.fromEntries(label.split(' · ').map((part) => {
+          const [key, ...rest] = part.split(':');
+          return [key.trim(), rest.join(':').trim()];
+        }));
+        estimate.productRows.push({
+          id: r.id || `product-${estimate.productRows.length}`,
+          product: parts['منتج'] || '',
+          supplierName: parts['المورد'] || '',
+          purchasePrice: r.amount ?? '',
+          salePrice: parts['البيع'] || '',
+          markupPercent: String(parts['النسبة'] || '').replace('%', ''),
+        });
+      } else {
+        estimate.materials_cost = r.amount ?? '';
+      }
+    }
     else if (r.kind === 'transport') estimate.transport_cost = r.amount ?? '';
     else if (r.kind === 'other') estimate.other_cost = r.amount ?? '';
+  }
+  estimate.dailyRows = Array.from(dailyByDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+  if (estimate.laborRows.length === 0 && (estimate.workers_count || estimate.supervisors_count)) {
+    if (estimate.workers_count) estimate.laborRows.push({ id: 'worker', label: 'عامل', count: estimate.workers_count, hours: estimate.worker_hours, rate: estimate.worker_rate });
+    if (estimate.supervisors_count) estimate.laborRows.push({ id: 'supervisor', label: 'مشرف', count: estimate.supervisors_count, hours: estimate.supervisor_hours, rate: estimate.supervisor_rate });
   }
   return estimate;
 }
@@ -177,6 +324,13 @@ export async function getCompanySettings()  { const { data, error } = await supa
 export async function getInvoices() {
   const { data, error } = await supabase.from('invoices')
     .select('id,number,project_id,client_id,issue_at,subtotal,vat_applicable,vat_rate,vat_amount,total,status,zatca_qr')
+    .order('issue_at', { ascending: false });
+  if (error) throw error; return data;
+}
+export async function getProjectInvoices(projectId) {
+  const { data, error } = await supabase.from('invoices')
+    .select('id,number,project_id,client_id,issue_at,total,status,zatca_qr')
+    .eq('project_id', projectId)
     .order('issue_at', { ascending: false });
   if (error) throw error; return data;
 }

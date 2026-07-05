@@ -173,6 +173,18 @@ function ClientsPageInner() {
     }
   }
 
+  async function changeStatus(c, status) {
+    if (status === c.status) return;
+    const prev = c.status;
+    setClients((current) => (current || []).map((x) => (x.id === c.id ? { ...x, status } : x)));
+    try {
+      await updateClient(c.id, { status });
+    } catch (error) {
+      setClients((current) => (current || []).map((x) => (x.id === c.id ? { ...x, status: prev } : x)));
+      setErr(error.message || 'تعذّر تحديث الحالة');
+    }
+  }
+
   if (err) return <ErrorBar message={err} />;
   if (!clients) return <Loading />;
 
@@ -208,7 +220,7 @@ function ClientsPageInner() {
           )
         ) : (
           <table>
-            <thead><tr><th>العميل</th><th>الجوال</th><th>المصدر</th><th>الحي</th><th>الحالة</th><th></th></tr></thead>
+            <thead><tr><th>العميل</th><th style={{ textAlign: 'center' }}>الجوال</th><th>المصدر</th><th>الحي</th><th>الحالة</th><th></th></tr></thead>
             <tbody>
               {filtered.map((c) => {
                 const st = CLIENT_STATUS[c.status] || { label: c.status || '—', cls: 'p-wait' };
@@ -218,10 +230,22 @@ function ClientsPageInner() {
                       <Link href={`/clients/${c.id}`} className="nm" style={{ color: 'var(--green)' }}>{c.name}</Link>
                       <br /><span className="uid">{c.code || '—'}</span>
                     </td>
-                    <td className="amt" dir="ltr" style={{ textAlign: 'start' }}>{c.phone || '—'}</td>
+                    <td className="amt" dir="ltr" style={{ textAlign: 'center' }}>{c.phone || '—'}</td>
                     <td><span className="src">{SOURCE_LABEL[c.source] || c.source || '—'}</span></td>
                     <td>{c.district || '—'}</td>
-                    <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
+                    <td>
+                      <select
+                        className={`status-select pill ${st.cls}`}
+                        value={c.status || 'active'}
+                        onChange={(e) => changeStatus(c, e.target.value)}
+                        aria-label={`حالة العميل ${c.name}`}
+                      >
+                        <option value="lead">عميل محتمل</option>
+                        <option value="active">عميل نشط</option>
+                        <option value="waiting">بانتظار رد</option>
+                        <option value="completed">مكتمل</option>
+                      </select>
+                    </td>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                       <button className="btn ghost sm" onClick={() => openEdit(c)}>تعديل</button>
                       <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(c)}>حذف</button>

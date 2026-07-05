@@ -8,7 +8,7 @@ import {
   getProjectMedia, createProjectMedia, removeProjectMedia,
   getProjectCosts, createProjectCost, removeProjectCost,
 } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS } from '@/lib/format';
+import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, displayProgress } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../../ui';
 
 const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
@@ -57,6 +57,9 @@ export default function ProjectDetail() {
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
         رجوع للمشاريع
       </button>
+      <button className="btn ghost" style={{ marginInlineStart: 10, marginBottom: 16 }} onClick={() => router.push(`/projects/${id}/report`)}>
+        تقرير المصاريف PDF
+      </button>
 
       {/* رأس */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -68,7 +71,7 @@ export default function ProjectDetail() {
         <div className="kv"><span className="k">نوع الخدمة</span><span className="v">{project.service_type || '—'}</span></div>
         <div className="kv"><span className="k">المشرف</span><span className="v">{supervisor?.name || '—'}</span></div>
         <div className="kv"><span className="k">البدء / التسليم</span><span className="v">{fmtDate(project.start_date)} ← {fmtDate(project.due_date)}</span></div>
-        <div className="kv"><span className="k">التقدّم</span><span className="v amt">{fmtNum(project.progress || 0)}%</span></div>
+        <div className="kv"><span className="k">التقدّم</span><span className="v amt">{fmtNum(displayProgress(project))}%</span></div>
       </div>
 
       {/* المؤشرات المالية من view */}

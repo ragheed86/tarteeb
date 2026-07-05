@@ -107,12 +107,12 @@ export default function EmployeesPage() {
           {emps.map((em) => {
             const st = STATUS[em.status] || { label: em.status, cls: 'p-wait' };
             return (
-              <div className="pcard" key={em.id}>
-                <div className="ph">
+              <div className="pcard employee-card" key={em.id}>
+                <div className="employee-photo">
                   {em.photo_url ? (
-                    <img src={em.photo_url} alt={em.name} style={{ width: 72, height: 72, borderRadius: '50%', objectFit: 'cover' }} />
+                    <img src={em.photo_url} alt={em.name} />
                   ) : (
-                    <span style={{ fontSize: 28, fontWeight: 600, color: 'var(--sage)' }}>{em.name?.trim()?.[0] || '؟'}</span>
+                    <span>{em.name?.trim()?.[0] || '؟'}</span>
                   )}
                 </div>
                 <div className="pb">

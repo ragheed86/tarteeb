@@ -2,20 +2,22 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getClients, getProjects, getInvoices, getInventory, getAllProjectCosts } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL } from '@/lib/format';
+import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, displayProgress, OPEN_DELIVERY_STATUSES } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from './ui';
 
 const ACTIVE = ['quote', 'preparing', 'in_progress'];
-const OPEN_DELIVERY = ['quote', 'preparing', 'in_progress', 'delivered'];
+const OPEN_DELIVERY = OPEN_DELIVERY_STATUSES;
 const PERIOD_DAYS = { day: 1, week: 7, month: 30, year: 365 };
 const PERIOD_LABEL = { day: 'إيرادات اليوم', week: 'إيرادات الأسبوع', month: 'إيرادات الشهر', year: 'إيرادات السنة' };
 const ARABIC_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const SOURCE_COLORS = ['var(--gold)', 'var(--sage)', 'var(--green)', 'var(--faint)', 'var(--pine)', 'var(--neg)'];
 
 function daysUntil(d) { return d ? Math.ceil((new Date(d).getTime() - Date.now()) / 86400000) : null; }
+// ضمن آخر «days» يوماً فقط (نافذة ماضية مغلقة الطرفين) — لا تُدخل التواريخ المستقبلية
 function withinDays(date, days) {
   if (!date) return false;
-  return (Date.now() - new Date(date).getTime()) / 86400000 <= days;
+  const diff = (Date.now() - new Date(date).getTime()) / 86400000;
+  return diff >= 0 && diff <= days;
 }
 
 export default function Dashboard() {
@@ -178,7 +180,7 @@ export default function Dashboard() {
                     <td><span className="nm">{p.title}</span></td>
                     <td>{p.service_type || '—'}</td>
                     <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
-                    <td><div className="prog" style={{ width: 90 }}><i style={{ width: `${p.progress || 0}%` }} /></div></td>
+                    <td><div className="prog" style={{ width: 90 }}><i style={{ width: `${displayProgress(p)}%` }} /></div></td>
                     <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
                   </tr>
                 );

@@ -1,60 +1,155 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  getProjects, getClients, updateProject,
-  getProjectCosts, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
+  getProjects, getClients, getSuppliers, getEmployees, updateProject,
+  getProjectCosts, getProjectInvoices, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
 } from '@/lib/data';
-import { fmtMoney } from '@/lib/format';
+import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS, PROJECT_STATUS, progressForStatus } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
-
-const EMPTY_ESTIMATE = {
-  workers_count: '', worker_hours: '', worker_rate: '',
-  supervisors_count: '', supervisor_hours: '', supervisor_rate: '',
-  materials_cost: '', transport_cost: '', other_cost: '',
-};
 
 function num(value) {
   return Number(value) || 0;
 }
 
+function makeId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+}
+
+function isoLocal(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function parseISODate(value) {
+  if (!value) return null;
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function addDaysISO(value, days) {
+  const d = parseISODate(value) || new Date();
+  d.setDate(d.getDate() + days);
+  return isoLocal(d);
+}
+
+function plannedProjectDays(project) {
+  const start = project?.start_date || project?.due_date || isoLocal(new Date());
+  const due = project?.due_date || start;
+  const s = parseISODate(start);
+  const e = parseISODate(due);
+  const count = s && e ? Math.max(1, Math.round((e.getTime() - s.getTime()) / 86_400_000) + 1) : 1;
+  return Array.from({ length: count }, (_, i) => addDaysISO(start, i));
+}
+
+const emptyLabor = () => ({ id: makeId('labor'), workerCount: '', worker: '', hours: '', rate: '' });
+const emptyProduct = () => ({ id: makeId('product'), product: '', supplierId: '', supplierName: '', purchasePrice: '', markupPercent: '', salePrice: '' });
+const emptyMoney = (prefix) => ({ id: makeId(prefix), note: '', amount: '' });
+const emptyDay = (date) => ({ date, laborRows: [emptyLabor()], productRows: [emptyProduct()], transportRows: [], otherRows: [] });
+
+function normalizeDay(day) {
+  return {
+    date: day.date,
+    laborRows: day.laborRows?.length ? day.laborRows.map((r) => ({
+      ...emptyLabor(),
+      ...r,
+      workerCount: r.workerCount ?? r.count ?? r.qty ?? (r.person ? 1 : ''),
+      worker: r.worker ?? r.person ?? '',
+      id: r.id || makeId('labor'),
+    })) : [emptyLabor()],
+    productRows: day.productRows?.length ? day.productRows.map((r) => ({ ...emptyProduct(), ...r, id: r.id || makeId('product') })) : [emptyProduct()],
+    transportRows: (day.transportRows || []).map((r) => ({ ...emptyMoney('transport'), ...r, id: r.id || makeId('transport') })),
+    otherRows: (day.otherRows || []).map((r) => ({ ...emptyMoney('other'), ...r, id: r.id || makeId('other') })),
+  };
+}
+
+function buildDailyRows(project, savedRows) {
+  const savedByDate = new Map((savedRows || []).map((d) => [d.date, d]));
+  const dates = new Set([...plannedProjectDays(project), ...(savedRows || []).map((d) => d.date)]);
+  return Array.from(dates)
+    .sort((a, b) => a.localeCompare(b))
+    .map((date) => normalizeDay(savedByDate.get(date) || emptyDay(date)));
+}
+
+function calcDay(day) {
+  const labor = (day.laborRows || []).reduce((s, r) => s + num(r.workerCount) * num(r.hours) * num(r.rate), 0);
+  const productsCost = (day.productRows || []).reduce((s, r) => s + num(r.purchasePrice), 0);
+  const productsSale = (day.productRows || []).reduce((s, r) => s + num(r.salePrice), 0);
+  const transport = (day.transportRows || []).reduce((s, r) => s + num(r.amount), 0);
+  const other = (day.otherRows || []).reduce((s, r) => s + num(r.amount), 0);
+  return { labor, productsCost, productsSale, transport, other, total: labor + productsCost + transport + other };
+}
+
+function updateRow(rows, id, key, value, suppliers) {
+  return rows.map((r) => {
+    if (r.id !== id) return r;
+    const next = { ...r, [key]: value };
+    if (key === 'supplierId') {
+      const supplier = suppliers.find((s) => s.id === value);
+      next.supplierName = supplier?.name || '';
+    }
+    if (key === 'purchasePrice' || key === 'markupPercent' || key === 'supplierId') {
+      const purchase = num(next.purchasePrice);
+      const pct = num(next.markupPercent);
+      next.salePrice = purchase > 0 ? String(Math.round((purchase * (1 + pct / 100)) * 100) / 100) : '';
+    }
+    return next;
+  });
+}
+
 export default function CostPage() {
-  const [state, setState] = useState(null); // { projects, byId }
+  const [state, setState] = useState(null);
   const [err, setErr] = useState('');
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [salePrice, setSalePrice] = useState('');
-  const [estimate, setEstimate] = useState(EMPTY_ESTIMATE);
+  const [dailyRows, setDailyRows] = useState([]);
+  const [projectInvoices, setProjectInvoices] = useState([]);
+  const [invoicePanelOpen, setInvoicePanelOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
-    Promise.all([getProjects(), getClients()])
-      .then(([projects, clients]) => {
+    Promise.all([getProjects(), getClients(), getSuppliers(), getEmployees().catch(() => [])])
+      .then(([projects, clients, suppliers, employees]) => {
         const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
-        setState({ projects, byId });
-        if (projects[0]) pick(projects[0], byId);
+        setState({ projects, suppliers, employees: employees || [], byId });
+        if (projects[0]) pick(projects[0], { projects, suppliers, employees, byId });
       })
       .catch((e) => setErr(e.message || 'تعذّر التحميل'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function pick(p, byIdOverride) {
-    const byId = byIdOverride || state?.byId || {};
-    setSelected({ ...p, clientName: byId[p.client_id] || 'عميل غير معروف' });
-    setQuery(`${p.title} · ${byId[p.client_id] || ''}`);
+  async function pick(project, stateOverride) {
+    const source = stateOverride || state || {};
+    const byId = source.byId || {};
+    const suppliers = source.suppliers || [];
+    setSelected({ ...project, clientName: byId[project.client_id] || 'عميل غير معروف' });
+    setQuery(`${project.title} · ${byId[project.client_id] || ''}`);
     setSearchOpen(false);
-    setSalePrice(p.sale_price ?? '');
+    setSalePrice(project.sale_price ?? '');
     setSaveMsg('');
+    setProjectInvoices([]);
+    setInvoicePanelOpen(false);
     try {
-      const costs = await getProjectCosts(p.id);
-      setEstimate(costRowsToEstimate(costs));
+      const [costs, invoices] = await Promise.all([
+        getProjectCosts(project.id),
+        getProjectInvoices(project.id).catch(() => []),
+      ]);
+      setProjectInvoices(invoices || []);
+      const restored = costRowsToEstimate(costs);
+      const rows = buildDailyRows(project, restored.dailyRows).map((day) => ({
+        ...day,
+        productRows: day.productRows.map((row) => {
+          const supplier = suppliers.find((s) => s.name === row.supplierName);
+          return { ...row, supplierId: row.supplierId || supplier?.id || '' };
+        }),
+      }));
+      setDailyRows(rows);
     } catch {
-      setEstimate(EMPTY_ESTIMATE);
+      setDailyRows(buildDailyRows(project, []));
+      setProjectInvoices([]);
     }
   }
-
-  function setEstimateField(k, v) { setEstimate((f) => ({ ...f, [k]: v })); }
 
   const filtered = useMemo(() => {
     if (!state) return [];
@@ -63,22 +158,91 @@ export default function CostPage() {
     return state.projects.filter((p) => `${p.title} · ${state.byId[p.client_id] || ''}`.toLowerCase().includes(q));
   }, [query, state]);
 
-  const workerTotal = num(estimate.workers_count) * num(estimate.worker_hours) * num(estimate.worker_rate);
-  const supervisorTotal = num(estimate.supervisors_count) * num(estimate.supervisor_hours) * num(estimate.supervisor_rate);
-  const total = workerTotal + supervisorTotal + num(estimate.materials_cost) + num(estimate.transport_cost) + num(estimate.other_cost);
+  function updateDay(date, updater) {
+    setDailyRows((days) => days.map((day) => (day.date === date ? updater(day) : day)));
+  }
+
+  function updateLabor(date, id, key, value) {
+    updateDay(date, (day) => ({ ...day, laborRows: updateRow(day.laborRows, id, key, value, state.suppliers) }));
+  }
+
+  function updateProduct(date, id, key, value) {
+    updateDay(date, (day) => ({ ...day, productRows: updateRow(day.productRows, id, key, value, state.suppliers) }));
+  }
+
+  function updateMoney(date, group, id, key, value) {
+    updateDay(date, (day) => ({ ...day, [group]: updateRow(day[group], id, key, value, state.suppliers) }));
+  }
+
+  function addDay() {
+    setDailyRows((days) => {
+      const last = days.at(-1)?.date || selected?.due_date || selected?.start_date || isoLocal(new Date());
+      return [...days, emptyDay(addDaysISO(last, 1))];
+    });
+  }
+
+  function addRow(date, group) {
+    updateDay(date, (day) => ({
+      ...day,
+      [group]: [
+        ...day[group],
+        group === 'laborRows' ? emptyLabor() : group === 'productRows' ? emptyProduct() : emptyMoney(group === 'transportRows' ? 'transport' : 'other'),
+      ],
+    }));
+  }
+
+  function removeRow(date, group, id) {
+    updateDay(date, (day) => ({ ...day, [group]: day[group].filter((r) => r.id !== id) }));
+  }
+
+  function removeDay(date) {
+    setDailyRows((days) => days.filter((day) => day.date !== date));
+  }
+
+  const dayTotals = dailyRows.map((day) => ({ date: day.date, ...calcDay(day) }));
+  const total = dayTotals.reduce((s, d) => s + d.total, 0);
   const price = num(salePrice);
   const profit = price - total;
   const margin = price > 0 ? Math.round((profit / price) * 100) : 0;
+  const laborSummary = dailyRows.reduce((summary, day) => {
+    let hasLabor = false;
+    for (const row of day.laborRows || []) {
+      const workers = num(row.workerCount);
+      const rowHours = workers * num(row.hours);
+      const amount = rowHours * num(row.rate);
+      if (workers || rowHours || amount) hasLabor = true;
+      summary.workerDays += workers;
+      summary.hours += rowHours;
+      summary.amount += amount;
+    }
+    if (hasLabor) summary.days += 1;
+    return summary;
+  }, { days: 0, workerDays: 0, hours: 0, amount: 0 });
+
+  async function changeStatus(status) {
+    if (!selected || status === selected.status) return;
+    const prev = selected.status;
+    const progress = progressForStatus(status, selected.progress);
+    setSelected((s) => ({ ...s, status, progress }));
+    setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === selected.id ? { ...p, status, progress } : p)) }));
+    try {
+      await updateProject(selected.id, { status, progress });
+    } catch (e) {
+      setSelected((s) => ({ ...s, status: prev, progress: selected.progress }));
+      setState((s) => ({ ...s, projects: s.projects.map((p) => (p.id === selected.id ? { ...p, status: prev, progress: selected.progress } : p)) }));
+      setSaveMsg(e.message || 'تعذّر تحديث الحالة');
+    }
+  }
 
   async function save() {
     if (!selected) return;
     setSaving(true); setSaveMsg('');
     try {
       const up = await updateProject(selected.id, { sale_price: price });
-      await saveProjectCosts(selected.id, estimateToCostRows(estimate));
+      await saveProjectCosts(selected.id, estimateToCostRows({ dailyRows }), { scope: 'daily' });
       setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === up.id ? up : x)) }));
       setSelected((s) => ({ ...s, sale_price: up.sale_price }));
-      setSaveMsg('تم حفظ التكاليف');
+      setSaveMsg('تم حفظ التكاليف اليومية');
     } catch (e) {
       setSaveMsg(e.message || 'تعذّر الحفظ');
     } finally {
@@ -94,7 +258,7 @@ export default function CostPage() {
 
   return (
     <>
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card cost-search-card" style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ flex: 1, minWidth: 240, position: 'relative' }}>
             <div className="fsearch" style={{ marginBottom: 0 }}>
@@ -131,89 +295,147 @@ export default function CostPage() {
         <div className="card"><Empty title="اختر مشروعاً" desc="ابحث عن مشروع أعلاه لعرض تكلفته وتعديلها." /></div>
       ) : (
         <>
-          <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <div>
-              <div className="uid">مشروع</div>
-              <h2 style={{ fontFamily: 'var(--display)', fontSize: 18, fontWeight: 600 }}>{selected.title} · {selected.clientName}</h2>
-            </div>
-            <div className="field" style={{ marginInlineStart: 'auto', textAlign: 'start', marginBottom: 0 }}>
-              <label>سعر البيع</label>
-              <input
-                type="number" min="0" step="0.01" value={salePrice} dir="ltr"
-                onChange={(e) => setSalePrice(e.target.value)}
-                style={{ fontFamily: 'var(--display)', fontSize: 20, fontWeight: 600, width: 160 }}
-              />
-            </div>
-          </div>
-
-          <div className="estimate-box" style={{ marginBottom: 16 }}>
-            <div className="estimate-head">
-              <h3>تفصيل تكلفة العمالة</h3>
-              <span className="amt">{fmtMoney(workerTotal + supervisorTotal)} ⃁</span>
-            </div>
-            <div className="estimate-grid">
-              <div className="field">
-                <label>عدد العاملين</label>
-                <input type="number" min="0" step="1" value={estimate.workers_count} onChange={(e) => setEstimateField('workers_count', e.target.value)} dir="ltr" />
-              </div>
-              <div className="field">
-                <label>ساعات العامل</label>
-                <input type="number" min="0" step="0.5" value={estimate.worker_hours} onChange={(e) => setEstimateField('worker_hours', e.target.value)} dir="ltr" />
-              </div>
-              <div className="field">
-                <label>سعر الساعة</label>
-                <input type="number" min="0" step="0.01" value={estimate.worker_rate} onChange={(e) => setEstimateField('worker_rate', e.target.value)} dir="ltr" />
-              </div>
-              <div className="estimate-total">
-                <span>إجمالي العاملين</span>
-                <b className="amt">{fmtMoney(workerTotal)} ⃁</b>
-              </div>
-              <div className="field">
-                <label>عدد المشرفين</label>
-                <input type="number" min="0" step="1" value={estimate.supervisors_count} onChange={(e) => setEstimateField('supervisors_count', e.target.value)} dir="ltr" />
-              </div>
-              <div className="field">
-                <label>ساعات المشرف</label>
-                <input type="number" min="0" step="0.5" value={estimate.supervisor_hours} onChange={(e) => setEstimateField('supervisor_hours', e.target.value)} dir="ltr" />
-              </div>
-              <div className="field">
-                <label>سعر ساعة المشرف</label>
-                <input type="number" min="0" step="0.01" value={estimate.supervisor_rate} onChange={(e) => setEstimateField('supervisor_rate', e.target.value)} dir="ltr" />
-              </div>
-              <div className="estimate-total">
-                <span>إجمالي المشرفين</span>
-                <b className="amt">{fmtMoney(supervisorTotal)} ⃁</b>
-              </div>
-            </div>
-          </div>
-
-          <div className="costwrap">
+          <div className="daily-cost-summary">
             <div className="card">
-              <div className="sec-head"><h2>تفصيل التكاليف</h2></div>
-              <CostInput icon="📦" label="تكلفة المنتجات" value={estimate.materials_cost} onChange={(v) => setEstimateField('materials_cost', v)} />
-              <CostInput icon="🚚" label="النقل" value={estimate.transport_cost} onChange={(v) => setEstimateField('transport_cost', v)} />
-              <CostInput icon="✳️" label="أخرى" value={estimate.other_cost} onChange={(v) => setEstimateField('other_cost', v)} />
-              <div className="cost-line" style={{ borderBottom: 0, fontWeight: 600 }}>
-                <div className="lft" style={{ marginInlineStart: 41 }}>إجمالي التكلفة</div>
-                <b style={{ color: 'var(--neg)' }}>{fmtMoney(total)} ⃁</b>
+              <div className="uid">مشروع</div>
+              <h2>{selected.title} · {selected.clientName}</h2>
+              <small>{fmtDate(selected.start_date)} إلى {fmtDate(selected.due_date)} · {fmtNum(dailyRows.length)} يوم عمل</small>
+              <div style={{ marginTop: 12 }}>
+                <label className="uid" style={{ display: 'block', marginBottom: 5 }}>حالة المشروع</label>
+                <select
+                  className={`status-select pill ${(PROJECT_STATUS[selected.status] || { cls: 'p-wait' }).cls}`}
+                  value={selected.status || 'quote'}
+                  onChange={(e) => changeStatus(e.target.value)}
+                  aria-label="حالة المشروع"
+                >
+                  {Object.entries(PROJECT_STATUS).map(([value, meta]) => (
+                    <option key={value} value={value}>{meta.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
-            <div>
-              <div className="result">
-                <div className="mg">صافي ربح المشروع</div>
-                <div className="big">{fmtMoney(profit)} ⃁</div>
-                <div className="mg">هامش الربح {margin}% · يُحتسب تلقائياً من البنود</div>
-              </div>
-              <div className="card waterfall">
-                <div className="wf"><span className="wl">سعر البيع</span><div className="wbar" style={{ width: '100%', background: 'var(--sage)' }}>{fmtMoney(price)}</div></div>
-                <div className="wf"><span className="wl">التكلفة</span><div className="wbar" style={{ width: `${price > 0 ? Math.round((total / price) * 100) : 0}%`, background: 'var(--neg)' }}>{fmtMoney(total)}</div></div>
-                <div className="wf"><span className="wl">صافي الربح</span><div className="wbar" style={{ width: `${Math.max(price > 0 ? Math.round((profit / price) * 100) : 0, 0)}%`, background: 'var(--green)' }}>{fmtMoney(profit)}</div></div>
-              </div>
-              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button className="btn" onClick={save} disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ التكاليف'}</button>
-                {saveMsg && <span style={{ fontSize: 13, color: 'var(--muted)' }}>{saveMsg}</span>}
+            <div className="card">
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>سعر البيع</label>
+                <input type="number" min="0" step="0.01" value={salePrice} dir="ltr" onChange={(e) => setSalePrice(e.target.value)} />
               </div>
             </div>
+            <div className="result">
+              <div className="mg">صافي ربح المشروع</div>
+              <div className="big">{fmtMoney(profit)} ⃁</div>
+              <div className="mg">إجمالي التكلفة {fmtMoney(total)} ⃁ · هامش {margin}%</div>
+            </div>
+          </div>
+
+          {(laborSummary.workerDays > 0 || laborSummary.hours > 0 || laborSummary.amount > 0) && (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="sec-head"><h2>ملخص العمالة</h2><span className="more">{fmtNum(laborSummary.days)} يوم فيه عمالة</span></div>
+              <div className="daily-people-grid">
+                <div className="person-due">
+                  <b>إجمالي العمال</b>
+                  <span>{fmtNum(laborSummary.workerDays)} عامل/يوم</span>
+                  <strong className="amt">{fmtMoney(laborSummary.amount)} ⃁</strong>
+                </div>
+                <div className="person-due">
+                  <b>إجمالي الساعات</b>
+                  <span>{fmtNum(laborSummary.hours)} ساعة محسوبة</span>
+                  <strong className="amt">{fmtMoney(laborSummary.amount)} ⃁</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="daily-actions">
+            <button className="btn" onClick={addDay} type="button">+ إضافة يوم عمل</button>
+            <button className="btn ghost" onClick={() => setInvoicePanelOpen(true)} type="button">
+              مرفقات الفواتير {projectInvoices.length ? `(${fmtNum(projectInvoices.length)})` : ''}
+            </button>
+            <button className="btn ghost" onClick={() => window.location.assign(`/projects/${selected.id}/report`)} type="button">تقرير PDF</button>
+            <button className="btn ghost" onClick={save} disabled={saving} type="button">{saving ? 'جارٍ الحفظ…' : 'حفظ التكاليف اليومية'}</button>
+            {saveMsg && <span>{saveMsg}</span>}
+          </div>
+
+          {invoicePanelOpen && (
+            <InvoiceAttachmentsModal
+              invoices={projectInvoices}
+              onClose={() => setInvoicePanelOpen(false)}
+            />
+          )}
+
+          <div className="daily-cost-days">
+            {dailyRows.map((day, index) => {
+              const totals = calcDay(day);
+              return (
+                <section className="day-cost-card" key={day.date}>
+                  <div className="day-cost-head">
+                    <div>
+                      <h3>اليوم {fmtNum(index + 1)}</h3>
+                      <span>{fmtDate(day.date)}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <strong className="amt">{fmtMoney(totals.total)} ⃁</strong>
+                      <button className="btn ghost sm" type="button" onClick={() => removeDay(day.date)}>حذف اليوم</button>
+                    </div>
+                  </div>
+
+                  <DailyTable
+                    title="العمالة"
+                    total={totals.labor}
+                    columns={['عدد العمال', 'الموظف (اختياري)', 'ساعات العامل', 'إجمالي الساعات', 'سعر الساعة', 'الإجمالي', '']}
+                    headClass="labor-head"
+                    onAdd={() => addRow(day.date, 'laborRows')}
+                    addLabel="+ إضافة بند عمالة"
+                  >
+                    {day.laborRows.map((row) => (
+                      <div className="daily-table-row labor-row" key={row.id}>
+                        <input type="number" min="0" step="1" value={row.workerCount} onChange={(e) => updateLabor(day.date, row.id, 'workerCount', e.target.value)} dir="ltr" />
+                        <select value={row.worker || ''} onChange={(e) => updateLabor(day.date, row.id, 'worker', e.target.value)}>
+                          <option value="">— بدون —</option>
+                          {(state.employees || []).map((em) => <option key={em.id} value={em.name}>{em.name}</option>)}
+                          {row.worker && row.worker !== 'فريلانسر' && !(state.employees || []).some((em) => em.name === row.worker) && (
+                            <option value={row.worker}>{row.worker}</option>
+                          )}
+                          <option value="فريلانسر">فريلانسر (مستقل)</option>
+                        </select>
+                        <input type="number" min="0" step="0.5" value={row.hours} onChange={(e) => updateLabor(day.date, row.id, 'hours', e.target.value)} dir="ltr" />
+                        <div className="row-total amt">{fmtNum(num(row.workerCount) * num(row.hours))}</div>
+                        <input type="number" min="0" step="0.01" value={row.rate} onChange={(e) => updateLabor(day.date, row.id, 'rate', e.target.value)} dir="ltr" />
+                        <div className="row-total amt">{fmtMoney(num(row.workerCount) * num(row.hours) * num(row.rate))} ⃁</div>
+                        <button className="x-btn" type="button" onClick={() => removeRow(day.date, 'laborRows', row.id)}>✕</button>
+                      </div>
+                    ))}
+                  </DailyTable>
+
+                  <DailyTable
+                    title="المنتجات"
+                    total={totals.productsCost}
+                    columns={['المنتج', 'المورد', 'سعر الشراء', 'نسبة البيع %', 'الإجمالي', '']}
+                    headClass="product-head"
+                    onAdd={() => addRow(day.date, 'productRows')}
+                    addLabel="+ إضافة منتج"
+                  >
+                    {day.productRows.map((row) => (
+                      <div className="daily-table-row product-row" key={row.id}>
+                        <input value={row.product} onChange={(e) => updateProduct(day.date, row.id, 'product', e.target.value)} placeholder="اسم المنتج" />
+                        <select value={row.supplierId} onChange={(e) => updateProduct(day.date, row.id, 'supplierId', e.target.value)}>
+                          <option value="">اختر مورداً…</option>
+                          {state.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(e) => updateProduct(day.date, row.id, 'purchasePrice', e.target.value)} dir="ltr" />
+                        <input type="number" min="0" step="0.01" value={row.markupPercent} onChange={(e) => updateProduct(day.date, row.id, 'markupPercent', e.target.value)} dir="ltr" />
+                        <div className="row-total amt">{fmtMoney(row.salePrice)} ⃁</div>
+                        <button className="x-btn" type="button" onClick={() => removeRow(day.date, 'productRows', row.id)}>✕</button>
+                      </div>
+                    ))}
+                  </DailyTable>
+
+                  <div className="daily-two-cols">
+                    <MoneyRows title="النقل" rows={day.transportRows} total={totals.transport} onAdd={() => addRow(day.date, 'transportRows')} onChange={(id, key, value) => updateMoney(day.date, 'transportRows', id, key, value)} onRemove={(id) => removeRow(day.date, 'transportRows', id)} />
+                    <MoneyRows title="مصاريف أخرى" rows={day.otherRows} total={totals.other} onAdd={() => addRow(day.date, 'otherRows')} onChange={(id, key, value) => updateMoney(day.date, 'otherRows', id, key, value)} onRemove={(id) => removeRow(day.date, 'otherRows', id)} />
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </>
       )}
@@ -221,15 +443,93 @@ export default function CostPage() {
   );
 }
 
-function CostInput({ icon, label, value, onChange }) {
+function InvoiceAttachmentsModal({ invoices, onClose }) {
+  const total = invoices.reduce((sum, invoice) => sum + num(invoice.total), 0);
   return (
-    <div className="cost-line">
-      <div className="lft"><div className="ic">{icon}</div>{label}</div>
-      <input
-        type="number" min="0" step="0.01" value={value} dir="ltr"
-        onChange={(e) => onChange(e.target.value)}
-        style={{ width: 120, textAlign: 'end', border: '1px solid var(--line)', borderRadius: 8, padding: '6px 8px', fontFamily: 'var(--body)' }}
-      />
+    <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-card invoice-attachments-modal" role="dialog" aria-modal="true" aria-label="مرفقات الفواتير">
+        <div className="modal-head">
+          <div>
+            <h2>مرفقات الفواتير</h2>
+            <p>{invoices.length ? `${fmtNum(invoices.length)} فاتورة مرتبطة بهذا المشروع` : 'لا توجد فواتير مرتبطة بهذا المشروع حتى الآن'}</p>
+          </div>
+          <button className="icon-close" type="button" onClick={onClose} aria-label="إغلاق">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {invoices.length === 0 ? (
+          <Empty title="لا توجد مرفقات" desc="عند إنشاء فاتورة وربطها بهذا المشروع ستظهر هنا." />
+        ) : (
+          <>
+            <div className="invoice-attachments-total">
+              <span>إجمالي الفواتير</span>
+              <strong className="amt">{fmtMoney(total)} ⃁</strong>
+            </div>
+            <div className="invoice-attachments-list">
+              {invoices.map((invoice) => {
+                const st = INVOICE_STATUS[invoice.status] || { label: invoice.status, cls: 'p-wait' };
+                return (
+                  <div className="invoice-attachment-row" key={invoice.id}>
+                    <div>
+                      <b className="amt" dir="ltr">{invoice.number || 'فاتورة'}</b>
+                      <span>{fmtDate(invoice.issue_at)} · {fmtMoney(invoice.total)} ⃁</span>
+                    </div>
+                    <span className={`pill ${st.cls}`}>{st.label}</span>
+                    <button
+                      className="btn ghost sm"
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        window.location.assign(`/invoices/${invoice.id}`);
+                      }}
+                    >
+                      فتح الفاتورة
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DailyTable({ title, total, columns, onAdd, addLabel, children, headClass = '' }) {
+  return (
+    <div className="daily-table-wrap">
+      <div className="daily-subhead">
+        <b>{title}</b>
+        <span className="amt">{fmtMoney(total)} ⃁</span>
+      </div>
+      <div className="daily-table">
+        <div className={`daily-table-head${headClass ? ` ${headClass}` : ''}`}>
+          {columns.map((c) => <span key={c}>{c}</span>)}
+        </div>
+        {children}
+      </div>
+      <button className="add-row-btn" type="button" onClick={onAdd}>{addLabel}</button>
+    </div>
+  );
+}
+
+function MoneyRows({ title, rows, total, onAdd, onChange, onRemove }) {
+  return (
+    <div className="daily-money-box">
+      <div className="daily-subhead">
+        <b>{title}</b>
+        <span className="amt">{fmtMoney(total)} ⃁</span>
+      </div>
+      {rows.map((row) => (
+        <div className="money-row" key={row.id}>
+          <input value={row.note} onChange={(e) => onChange(row.id, 'note', e.target.value)} placeholder="وصف" />
+          <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => onChange(row.id, 'amount', e.target.value)} dir="ltr" placeholder="المبلغ" />
+          <button className="x-btn" type="button" onClick={() => onRemove(row.id)}>✕</button>
+        </div>
+      ))}
+      <button className="add-row-btn" type="button" onClick={onAdd}>+ إضافة</button>
     </div>
   );
 }

@@ -99,7 +99,7 @@ export default function ProjectsPage() {
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
-  useEffect(() => { setPage(1); }, [q, from, to, view]);
+  useEffect(() => { setPage(1); }, [q, from, to, view, showAll]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
 
@@ -210,6 +210,7 @@ export default function ProjectsPage() {
     setFrom('');
     setTo('');
     setQ('');
+    setShowAll(true);
   };
   const cols = [
     ['قيد التجهيز', ['quote', 'preparing'], 'preparing'],
@@ -233,18 +234,22 @@ export default function ProjectsPage() {
         <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>إلى</span>
         <input type="date" className="fdate" value={to} onChange={(e) => setTo(e.target.value)} />
         <button className="chip" onClick={resetCurrentMonth}>هذا الشهر</button>
-        <button className={`chip${!from && !to && !q ? ' active' : ''}`} onClick={showAllProjects}>عرض كل المشاريع</button>
+        <button className={`chip${showAll ? ' active' : ''}`} onClick={showAllProjects}>عرض كل المشاريع</button>
         <button className="btn" style={{ marginInlineStart: 'auto' }} onClick={openAdd}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
           مشروع جديد
         </button>
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-4px 0 16px' }}>
-        {!from && !to ? 'يعرض كل المشاريع' : 'يعرض المشاريع ضمن نطاق التاريخ المحدد'} · البحث يعمل باسم المشروع أو العميل أو التاريخ · {fmtNum(filtered.length)} نتيجة
+        {!isBrowsing ? 'ابحث عن مشروع أو عميل، أو اختر نطاق تاريخ، لعرض المشاريع' : hasDateFilter ? 'يعرض المشاريع ضمن نطاق التاريخ المحدد' : 'يعرض كل المشاريع'} · البحث يعمل باسم المشروع أو العميل أو التاريخ{isBrowsing ? ` · ${fmtNum(filtered.length)} نتيجة` : ''}
       </div>
 
       {projects.length === 0 ? (
         <div className="card"><Empty title="لا توجد مشاريع بعد" desc="أنشئ أول مشروع لربطه بعميل وتتبّع تقدّمه." /></div>
+      ) : !isBrowsing ? (
+        <div className="card">
+          <Empty title="ابحث لعرض المشاريع" desc="استخدم مربع البحث أعلاه، أو حدّد نطاق تاريخ، أو اضغط «عرض كل المشاريع»." />
+        </div>
       ) : view === 'cards' ? (
         <>
           <div className="sec-head"><h2>ملخص المشاريع</h2><span className="more">اضغط أي صف للتفاصيل</span></div>
@@ -376,7 +381,7 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {projects.length > 0 && (
+      {isBrowsing && (
         <div className="pagination">
           <button className="btn ghost sm" type="button" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>السابق</button>
           <span>

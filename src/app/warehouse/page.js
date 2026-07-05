@@ -4,6 +4,10 @@ import {
   getInventory, getWarehouses, getCategories, getSuppliers,
   createInventoryItem, updateInventoryItem, removeInventoryItem,
 } from '@/lib/data';
+import { supabase } from '@/lib/supabase';
+import {
+  ALL_PERMISSIONS, canAccess, isPrimaryAdmin, normalizePermissions,
+} from '@/lib/permissions';
 import { fmtMoney, fmtNum } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
 
@@ -14,12 +18,15 @@ const EMPTY = {
 
 export default function WarehousePage() {
   const [d, setD] = useState(null);
+  const [access, setAccess] = useState(undefined);
   const [err, setErr] = useState('');
   const [fCat, setFCat] = useState('');
   const [fWh, setFWh] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [inventorying, setInventorying] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [inventoryForm, setInventoryForm] = useState({ quantity: '', reorder_level: '' });
   const [productImage, setProductImage] = useState({ name: '', preview: '' });
   const [barcodeImage, setBarcodeImage] = useState({ name: '', preview: '' });
   const [saving, setSaving] = useState(false);
@@ -35,7 +42,50 @@ export default function WarehousePage() {
   }
   useEffect(() => { load(); }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAccess() {
+      let email = '';
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData.session;
+        if (!session) {
+          if (!cancelled) setAccess(null);
+          return;
+        }
+        email = session.user?.email || '';
+        const primary = isPrimaryAdmin(email);
+        const { data, error } = await supabase
+          .from('app_user_access')
+          .select('user_id,email,display_name,role,permissions,active')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        if (error) throw error;
+        if (!cancelled) {
+          setAccess({
+            user_id: session.user.id,
+            email,
+            display_name: data?.display_name || '',
+            role: primary ? 'admin' : data?.role || 'viewer',
+            permissions: primary ? ALL_PERMISSIONS : normalizePermissions(data?.permissions || [], email),
+            active: primary ? true : data?.active === true,
+            isPrimaryAdmin: primary,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setAccess(isPrimaryAdmin(email)
+            ? { email, role: 'admin', permissions: ALL_PERMISSIONS, active: true, isPrimaryAdmin: true }
+            : null);
+        }
+      }
+    }
+    loadAccess();
+    return () => { cancelled = true; };
+  }, []);
+
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+  function setInventory(k, v) { setInventoryForm((f) => ({ ...f, [k]: v })); }
   function resetImages() {
     setProductImage({ name: '', preview: '' });
     setBarcodeImage({ name: '', preview: '' });
@@ -51,7 +101,16 @@ export default function WarehousePage() {
     resetImages();
     setFormErr(''); setOpen(true);
   }
+  function openInventory(it) {
+    setInventorying(it);
+    setInventoryForm({
+      quantity: it.quantity ?? '',
+      reorder_level: it.reorder_level ?? '',
+    });
+    setFormErr('');
+  }
   function close() { if (!saving) { setOpen(false); setEditing(null); resetImages(); } }
+  function closeInventory() { if (!saving) { setInventorying(null); setInventoryForm({ quantity: '', reorder_level: '' }); } }
 
   function handleProductImage(e) {
     const file = e.target.files?.[0];
@@ -86,6 +145,7 @@ export default function WarehousePage() {
 
   async function submit(e) {
     e.preventDefault();
+    if (!canAccess(access, 'warehouse_products')) { setFormErr('لا تملك صلاحية إضافة أو تعديل المنتجات'); return; }
     if (!form.name.trim()) { setFormErr('اسم الصنف مطلوب'); return; }
     setSaving(true); setFormErr('');
     const payload = {
@@ -107,16 +167,34 @@ export default function WarehousePage() {
     } catch (e2) { setFormErr(e2.message || 'تعذّر الحفظ'); }
     finally { setSaving(false); }
   }
+  async function submitInventory(e) {
+    e.preventDefault();
+    if (!canAccess(access, 'warehouse_inventory')) { setFormErr('لا تملك صلاحية الجرد'); return; }
+    if (!inventorying) return;
+    setSaving(true); setFormErr('');
+    try {
+      const up = await updateInventoryItem(inventorying.id, {
+        quantity: Number(inventoryForm.quantity) || 0,
+        reorder_level: Number(inventoryForm.reorder_level) || 0,
+      });
+      setD((s) => ({ ...s, items: s.items.map((x) => (x.id === up.id ? up : x)) }));
+      closeInventory();
+    } catch (e2) { setFormErr(e2.message || 'تعذّر حفظ الجرد'); }
+    finally { setSaving(false); }
+  }
   async function del(it) {
+    if (!canAccess(access, 'warehouse_products')) { setErr('لا تملك صلاحية حذف المنتجات'); return; }
     if (!confirm(`حذف الصنف «${it.name}»؟`)) return;
     try { await removeInventoryItem(it.id); setD((s) => ({ ...s, items: s.items.filter((x) => x.id !== it.id) })); }
     catch (e2) { setErr(e2.message || 'تعذّر الحذف'); }
   }
 
   if (err) return <ErrorBar message={err} />;
-  if (!d) return <Loading />;
+  if (!d || access === undefined) return <Loading />;
 
   const { items, warehouses, categories, suppliers } = d;
+  const canManageProducts = canAccess(access, 'warehouse_products');
+  const canRunInventory = canAccess(access, 'warehouse_inventory');
   const catName = Object.fromEntries(categories.map((c) => [c.id, c.name]));
   const whName = Object.fromEntries(warehouses.map((w) => [w.id, w.name]));
   const supName = Object.fromEntries(suppliers.map((s) => [s.id, s.name]));
@@ -138,10 +216,12 @@ export default function WarehousePage() {
   return (
     <>
       <div className="sec-head" style={{ marginBottom: 18 }}>
-        <button className="btn" onClick={openAdd}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
-          صنف جديد
-        </button>
+        {canManageProducts && (
+          <button className="btn" onClick={openAdd}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
+            صنف جديد
+          </button>
+        )}
         <select className="filter-sel" value={fCat} onChange={(e) => setFCat(e.target.value)} style={{ marginInlineStart: 'auto' }}>
           <option value="">كل التصنيفات</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -152,6 +232,12 @@ export default function WarehousePage() {
         </select>
         <span className="more">{fmtNum(filtered.length)} صنف{lowCount > 0 ? ` · ${fmtNum(lowCount)} ناقص` : ''}</span>
       </div>
+
+      {!canManageProducts && !canRunInventory && (
+        <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>
+          لديك صلاحية عرض المستودع فقط.
+        </div>
+      )}
 
       <div className="warehouse-stats">
         {visibleStats.map((warehouse) => (
@@ -167,7 +253,7 @@ export default function WarehousePage() {
 
       <div className="card" style={{ padding: '6px 0' }}>
         {filtered.length === 0 ? (
-          <Empty title="لا أصناف" desc="أضف أصناف المخزون لإدارتها هنا." />
+          <Empty title="لا أصناف" desc={canManageProducts ? 'أضف أصناف المخزون لإدارتها هنا.' : 'لا توجد أصناف مطابقة للفلاتر الحالية.'} />
         ) : (
           <table>
             <thead><tr><th>الصنف</th><th>التصنيف</th><th>المستودع</th><th>الكمية</th><th>حد التنبيه</th><th>التكلفة</th><th>المورّد</th><th></th></tr></thead>
@@ -190,8 +276,10 @@ export default function WarehousePage() {
                     <td className="amt">{fmtMoney(it.unit_cost)} ⃁</td>
                     <td>{supName[it.supplier_id] || '—'}</td>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <button className="btn ghost sm" onClick={() => openEdit(it)}>تعديل</button>
-                      <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(it)}>حذف</button>
+                      {canRunInventory && <button className="btn ghost sm" onClick={() => openInventory(it)}>جرد</button>}
+                      {canManageProducts && <button className="btn ghost sm" style={{ marginInlineStart: canRunInventory ? 8 : 0 }} onClick={() => openEdit(it)}>تعديل</button>}
+                      {canManageProducts && <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(it)}>حذف</button>}
+                      {!canRunInventory && !canManageProducts && <span className="uid">—</span>}
                     </td>
                   </tr>
                 );
@@ -257,6 +345,28 @@ export default function WarehousePage() {
             <div className="modal-actions">
               <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
               <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الصنف'}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {inventorying && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && closeInventory()}>
+          <form className="modal-card modal-sm" onSubmit={submitInventory}>
+            <div className="modal-head">
+              <div><h2>جرد الصنف</h2><p>{inventorying.name}</p></div>
+              <button className="icon-close" type="button" onClick={closeInventory} aria-label="إغلاق">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+              </button>
+            </div>
+            {formErr && <div className="errbar">{formErr}</div>}
+            <div className="form-grid">
+              <div className="field"><label>الكمية الحالية</label><input type="number" min="0" step="0.01" value={inventoryForm.quantity} onChange={(e) => setInventory('quantity', e.target.value)} dir="ltr" autoFocus /></div>
+              <div className="field"><label>حد التنبيه</label><input type="number" min="0" step="0.01" value={inventoryForm.reorder_level} onChange={(e) => setInventory('reorder_level', e.target.value)} dir="ltr" /></div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn ghost" type="button" onClick={closeInventory} disabled={saving}>إلغاء</button>
+              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الجرد'}</button>
             </div>
           </form>
         </div>

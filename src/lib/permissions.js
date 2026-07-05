@@ -14,7 +14,9 @@ export const PERMISSION_GROUPS = [
       { key: 'clients', label: 'العملاء', description: 'عرض وإدارة بيانات العملاء' },
       { key: 'projects', label: 'المشاريع', description: 'عرض وإدارة المشاريع' },
       { key: 'cost', label: 'تكلفة المشاريع', description: 'إدخال ومراجعة مصاريف المشاريع' },
-      { key: 'warehouse', label: 'المستودع', description: 'المخزون والأصناف' },
+      { key: 'warehouse', label: 'المستودع', description: 'عرض المخزون والأصناف' },
+      { key: 'warehouse_inventory', label: 'جرد المستودع', description: 'تعديل الكميات وحدود التنبيه' },
+      { key: 'warehouse_products', label: 'إضافة المنتجات', description: 'إضافة وتعديل وحذف الأصناف' },
       { key: 'employees', label: 'الموظفون', description: 'الفريق والمستندات' },
       { key: 'heatmap', label: 'الخريطة الحرارية', description: 'توزيع الطلبات حسب الأحياء' },
     ],
@@ -33,9 +35,9 @@ export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.items.
 
 export const ROLE_PRESETS = {
   admin: ALL_PERMISSIONS,
-  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'employees', 'heatmap', 'invoices'],
+  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap', 'invoices'],
   accountant: ['dashboard', 'clients', 'projects', 'cost', 'invoices', 'partners'],
-  operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'employees'],
+  operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees'],
   viewer: ['dashboard', 'clients', 'projects'],
 };
 
@@ -65,7 +67,11 @@ export function canAccess(access, permission) {
   if (!permission) return true;
   if (!access?.active) return false;
   if (access?.isPrimaryAdmin || access?.role === 'admin') return true;
-  return (access?.permissions || []).includes(permission);
+  const permissions = access?.permissions || [];
+  if (permission === 'warehouse') {
+    return permissions.some((item) => ['warehouse', 'warehouse_inventory', 'warehouse_products'].includes(item));
+  }
+  return permissions.includes(permission);
 }
 
 export function permissionForPath(pathname) {

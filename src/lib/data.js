@@ -35,15 +35,15 @@ export async function createClient(input) {
   if (error) throw error; return data;
 }
 export async function updateClient(id, input) {
-  const payload = {
-    name: input.name.trim(),
-    phone: input.phone?.trim() || null,
-    source: input.source || 'other',
-    district: input.district?.trim() || null,
-    status: input.status || 'active',
-    first_contact_at: input.first_contact_at || null,
-    notes: input.notes?.trim() || null,
-  };
+  // تحديث جزئي آمن: يبني فقط الحقول الموجودة فعلياً بـinput (مثلاً تغيير الحالة وحدها من القائمة السريعة)
+  const payload = {};
+  if (input.name !== undefined) payload.name = input.name.trim();
+  if (input.phone !== undefined) payload.phone = input.phone?.trim() || null;
+  if (input.source !== undefined) payload.source = input.source || 'other';
+  if (input.district !== undefined) payload.district = input.district?.trim() || null;
+  if (input.status !== undefined) payload.status = input.status || 'active';
+  if (input.first_contact_at !== undefined) payload.first_contact_at = input.first_contact_at || null;
+  if (input.notes !== undefined) payload.notes = input.notes?.trim() || null;
   const { data, error } = await supabase
     .from('clients')
     .update(payload)
@@ -74,8 +74,8 @@ export async function getInvoicesByClient(clientId) {
 export async function getProjects() {
   const { data, error } = await supabase
     .from('projects')
-    .select('id,client_id,title,service_type,sale_price,status,supervisor_id,start_date,due_date,progress,created_at')
-    .order('created_at', { ascending: false });
+    .select('id,client_id,title,service_type,sale_price,status,supervisor_id,start_date,due_date,progress,created_at,updated_at')
+    .order('updated_at', { ascending: false });
   if (error) throw error; return data;
 }
 export async function getProject(id) {
@@ -357,7 +357,7 @@ export async function createCommunication(p) {
 // ============================================================
 //  المشاريع · CRUD + الفريق + المهام + الوسائط
 // ============================================================
-const PROJECT_COLS = 'id,client_id,title,service_type,sale_price,status,supervisor_id,start_date,due_date,progress,created_at';
+const PROJECT_COLS = 'id,client_id,title,service_type,sale_price,status,supervisor_id,start_date,due_date,progress,created_at,updated_at';
 export async function createProject(p) {
   const { data, error } = await supabase.from('projects').insert(p).select(PROJECT_COLS).single();
   if (error) throw error; return data;

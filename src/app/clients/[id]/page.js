@@ -40,8 +40,8 @@ export default function ClientProfile() {
 
   const st = CLIENT_STATUS[client.status] || { label: client.status, cls: 'p-wait' };
   const invoiced = invoices.reduce((s, i) => s + Number(i.total || 0), 0);
-  const paid = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + Number(i.total || 0), 0);
-  const outstanding = invoiced - paid;
+  const paid = invoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
+  const outstanding = invoices.reduce((s, i) => s + Number(i.remaining_amount || 0), 0);
 
   return (
     <>
@@ -129,7 +129,7 @@ export default function ClientProfile() {
           <Empty title="لا فواتير" desc="لا توجد فواتير لهذا العميل بعد." />
         ) : (
           <table>
-            <thead><tr><th>رقم</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
+            <thead><tr><th>رقم</th><th>الإصدار</th><th>الاستحقاق</th><th>الإجمالي</th><th>المحصّل</th><th>المتبقي</th><th>الحالة</th></tr></thead>
             <tbody>
               {invoices.map((i) => {
                 const is = INVOICE_STATUS[i.status] || { label: i.status, cls: 'p-wait' };
@@ -137,7 +137,10 @@ export default function ClientProfile() {
                   <tr key={i.id} className="clickable" onClick={() => router.push(`/invoices/${i.id}`)}>
                     <td className="amt" dir="ltr" style={{ textAlign: 'start' }}>{i.number || '—'}</td>
                     <td>{fmtDate(i.issue_at)}</td>
+                    <td>{fmtDate(i.due_at)}</td>
                     <td className="amt">{fmtMoney(i.total)} ⃁</td>
+                    <td className="amt">{fmtMoney(i.paid_amount)} ⃁</td>
+                    <td className="amt">{fmtMoney(i.remaining_amount)} ⃁</td>
                     <td><span className={`pill ${is.cls}`}>{is.label}</span></td>
                   </tr>
                 );

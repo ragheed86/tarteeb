@@ -164,7 +164,7 @@ function ClientsPageInner() {
   }
 
   async function del(c) {
-    if (!confirm(`حذف العميل «${c.name}»؟ سيُحذف معه مشاريعه وفواتيره المرتبطة.`)) return;
+    if (!confirm(`حذف العميل «${c.name}»؟ سيُحذف معه مشاريعه، وستبقى فواتيره السابقة بلا عميل مرتبط.`)) return;
     try {
       await removeClient(c.id);
       setClients((current) => (current || []).filter((x) => x.id !== c.id));

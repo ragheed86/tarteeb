@@ -12,6 +12,22 @@ export function fmtDate(d) {
   if (Number.isNaN(date.getTime())) return String(d);
   return new Intl.DateTimeFormat('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
 }
+// وقت نسبي مختصر لـ«آخر تحديث» — أرقام لاتينية، ويرجع للتاريخ الكامل بعد أسبوع
+export function fmtRelative(d) {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return String(d);
+  const n = (x) => new Intl.NumberFormat('en-US').format(x);
+  const mins = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (mins < 1) return 'الآن';
+  if (mins < 60) return `قبل ${n(mins)} دقيقة`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `قبل ${n(hrs)} ساعة`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'أمس';
+  if (days < 7) return `قبل ${n(days)} أيام`;
+  return fmtDate(d);
+}
 
 // خرائط الحالات → أصناف الـ pill والتسميات العربية
 export const CLIENT_STATUS = {
@@ -52,6 +68,7 @@ export function progressForStatus(status, currentProgress) {
 export const INVOICE_STATUS = {
   draft: { label: 'مسودة', cls: 'p-wait' },
   unpaid: { label: 'غير مدفوعة', cls: 'p-quote' },
+  partial: { label: 'مدفوعة جزئياً', cls: 'p-prog' },
   paid: { label: 'مدفوعة', cls: 'p-done' },
   overdue: { label: 'متأخرة', cls: 'p-cancel' },
 };

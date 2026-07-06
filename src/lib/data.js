@@ -65,9 +65,9 @@ export async function getProjectsByClient(clientId) {
 }
 export async function getInvoicesByClient(clientId) {
   const { data, error } = await supabase.from('invoices')
-    .select('id,number,issue_at,total,status')
+    .select('id,number,issue_at,due_at,total,status,paid_at')
     .eq('client_id', clientId).order('issue_at', { ascending: false });
-  if (error) throw error; return data;
+  if (error) throw error; return attachInvoiceSummaries(data);
 }
 
 // ---------- المشاريع ----------
@@ -86,7 +86,8 @@ export async function getProject(id) {
 // ---------- تكلفة المشروع (بنود + ملخص محسوب من view) ----------
 export async function getProjectCosts(projectId) {
   const { data, error } = await supabase.from('project_costs')
-    .select('id,kind,label,amount,qty,hours,rate').eq('project_id', projectId);
+    .select('id,kind,label,amount,qty,hours,rate,work_date,note,worker_name,product_name,supplier_id,supplier_name,sale_price,markup_percent')
+    .eq('project_id', projectId);
   if (error) throw error; return data;
 }
 // كل بنود التكلفة لكل المشاريع دفعة واحدة — لحساب الربح الإجمالي بلوحة التحكم
@@ -99,12 +100,12 @@ export async function getAllProjectCosts() {
 function isManagedCostRow(c) {
   const managedLabels = new Set(['عمالة', 'إشراف']);
   const managedKinds = new Set(['materials', 'transport', 'other']);
-  return (c.kind === 'labor' && (managedLabels.has(c.label) || String(c.label || '').startsWith('عمالة:')))
-    || (c.kind === 'materials' && (!c.label || String(c.label || '').startsWith('منتج:')))
+  return (c.kind === 'labor' && (managedLabels.has(c.label) || String(c.label || '').startsWith('عمالة:') || c.note))
+    || (c.kind === 'materials' && (!c.label || String(c.label || '').startsWith('منتج:') || c.product_name))
     || (managedKinds.has(c.kind) && !c.label);
 }
 function isDailyCostRow(c) {
-  return String(c.label || '').startsWith('يومي:');
+  return Boolean(c.work_date) || String(c.label || '').startsWith('يومي:');
 }
 export function splitManagedCosts(costs) {
   const managed = []; const adhoc = [];
@@ -114,38 +115,28 @@ export function splitManagedCosts(costs) {
 // يستبدل بنود الجدول التقديري فقط دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً
 export async function saveProjectCosts(projectId, rows, options = {}) {
   const scope = options.scope || 'estimate';
-  const { data: existing, error: fetchErr } = await supabase.from('project_costs')
-    .select('id,kind,label').eq('project_id', projectId);
-  if (fetchErr) throw fetchErr;
-  const idsToDelete = (existing || [])
-    .filter((c) => {
-      if (scope === 'daily') return isDailyCostRow(c) || isManagedCostRow(c);
-      return isManagedCostRow(c) && !isDailyCostRow(c);
-    })
-    .map((c) => c.id);
-  if (idsToDelete.length) {
-    const { error: delErr } = await supabase.from('project_costs').delete().in('id', idsToDelete);
-    if (delErr) throw delErr;
-  }
-  if (!rows.length) return [];
-  const payload = rows.map((r) => ({ ...r, project_id: projectId }));
-  const { data, error } = await supabase.from('project_costs').insert(payload)
-    .select('id,kind,label,amount,qty,hours,rate');
+  const { data, error } = await supabase.rpc('replace_project_costs', {
+    p_project_id: projectId,
+    p_rows: rows || [],
+    p_scope: scope,
+  });
   if (error) throw error; return data;
 }
 // جدول تقديري (عمالة/إشراف/مواد/نقل/أخرى) <-> بنود project_costs
 export function estimateToCostRows(estimate) {
   const n = (v) => Number(v) || 0;
+  const clean = (v) => String(v || '').trim() || null;
   if (Array.isArray(estimate.dailyRows)) {
     const rows = [];
     for (const day of estimate.dailyRows) {
       for (const r of day.laborRows || []) {
         const workerCount = n(r.workerCount ?? r.count ?? r.qty ?? (r.person ? 1 : 0));
         const amount = workerCount * n(r.hours) * n(r.rate);
-        const worker = String(r.worker || '').trim();
         rows.push({
           kind: 'labor',
-          label: `يومي: ${day.date} · عمالة: ${workerCount || 0} عامل${worker ? ` · الموظف: ${worker}` : ''}`,
+          label: null,
+          work_date: day.date,
+          worker_name: clean(r.worker),
           qty: workerCount,
           hours: n(r.hours),
           rate: n(r.rate),
@@ -153,20 +144,23 @@ export function estimateToCostRows(estimate) {
         });
       }
       for (const r of day.productRows || []) {
-        const supplier = r.supplierName ? ` · المورد: ${r.supplierName}` : '';
-        const sale = n(r.salePrice) ? ` · البيع: ${n(r.salePrice)}` : '';
-        const pct = n(r.markupPercent) ? ` · النسبة: ${n(r.markupPercent)}%` : '';
         rows.push({
           kind: 'materials',
-          label: `يومي: ${day.date} · منتج: ${r.product || 'منتج'}${supplier}${sale}${pct}`,
+          label: null,
+          work_date: day.date,
+          product_name: clean(r.product) || 'منتج',
+          supplier_id: clean(r.supplierId),
+          supplier_name: clean(r.supplierName),
+          sale_price: n(r.salePrice) || null,
+          markup_percent: n(r.markupPercent) || null,
           amount: n(r.purchasePrice),
         });
       }
       for (const r of day.transportRows || []) {
-        rows.push({ kind: 'transport', label: `يومي: ${day.date} · نقل: ${r.note || 'نقل'}`, amount: n(r.amount) });
+        rows.push({ kind: 'transport', label: null, work_date: day.date, note: clean(r.note) || 'نقل', amount: n(r.amount) });
       }
       for (const r of day.otherRows || []) {
-        rows.push({ kind: 'other', label: `يومي: ${day.date} · أخرى: ${r.note || 'مصروف'}`, amount: n(r.amount) });
+        rows.push({ kind: 'other', label: null, work_date: day.date, note: clean(r.note) || 'مصروف', amount: n(r.amount) });
       }
     }
     return rows.filter((r) => r.amount > 0);
@@ -180,33 +174,38 @@ export function estimateToCostRows(estimate) {
     ];
   const laborRows = laborSource.map((r) => ({
     kind: 'labor',
-    label: `عمالة: ${r.label || 'بند'}`,
+    label: null,
+    note: clean(r.label) || 'بند',
     qty: n(r.count),
     hours: n(r.hours),
     rate: n(r.rate),
   })).map((r) => ({ ...r, amount: r.qty * r.hours * r.rate }));
 
-  const productRows = (estimate.productRows || []).map((r) => {
-    const supplier = r.supplierName ? ` · المورد: ${r.supplierName}` : '';
-    const sale = n(r.salePrice) ? ` · البيع: ${n(r.salePrice)}` : '';
-    const pct = n(r.markupPercent) ? ` · النسبة: ${n(r.markupPercent)}%` : '';
-    return {
-      kind: 'materials',
-      label: `منتج: ${r.product || 'منتج'}${supplier}${sale}${pct}`,
-      amount: n(r.purchasePrice),
-    };
-  });
+  const productRows = (estimate.productRows || []).map((r) => ({
+    kind: 'materials',
+    label: null,
+    product_name: clean(r.product) || 'منتج',
+    supplier_id: clean(r.supplierId),
+    supplier_name: clean(r.supplierName),
+    sale_price: n(r.salePrice) || null,
+    markup_percent: n(r.markupPercent) || null,
+    amount: n(r.purchasePrice),
+  }));
 
   const rows = [
     ...laborRows,
     ...productRows,
-    { kind: 'transport', label: null, qty: null, hours: null, rate: null, amount: n(estimate.transport_cost) },
-    { kind: 'other', label: null, qty: null, hours: null, rate: null, amount: n(estimate.other_cost) },
+    { kind: 'transport', label: null, note: null, qty: null, hours: null, rate: null, amount: n(estimate.transport_cost) },
+    { kind: 'other', label: null, note: null, qty: null, hours: null, rate: null, amount: n(estimate.other_cost) },
   ];
   return rows.filter((r) => r.amount > 0);
 }
 export function costRowsToEstimate(rows) {
   const n = (v) => Number(v) || 0;
+  const legacyParts = (label) => Object.fromEntries(String(label || '').split(' · ').map((part) => {
+    const [key, ...rest] = part.split(':');
+    return [key.trim(), rest.join(':').trim()];
+  }));
   const estimate = {
     workers_count: '', worker_hours: '', worker_rate: '',
     supervisors_count: '', supervisor_hours: '', supervisor_rate: '',
@@ -223,7 +222,42 @@ export function costRowsToEstimate(rows) {
 
   for (const r of rows || []) {
     const labelText = String(r.label || '');
-    if (labelText.startsWith('يومي:')) {
+    if (r.work_date) {
+      const date = String(r.work_date).slice(0, 10);
+      const day = ensureDay(date);
+      if (r.kind === 'labor') {
+        const hasHourlyDetails = n(r.qty) > 0 && n(r.hours) > 0 && n(r.rate) > 0;
+        if (hasHourlyDetails) {
+          day.laborRows.push({
+            id: r.id || `labor-${day.laborRows.length}`,
+            workerCount: r.qty ?? '',
+            worker: r.worker_name || '',
+            hours: r.hours ?? '',
+            rate: r.rate ?? '',
+          });
+        } else if (n(r.amount) > 0) {
+          day.otherRows.push({
+            id: r.id || `other-${day.otherRows.length}`,
+            note: r.note || r.worker_name || 'مصروف عمالة',
+            amount: r.amount ?? '',
+          });
+        }
+      } else if (r.kind === 'materials') {
+        day.productRows.push({
+          id: r.id || `product-${day.productRows.length}`,
+          product: r.product_name || '',
+          supplierId: r.supplier_id || '',
+          supplierName: r.supplier_name || '',
+          purchasePrice: r.amount ?? '',
+          salePrice: r.sale_price ?? '',
+          markupPercent: r.markup_percent ?? '',
+        });
+      } else if (r.kind === 'transport') {
+        day.transportRows.push({ id: r.id || `transport-${day.transportRows.length}`, note: r.note || '', amount: r.amount ?? '' });
+      } else if (r.kind === 'other') {
+        day.otherRows.push({ id: r.id || `other-${day.otherRows.length}`, note: r.note || '', amount: r.amount ?? '' });
+      }
+    } else if (labelText.startsWith('يومي:')) {
       const parts = labelText.split(' · ');
       const date = parts[0].replace('يومي:', '').trim();
       const day = ensureDay(date);
@@ -261,7 +295,7 @@ export function costRowsToEstimate(rows) {
         day.otherRows.push({ id: r.id || `other-${day.otherRows.length}`, note: findPart('أخرى:') || '', amount: r.amount ?? '' });
       }
     } else if (r.kind === 'labor') {
-      const label = String(r.label || '').replace(/^عمالة:\s*/, '') || 'بند';
+      const label = r.note || String(r.label || '').replace(/^عمالة:\s*/, '') || 'بند';
       const row = { id: r.id || `labor-${estimate.laborRows.length}`, label, count: r.qty ?? '', hours: r.hours ?? '', rate: r.rate ?? '' };
       estimate.laborRows.push(row);
       if (label.includes('مشرف') && !estimate.supervisors_count) {
@@ -271,18 +305,16 @@ export function costRowsToEstimate(rows) {
       }
     } else if (r.kind === 'materials') {
       const label = String(r.label || '');
-      if (label.startsWith('منتج:')) {
-        const parts = Object.fromEntries(label.split(' · ').map((part) => {
-          const [key, ...rest] = part.split(':');
-          return [key.trim(), rest.join(':').trim()];
-        }));
+      if (r.product_name || label.startsWith('منتج:')) {
+        const parts = legacyParts(label);
         estimate.productRows.push({
           id: r.id || `product-${estimate.productRows.length}`,
-          product: parts['منتج'] || '',
-          supplierName: parts['المورد'] || '',
+          product: r.product_name || parts['منتج'] || '',
+          supplierId: r.supplier_id || '',
+          supplierName: r.supplier_name || parts['المورد'] || '',
           purchasePrice: r.amount ?? '',
-          salePrice: parts['البيع'] || '',
-          markupPercent: String(parts['النسبة'] || '').replace('%', ''),
+          salePrice: r.sale_price ?? parts['البيع'] ?? '',
+          markupPercent: r.markup_percent ?? String(parts['النسبة'] || '').replace('%', ''),
         });
       } else {
         estimate.materials_cost = r.amount ?? '';
@@ -323,20 +355,38 @@ export async function getCompanySettings()  { const { data, error } = await supa
 // ---------- الفواتير + الشركاء ----------
 export async function getInvoices() {
   const { data, error } = await supabase.from('invoices')
-    .select('id,number,project_id,client_id,issue_at,subtotal,vat_applicable,vat_rate,vat_amount,total,status,zatca_qr')
+    .select('id,number,project_id,client_id,issue_at,due_at,subtotal,vat_applicable,vat_rate,vat_amount,total,status,paid_at,zatca_qr')
     .order('issue_at', { ascending: false });
-  if (error) throw error; return data;
+  if (error) throw error; return attachInvoiceSummaries(data);
 }
 export async function getProjectInvoices(projectId) {
   const { data, error } = await supabase.from('invoices')
-    .select('id,number,project_id,client_id,issue_at,total,status,zatca_qr')
+    .select('id,number,project_id,client_id,issue_at,due_at,total,status,paid_at,zatca_qr')
     .eq('project_id', projectId)
     .order('issue_at', { ascending: false });
-  if (error) throw error; return data;
+  if (error) throw error; return attachInvoiceSummaries(data);
 }
 export async function getInvoiceItems(invoiceId) {
   const { data, error } = await supabase.from('invoice_items').select('*').eq('invoice_id', invoiceId);
   if (error) throw error; return data;
+}
+async function attachInvoiceSummaries(invoices) {
+  const rows = invoices || [];
+  if (rows.length === 0) return rows;
+  const ids = rows.map((invoice) => invoice.id).filter(Boolean);
+  const { data, error } = await supabase
+    .from('invoice_payment_summaries')
+    .select('invoice_id,paid_amount,remaining_amount,last_payment_at,payment_count')
+    .in('invoice_id', ids);
+  if (error) throw error;
+  const byInvoice = Object.fromEntries((data || []).map((summary) => [summary.invoice_id, summary]));
+  return rows.map((invoice) => ({
+    ...invoice,
+    paid_amount: Number(byInvoice[invoice.id]?.paid_amount || 0),
+    remaining_amount: Number(byInvoice[invoice.id]?.remaining_amount ?? invoice.total ?? 0),
+    last_payment_at: byInvoice[invoice.id]?.last_payment_at || null,
+    payment_count: Number(byInvoice[invoice.id]?.payment_count || 0),
+  }));
 }
 export async function getPartners() {
   const { data, error } = await supabase.from('partners').select('*');
@@ -422,9 +472,79 @@ export async function removeProjectMedia(id) {
   if (error) throw error;
 }
 
+// ---------- وسائط لوحة المعلومات (رفع فعلي إلى Supabase Storage) ----------
+const DASHBOARD_MEDIA_BUCKET = 'dashboard-media';
+
+export async function getDashboardMedia() {
+  const { data, error } = await supabase.from('dashboard_media')
+    .select('id,kind,file_url,file_path,caption,created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error; return data;
+}
+
+// يرفع الملف إلى الحاوية، يجلب الرابط العام، ثم يسجّل صفاً في الجدول
+export async function uploadDashboardMedia(file, caption = '') {
+  const kind = file.type.startsWith('video') ? 'video' : 'image';
+  const ext = (file.name.split('.').pop() || (kind === 'video' ? 'mp4' : 'jpg')).toLowerCase();
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: upErr } = await supabase.storage.from(DASHBOARD_MEDIA_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (upErr) throw upErr;
+  const { data: pub } = supabase.storage.from(DASHBOARD_MEDIA_BUCKET).getPublicUrl(path);
+  const row = { kind, file_url: pub.publicUrl, file_path: path, caption: caption?.trim() || null };
+  const { data, error } = await supabase.from('dashboard_media').insert(row).select().single();
+  if (error) throw error; return data;
+}
+
+export async function removeDashboardMedia(id, filePath) {
+  if (filePath) await supabase.storage.from(DASHBOARD_MEDIA_BUCKET).remove([filePath]).catch(() => {});
+  const { error } = await supabase.from('dashboard_media').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---------- مرفقات تكلفة المشروع (مستندات: فواتير موردين، إيصالات...) ----------
+const COST_ATTACHMENTS_BUCKET = 'project-cost-attachments';
+
+export async function getProjectCostAttachments(projectId) {
+  const { data, error } = await supabase.from('project_cost_attachments')
+    .select('id,project_id,file_name,file_url,file_path,file_type,file_size,note,created_at')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: false });
+  if (error) throw error; return data;
+}
+
+// يرفع المستند إلى الحاوية، يجلب الرابط العام، ثم يسجّل صفاً في الجدول
+export async function uploadProjectCostAttachment(projectId, file, note = '') {
+  const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+  const path = `${projectId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: upErr } = await supabase.storage.from(COST_ATTACHMENTS_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (upErr) throw upErr;
+  const { data: pub } = supabase.storage.from(COST_ATTACHMENTS_BUCKET).getPublicUrl(path);
+  const row = {
+    project_id: projectId,
+    file_name: file.name,
+    file_url: pub.publicUrl,
+    file_path: path,
+    file_type: file.type || null,
+    file_size: file.size || null,
+    note: note?.trim() || null,
+  };
+  const { data, error } = await supabase.from('project_cost_attachments').insert(row).select().single();
+  if (error) throw error; return data;
+}
+
+export async function removeProjectCostAttachment(id, filePath) {
+  if (filePath) await supabase.storage.from(COST_ATTACHMENTS_BUCKET).remove([filePath]).catch(() => {});
+  const { error } = await supabase.from('project_cost_attachments').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // تكلفة المشروع — بنود
 export async function createProjectCost(p) {
-  const { data, error } = await supabase.from('project_costs').insert(p).select('id,kind,label,amount').single();
+  const { data, error } = await supabase.from('project_costs').insert(p)
+    .select('id,kind,label,amount,qty,hours,rate,work_date,note,worker_name,product_name,supplier_id,supplier_name,sale_price,markup_percent')
+    .single();
   if (error) throw error; return data;
 }
 export async function removeProjectCost(id) {
@@ -549,28 +669,53 @@ export async function removeGovernmentAccount(id) {
 // ============================================================
 //  الفواتير · CRUD + البنود
 // ============================================================
-const INVOICE_COLS = 'id,number,project_id,client_id,issue_at,subtotal,vat_applicable,vat_rate,vat_amount,total,zatca_uuid,zatca_qr,status,created_at';
+const INVOICE_COLS = 'id,number,project_id,client_id,issue_at,due_at,subtotal,vat_applicable,vat_rate,vat_amount,total,zatca_uuid,zatca_qr,status,paid_at,created_at';
 export async function getInvoice(id) {
   const { data, error } = await supabase.from('invoices').select('*').eq('id', id).single();
-  if (error) throw error; return data;
-}
-// ينشئ الفاتورة ثم يدرج بنودها. items=[{description,qty,unit_price}]
-export async function createInvoice(invoice, items) {
-  const { data, error } = await supabase.from('invoices').insert(invoice).select(INVOICE_COLS).single();
   if (error) throw error;
-  if (items && items.length) {
-    const rows = items.map((it) => ({ ...it, invoice_id: data.id }));
-    const { error: e2 } = await supabase.from('invoice_items').insert(rows);
-    if (e2) throw e2;
-  }
+  const [invoice] = await attachInvoiceSummaries([data]);
+  return invoice;
+}
+// ينشئ الفاتورة وبنودها داخل Transaction واحدة في قاعدة البيانات.
+// items=[{description,qty,unit_price}]
+export async function createInvoice(invoice, items) {
+  const { data, error } = await supabase.rpc('create_invoice_with_items', {
+    p_invoice: invoice,
+    p_items: items || [],
+  });
+  if (error) throw error;
   return data;
 }
 export async function updateInvoice(id, p) {
   const { data, error } = await supabase.from('invoices').update(p).eq('id', id).select(INVOICE_COLS).single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  const [invoice] = await attachInvoiceSummaries([data]);
+  return invoice;
 }
 export async function removeInvoice(id) {
   const { error } = await supabase.from('invoices').delete().eq('id', id);
+  if (error) throw error;
+}
+export async function getInvoicePayments(invoiceId) {
+  const { data, error } = await supabase.from('invoice_payments')
+    .select('id,invoice_id,amount,paid_at,method,note,created_at')
+    .eq('invoice_id', invoiceId)
+    .order('paid_at', { ascending: false });
+  if (error) throw error; return data;
+}
+export async function createInvoicePayment(p) {
+  const payload = {
+    invoice_id: p.invoice_id,
+    amount: Number(p.amount) || 0,
+    paid_at: p.paid_at || new Date().toISOString(),
+    method: p.method || 'cash',
+    note: p.note?.trim() || null,
+  };
+  const { data, error } = await supabase.from('invoice_payments').insert(payload).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removeInvoicePayment(id) {
+  const { error } = await supabase.from('invoice_payments').delete().eq('id', id);
   if (error) throw error;
 }
 

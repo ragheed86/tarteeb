@@ -1,7 +1,10 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getClients, getProjects, getInvoices, getInventory, getAllProjectCosts } from '@/lib/data';
+import {
+  getClients, getProjects, getInvoices, getInventory, getAllProjectCosts,
+  getDashboardMedia, uploadDashboardMedia, removeDashboardMedia,
+} from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, displayProgress, OPEN_DELIVERY_STATUSES } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from './ui';
 
@@ -20,11 +23,16 @@ function withinDays(date, days) {
   return diff >= 0 && diff <= days;
 }
 
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // حد Supabase الافتراضي 50 ميجابايت
+
 export default function Dashboard() {
   const router = useRouter();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
   const [period, setPeriod] = useState('month');
+  const [media, setMedia] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [mediaErr, setMediaErr] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -46,15 +54,48 @@ export default function Dashboard() {
         setErr(e.message || 'تعذّر تحميل البيانات');
       }
     })();
+    getDashboardMedia().then(setMedia).catch(() => {});
   }, []);
+
+  async function onPickMedia(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    setUploading(true);
+    setMediaErr('');
+    try {
+      for (const file of files) {
+        if (file.size > MAX_MEDIA_BYTES) {
+          setMediaErr(`«${file.name}» يتجاوز الحد الأقصى (50 ميجابايت)`);
+          continue;
+        }
+        const row = await uploadDashboardMedia(file);
+        setMedia((m) => [row, ...m]);
+      }
+    } catch (uploadErr) {
+      setMediaErr(uploadErr.message || 'تعذّر رفع الملف');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function onDeleteMedia(item) {
+    if (!confirm('حذف هذا المرفق نهائياً؟')) return;
+    try {
+      await removeDashboardMedia(item.id, item.file_path);
+      setMedia((m) => m.filter((x) => x.id !== item.id));
+    } catch (delErr) {
+      setMediaErr(delErr.message || 'تعذّر الحذف');
+    }
+  }
 
   if (err) return <ErrorBar message={err} />;
   if (!data) return <Loading />;
 
   const days = PERIOD_DAYS[period];
   const periodRevenue = data.invoices
-    .filter((i) => i.status === 'paid' && withinDays(i.issue_at, days))
-    .reduce((s, i) => s + Number(i.total || 0), 0);
+    .filter((i) => withinDays(i.last_payment_at || i.issue_at, days))
+    .reduce((s, i) => s + Number(i.paid_amount || 0), 0);
   const periodProjects = data.projects.filter((p) => withinDays(p.due_date || p.created_at, days));
   const periodSales = periodProjects.reduce((s, p) => s + Number(p.sale_price || 0), 0);
   const periodProfit = periodProjects.reduce((s, p) => s + (Number(p.sale_price || 0) - (data.costByProject[p.id] || 0)), 0);
@@ -68,8 +109,8 @@ export default function Dashboard() {
     return { year: d.getFullYear(), month: d.getMonth(), label: ARABIC_MONTHS[d.getMonth()] };
   });
   const monthTotals = months.map((m) => data.invoices
-    .filter((i) => i.status === 'paid' && (() => { const d = new Date(i.issue_at); return d.getFullYear() === m.year && d.getMonth() === m.month; })())
-    .reduce((s, i) => s + Number(i.total || 0), 0));
+    .filter((i) => Number(i.paid_amount || 0) > 0 && (() => { const d = new Date(i.last_payment_at || i.issue_at); return d.getFullYear() === m.year && d.getMonth() === m.month; })())
+    .reduce((s, i) => s + Number(i.paid_amount || 0), 0));
   const maxMonth = Math.max(...monthTotals, 1);
 
   // توزيع مصدر العملاء الفعلي
@@ -187,6 +228,42 @@ export default function Dashboard() {
               })}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* المرفقات والوسائط */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="sec-head">
+          <h2>المرفقات والوسائط</h2>
+          <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="more">{fmtNum(media.length)}</span>
+            <label className={`btn sm${uploading ? ' disabled' : ''}`} htmlFor="dash-media-file">
+              {uploading ? 'جارٍ الرفع…' : '+ صورة / فيديو'}
+            </label>
+            <input id="dash-media-file" type="file" accept="image/*,video/*" multiple hidden disabled={uploading} onChange={onPickMedia} />
+          </div>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-6px 0 12px' }}>
+          صور ومقاطع فيديو محفوظة على الخادم — تبقى بعد التحديث · الحد الأقصى 50 ميجابايت للملف
+        </div>
+        {mediaErr && <div className="errbar">{mediaErr}</div>}
+        {media.length === 0 ? (
+          <Empty title="لا مرفقات بعد" desc="اضغط «+ صورة / فيديو» لإضافة أول مرفق." />
+        ) : (
+          <div className="media-grid">
+            {media.map((item) => (
+              <div className="media-item" key={item.id}>
+                {item.kind === 'video' ? (
+                  <video src={item.file_url} controls preload="metadata" />
+                ) : (
+                  <a href={item.file_url} target="_blank" rel="noreferrer">
+                    <img src={item.file_url} alt={item.caption || 'مرفق'} loading="lazy" />
+                  </a>
+                )}
+                <button className="media-del" type="button" onClick={() => onDeleteMedia(item)} aria-label="حذف المرفق">✕</button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </>

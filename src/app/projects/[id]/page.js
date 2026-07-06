@@ -14,6 +14,13 @@ import { Loading, Empty, ErrorBar } from '../../ui';
 const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
 const MEDIA_KIND = { before: 'قبل', after: 'بعد', other: 'أخرى' };
 
+function costDescription(cost) {
+  if (cost.product_name) return cost.supplier_name ? `${cost.product_name} · ${cost.supplier_name}` : cost.product_name;
+  if (cost.worker_name) return `عمالة: ${cost.worker_name}`;
+  if (cost.note) return cost.note;
+  return cost.label || '—';
+}
+
 export default function ProjectDetail() {
   const { id } = useParams();
   const router = useRouter();
@@ -192,7 +199,7 @@ function CostsCard({ projectId, costs, onChange }) {
     setBusy(true);
     try {
       await createProjectCost({
-        project_id: projectId, kind: form.kind, label: form.label.trim() || null, amount: Number(form.amount) || 0,
+        project_id: projectId, kind: form.kind, note: form.label.trim() || null, amount: Number(form.amount) || 0,
       });
       setForm({ kind: 'labor', label: '', amount: '' });
       await onChange();
@@ -211,7 +218,7 @@ function CostsCard({ projectId, costs, onChange }) {
             {costs.map((c) => (
               <tr key={c.id}>
                 <td>{COST_KIND[c.kind] || c.kind}</td>
-                <td>{c.label || '—'}</td>
+                <td>{costDescription(c)}</td>
                 <td className="amt">{fmtMoney(c.amount)} ⃁</td>
                 <td style={{ textAlign: 'left' }}><button className="x-btn" onClick={() => del(c)}>✕</button></td>
               </tr>

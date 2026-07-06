@@ -4,10 +4,8 @@ import {
   getInventory, getWarehouses, getCategories, getSuppliers,
   createInventoryItem, updateInventoryItem, removeInventoryItem,
 } from '@/lib/data';
-import { supabase } from '@/lib/supabase';
-import {
-  ALL_PERMISSIONS, canAccess, isPrimaryAdmin, normalizePermissions,
-} from '@/lib/permissions';
+import { canAccess } from '@/lib/permissions';
+import { useAccess } from '@/lib/useAccess';
 import { fmtMoney, fmtNum } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
 
@@ -18,7 +16,7 @@ const EMPTY = {
 
 export default function WarehousePage() {
   const [d, setD] = useState(null);
-  const [access, setAccess] = useState(undefined);
+  const { access } = useAccess();
   const [err, setErr] = useState('');
   const [fCat, setFCat] = useState('');
   const [fWh, setFWh] = useState('');
@@ -41,48 +39,6 @@ export default function WarehousePage() {
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadAccess() {
-      let email = '';
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const session = sessionData.session;
-        if (!session) {
-          if (!cancelled) setAccess(null);
-          return;
-        }
-        email = session.user?.email || '';
-        const primary = isPrimaryAdmin(email);
-        const { data, error } = await supabase
-          .from('app_user_access')
-          .select('user_id,email,display_name,role,permissions,active')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-        if (error) throw error;
-        if (!cancelled) {
-          setAccess({
-            user_id: session.user.id,
-            email,
-            display_name: data?.display_name || '',
-            role: primary ? 'admin' : data?.role || 'viewer',
-            permissions: primary ? ALL_PERMISSIONS : normalizePermissions(data?.permissions || [], email),
-            active: primary ? true : data?.active === true,
-            isPrimaryAdmin: primary,
-          });
-        }
-      } catch {
-        if (!cancelled) {
-          setAccess(isPrimaryAdmin(email)
-            ? { email, role: 'admin', permissions: ALL_PERMISSIONS, active: true, isPrimaryAdmin: true }
-            : null);
-        }
-      }
-    }
-    loadAccess();
-    return () => { cancelled = true; };
-  }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
   function setInventory(k, v) { setInventoryForm((f) => ({ ...f, [k]: v })); }

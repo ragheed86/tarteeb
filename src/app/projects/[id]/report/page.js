@@ -26,6 +26,10 @@ function daySortValue(day) {
 }
 
 function dayFromCost(cost) {
+  if (cost.work_date) {
+    const date = String(cost.work_date).slice(0, 10);
+    return { key: date || 'بنود يومية', title: fmtDate(date), rawDate: date };
+  }
   const label = String(cost.label || '');
   if (label.startsWith('يومي:')) {
     const date = label.split(' · ')[0].replace('يومي:', '').trim();
@@ -40,6 +44,10 @@ function dayFromCost(cost) {
 }
 
 function cleanLabel(cost) {
+  if (cost.kind === 'materials' && cost.product_name) return cost.product_name;
+  if (cost.kind === 'labor' && cost.worker_name) return `عمالة: ${cost.worker_name}`;
+  if ((cost.kind === 'transport' || cost.kind === 'other') && cost.note) return cost.note;
+  if (cost.note) return cost.note;
   let label = String(cost.label || COST_KIND[cost.kind] || 'بند تكلفة');
   label = label.replace(/^يومي:\s*[^·]+ ·\s*/, '');
   label = label.replace(/\s*-\s*اليوم\s+(الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر).*$/, '');
@@ -329,12 +337,16 @@ function CostRow({ row }) {
   const hours = n(row.hours);
   const rate = n(row.rate);
   const hasDetail = qty && hours && rate;
+  const supplier = row.kind === 'materials' && row.supplier_name ? ` · المورد: ${row.supplier_name}` : '';
+  const sale = row.kind === 'materials' && n(row.sale_price) ? ` · البيع: ${fmtMoney(row.sale_price)} ${CURRENCY}` : '';
   return (
     <div className="rpt-row">
       <div className="rpt-row-main">
         <b>{cleanLabel(row)}</b>
         <small>
           {COST_KIND[row.kind] || row.kind}
+          {supplier}
+          {sale}
           {hasDetail ? ` · ${fmtNum(qty)} عامل × ${fmtNum(hours)} ساعة × ${fmtMoney(rate)} ${CURRENCY} (${fmtNum(qty * hours)} ساعة)` : ''}
         </small>
       </div>

@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { supabase, supabaseReady } from '@/lib/supabase';
-import {
-  ALL_PERMISSIONS, ROLE_LABELS, canAccess, isPrimaryAdmin, normalizePermissions, permissionForPath,
-} from '@/lib/permissions';
+import { ROLE_LABELS, canAccess, permissionForPath } from '@/lib/permissions';
+import { useAccess } from '@/lib/useAccess';
+import { useRouteMemory } from '@/lib/useRouteMemory';
 
 // ---------- خريطة التنقّل والعناوين ----------
 const NAV = [
@@ -34,61 +34,11 @@ const MOBILE_NAV = ['/', '/clients', '/projects', '/warehouse', '/employees'];
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
-  const [session, setSession] = useState(undefined); // undefined=يحمّل، null=خارج
-  const [access, setAccess] = useState(undefined);
+  const { session, access } = useAccess();
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!supabaseReady) {
-      setSession(null);
-      return undefined;
-    }
-    supabase.auth.getSession().then(({ data }) => setSession(data.session ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadAccess() {
-      if (!session) {
-        setAccess(session === null ? null : undefined);
-        return;
-      }
-      setAccess(undefined);
-      const email = session.user?.email || '';
-      try {
-        const { data, error } = await supabase
-          .from('app_user_access')
-          .select('user_id,email,display_name,role,permissions,active')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-        if (error) throw error;
-        const primary = isPrimaryAdmin(email);
-        if (!cancelled) {
-          setAccess({
-            user_id: session.user.id,
-            email,
-            display_name: data?.display_name || '',
-            role: primary ? 'admin' : data?.role || 'viewer',
-            permissions: primary ? ALL_PERMISSIONS : normalizePermissions(data?.permissions || [], email),
-            active: primary ? true : data?.active === true,
-            isPrimaryAdmin: primary,
-          });
-        }
-      } catch {
-        if (!cancelled) {
-          setAccess(isPrimaryAdmin(email)
-            ? { user_id: session.user.id, email, role: 'admin', permissions: ALL_PERMISSIONS, active: true, isPrimaryAdmin: true }
-            : null);
-        }
-      }
-    }
-    loadAccess();
-    return () => { cancelled = true; };
-  }, [session]);
-
   useEffect(() => setOpen(false), [pathname]); // إغلاق القائمة عند التنقّل
+  useRouteMemory(Boolean(session)); // يستعيد آخر مسار عند إطلاق بارد للتطبيق (PWA) على الشاشة الرئيسية
 
   if (session === undefined || (session && access === undefined)) {
     return <Splash />;

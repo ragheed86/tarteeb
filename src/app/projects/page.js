@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  getProjects, getClients, getInvoices, createProject, updateProject, removeProject,
+  getProjects, getClients, getInvoices, getEmployees, createProject, updateProject, removeProject,
 } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, displayProgress, progressForStatus, DONE_STATUSES } from '@/lib/format';
+import { fmtMoney, fmtNum, fmtDate, fmtRelative, PROJECT_STATUS, displayProgress, progressForStatus, DONE_STATUSES } from '@/lib/format';
+import { usePersistedState } from '@/lib/usePersistedState';
 import { Loading, Empty, ErrorBar } from '../ui';
 
 const STATUS_OPTS = [
@@ -18,7 +19,7 @@ const STATUS_OPTS = [
 
 const EMPTY = {
   title: '', client_id: '', service_type: '', sale_price: '', status: 'quote',
-  start_date: '', due_date: '', progress: 0,
+  start_date: '', due_date: '', progress: 0, supervisor_id: '',
 };
 const PAGE_SIZE = 10;
 
@@ -57,16 +58,46 @@ function projectOverlapsRange(project, from, to) {
   return true;
 }
 
-function calendarMeta(anchorDate) {
-  const [year, month] = anchorDate.split('-').map(Number);
-  const first = new Date(year, month - 1, 1);
-  return {
-    label: new Intl.DateTimeFormat('ar-SA-u-nu-latn', { month: 'long', year: 'numeric' }).format(first),
-    emptyCells: first.getDay(),
-    days: new Date(year, month, 0).getDate(),
-    prefix: `${year}-${String(month).padStart(2, '0')}`,
-  };
+// ── مساعدات التقويم ──
+const WEEKDAYS_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const MONTH_LABEL = (iso) => {
+  const [y, m] = iso.split('-').map(Number);
+  return new Intl.DateTimeFormat('ar-SA-u-nu-latn', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1));
+};
+function addMonthsIso(iso, n) {
+  const [y, m] = iso.split('-').map(Number);
+  return isoLocal(new Date(y, m - 1 + n, 1));
 }
+function addDaysIso(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return isoLocal(new Date(y, m - 1, d + n));
+}
+// مصفوفة 42 يوماً (6 أسابيع) تبدأ من أحد يسبق أول الشهر — تتضمّن أيام الشهرين المجاورين
+function monthMatrix(anchorIso) {
+  const [y, m] = anchorIso.split('-').map(Number);
+  const first = new Date(y, m - 1, 1);
+  const start = new Date(y, m - 1, 1 - first.getDay());
+  return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+}
+// أيام الأسبوع (7) المحتوي للتاريخ المرجعي
+function weekDays(anchorIso) {
+  const [y, m, d] = anchorIso.split('-').map(Number);
+  const base = new Date(y, m - 1, d);
+  const sunday = new Date(y, m - 1, d - base.getDay());
+  return Array.from({ length: 7 }, (_, i) => new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + i));
+}
+const WEEK_RANGE_LABEL = (anchorIso) => {
+  const days = weekDays(anchorIso);
+  const fmt = (dt) => new Intl.DateTimeFormat('ar-SA-u-nu-latn', { day: 'numeric', month: 'short' }).format(dt);
+  return `${fmt(days[0])} — ${fmt(days[6])}`;
+};
+// أعمدة كانبان: [العنوان, الحالات المشمولة, الحالة عند الإفلات]
+const KANBAN_COLS = [
+  ['قيد التخطيط', ['quote', 'preparing'], 'preparing'],
+  ['قيد الإنجاز', ['in_progress'], 'in_progress'],
+  ['قيد المراجعة', ['delivered'], 'delivered'],
+  ['مكتمل', ['completed'], 'completed'],
+];
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -77,17 +108,25 @@ export default function ProjectsPage() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
-  const [view, setView] = useState('cards');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [q, setQ] = useState('');
-  const [page, setPage] = useState(1);
-  const [showAll, setShowAll] = useState(false);
+  // محفوظة عبر sessionStorage — تنجو من إعادة تركيب الصفحة (Splash عند تجديد الجلسة)
+  // ومن أي إعادة تحميل حقيقية لنفس التبويب، فلا يُفاجأ المستخدم بعودة الفلاتر لوضعها الافتراضي
+  const [view, setView] = usePersistedState('projects:view', 'table');
+  const [from, setFrom] = usePersistedState('projects:from', '');
+  const [to, setTo] = usePersistedState('projects:to', '');
+  const [q, setQ] = usePersistedState('projects:q', '');
+  const [page, setPage] = usePersistedState('projects:page', 1);
+  const [showAll, setShowAll] = usePersistedState('projects:showAll', true);
+  const [calMode, setCalMode] = useState('month');
+  const [calAnchor, setCalAnchor] = useState(() => isoLocal(new Date()));
+  const [dragCol, setDragCol] = useState(null);
 
   async function load() {
     try {
-      const [projects, clients, invoices] = await Promise.all([getProjects(), getClients(), getInvoices().catch(() => [])]);
+      const [projects, clients, invoices, employees] = await Promise.all([
+        getProjects(), getClients(), getInvoices().catch(() => []), getEmployees().catch(() => []),
+      ]);
       const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
+      const employeesById = Object.fromEntries((employees || []).map((em) => [em.id, em]));
       // السعر النهائي = مجموع فواتير المشروع الصادرة (غير المسودّة)
       const finalByProject = {};
       for (const inv of invoices || []) {
@@ -95,7 +134,7 @@ export default function ProjectsPage() {
           finalByProject[inv.project_id] = (finalByProject[inv.project_id] || 0) + Number(inv.total || 0);
         }
       }
-      setState({ projects, clients, byId, finalByProject });
+      setState({ projects, clients, byId, finalByProject, employees: employees || [], employeesById });
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
@@ -114,6 +153,7 @@ export default function ProjectsPage() {
       title: p.title || '', client_id: p.client_id || '', service_type: p.service_type || '',
       sale_price: p.sale_price ?? '', status: p.status || 'quote',
       start_date: p.start_date || '', due_date: p.due_date || '', progress: p.progress ?? 0,
+      supervisor_id: p.supervisor_id || '',
     });
     setFormErr(''); setOpen(true);
   }
@@ -133,6 +173,7 @@ export default function ProjectsPage() {
       start_date: form.start_date || null,
       due_date: form.due_date || null,
       progress: progressForStatus(form.status, form.progress),
+      supervisor_id: form.supervisor_id || null,
     };
     try {
       if (editing) {
@@ -157,17 +198,38 @@ export default function ProjectsPage() {
   async function moveToStatus(projectId, status) {
     const current = state?.projects.find((x) => x.id === projectId);
     if (!current || current.status === status) return;
+    // تحديث فوري متفائل ثم مزامنة مع الخادم
+    const optimistic = { ...current, status, progress: progressForStatus(status, current.progress) };
+    setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === projectId ? optimistic : x)) }));
     try {
-      const up = await updateProject(projectId, { status, progress: progressForStatus(status, current.progress) });
+      const up = await updateProject(projectId, { status, progress: optimistic.progress });
       setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === up.id ? up : x)) }));
-    } catch (e2) { setErr(e2.message || 'تعذّر تحديث الحالة'); }
+    } catch (e2) {
+      setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === projectId ? current : x)) }));
+      setErr(e2.message || 'تعذّر تحديث الحالة');
+    }
+  }
+
+  // سحب مشروع في التقويم لتغيير موعد التسليم
+  async function updateDueDate(projectId, iso) {
+    const current = state?.projects.find((x) => x.id === projectId);
+    if (!current || current.due_date === iso) return;
+    setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === projectId ? { ...x, due_date: iso } : x)) }));
+    try {
+      const up = await updateProject(projectId, { due_date: iso });
+      setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === up.id ? up : x)) }));
+    } catch (e2) {
+      setState((s) => ({ ...s, projects: s.projects.map((x) => (x.id === projectId ? current : x)) }));
+      setErr(e2.message || 'تعذّر تحديث التاريخ');
+    }
   }
 
   if (err) return <ErrorBar message={err} />;
   if (!state) return <Loading />;
 
-  const { projects, clients, byId, finalByProject } = state;
+  const { projects, clients, byId, finalByProject, employees, employeesById } = state;
   const clientsById = Object.fromEntries(clients.map((c) => [c.id, c]));
+  const supervisorName = (p) => employeesById?.[p.supervisor_id]?.name || '';
   const term = normalizeSearch(q);
   const hasQuery = term.length > 0;
   const hasDateFilter = Boolean(from || to);
@@ -194,13 +256,13 @@ export default function ProjectsPage() {
     ].filter(Boolean).join(' '));
     return (!term || searchText.includes(term)) && projectOverlapsRange(p, from, to);
   }) : [];
+  // ترتيب حسب آخر تحديث (الأحدث أولاً) — يخدم «آخر 10 مشاريع تم العمل عليها»
+  filtered.sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * PAGE_SIZE;
   const pageProjects = filtered.slice(pageStart, pageStart + PAGE_SIZE);
-  const firstPageDate = pageProjects.find((p) => p.due_date || p.start_date)?.due_date
-    || pageProjects.find((p) => p.due_date || p.start_date)?.start_date;
-  const cal = calendarMeta(from || to || firstPageDate || isoLocal(new Date()));
+  const boardProjects = filtered; // كانبان والتقويم يعرضان كل المطابق دون ترقيم صفحات
   const resetCurrentMonth = () => {
     const next = currentMonthRange();
     setFrom(next.from);
@@ -212,15 +274,12 @@ export default function ProjectsPage() {
     setQ('');
     setShowAll(true);
   };
-  const cols = [
-    ['قيد التجهيز', ['quote', 'preparing'], 'preparing'],
-    ['جاري التنفيذ', ['in_progress'], 'in_progress'],
-    ['تم التسليم', ['delivered', 'completed'], 'delivered'],
-  ];
+  const paginated = view === 'table' || view === 'cards';
   return (
     <>
       <div className="toolbar">
         <div className="viewtoggle">
+          <button className={`vt${view === 'table' ? ' active' : ''}`} onClick={() => setView('table')}>جدول</button>
           <button className={`vt${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')}>بطاقات</button>
           <button className={`vt${view === 'kanban' ? ' active' : ''}`} onClick={() => setView('kanban')}>كانبان</button>
           <button className={`vt${view === 'calendar' ? ' active' : ''}`} onClick={() => setView('calendar')}>تقويم</button>
@@ -250,19 +309,19 @@ export default function ProjectsPage() {
         <div className="card">
           <Empty title="ابحث لعرض المشاريع" desc="استخدم مربع البحث أعلاه، أو حدّد نطاق تاريخ، أو اضغط «عرض كل المشاريع»." />
         </div>
-      ) : view === 'cards' ? (
+      ) : view === 'table' ? (
         <>
-          <div className="sec-head"><h2>ملخص المشاريع</h2><span className="more">اضغط أي صف للتفاصيل</span></div>
-          <div className="card" style={{ padding: '6px 0', overflowX: 'auto', marginBottom: 20 }}>
+          <div className="sec-head"><h2>آخر المشاريع تحديثاً</h2><span className="more">مرتّبة حسب آخر تحديث · اضغط أي صف للتفاصيل</span></div>
+          <div className="card" style={{ padding: '6px 0', overflowX: 'auto' }}>
             <table>
-              <thead><tr><th>المشروع</th><th>العميل</th><th>الحالة</th><th>تاريخ التسليم</th><th>السعر المبدئي</th><th>سعر البيع النهائي</th><th>التقدّم</th></tr></thead>
+              <thead><tr><th>المشروع</th><th>المسؤول</th><th>الحالة</th><th>آخر تحديث</th><th>تاريخ التسليم</th><th>السعر المبدئي</th><th>سعر البيع النهائي</th><th>التقدّم</th></tr></thead>
               <tbody>
-              {pageProjects.map((p) => {
+                {pageProjects.map((p) => {
                   const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
                   return (
                     <tr className="clickable" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>
-                      <td className="nm">{p.title}</td>
-                      <td>{byId[p.client_id] || 'عميل غير معروف'}</td>
+                      <td className="nm">{p.title}<br /><span className="uid">{byId[p.client_id] || 'عميل غير معروف'}</span></td>
+                      <td>{supervisorName(p) || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <select
                           className={`status-select pill ${st.cls}`}
@@ -275,6 +334,7 @@ export default function ProjectsPage() {
                           ))}
                         </select>
                       </td>
+                      <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }} title={fmtDate(p.updated_at)}>{fmtRelative(p.updated_at)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(p.due_date)}</td>
                       <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
                       <td className="amt">{finalByProject?.[p.id] ? `${fmtMoney(finalByProject[p.id])} ⃁` : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
@@ -285,7 +345,9 @@ export default function ProjectsPage() {
               </tbody>
             </table>
           </div>
-          <div className="pgrid">
+        </>
+      ) : view === 'cards' ? (
+        <div className="pgrid">
           {pageProjects.map((p) => {
             const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
             return (
@@ -315,6 +377,9 @@ export default function ProjectsPage() {
                     <span>التسليم: {fmtDate(p.due_date)}</span>
                     <span className="amt">{fmtNum(displayProgress(p))}%</span>
                   </div>
+                  {supervisorName(p) && (
+                    <div className="row" style={{ color: 'var(--muted)', fontSize: 12 }}><span>المسؤول: {supervisorName(p)}</span></div>
+                  )}
                   <div className="row" style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
                     <button className="btn ghost sm" onClick={() => openEdit(p)}>تعديل</button>
                     <button className="btn ghost sm" style={{ color: 'var(--neg)' }} onClick={(e) => del(p, e)}>حذف</button>
@@ -323,19 +388,20 @@ export default function ProjectsPage() {
               </div>
             );
           })}
-          </div>
-        </>
+        </div>
       ) : view === 'kanban' ? (
-        <div className="kanban">
-          {cols.map(([title, statuses, dropStatus]) => {
-            const rows = pageProjects.filter((p) => statuses.includes(p.status));
+        <div className="kanban kanban-4">
+          {KANBAN_COLS.map(([title, statuses, dropStatus]) => {
+            const rows = boardProjects.filter((p) => statuses.includes(p.status));
             return (
               <div
-                className="kcol"
-                key={title}
-                onDragOver={(e) => e.preventDefault()}
+                className={`kcol${dragCol === dropStatus ? ' drag-over' : ''}`}
+                key={dropStatus}
+                onDragOver={(e) => { e.preventDefault(); if (dragCol !== dropStatus) setDragCol(dropStatus); }}
+                onDragLeave={(e) => { if (e.currentTarget === e.target) setDragCol(null); }}
                 onDrop={(e) => {
                   e.preventDefault();
+                  setDragCol(null);
                   const id = e.dataTransfer.getData('text/plain');
                   if (id) moveToStatus(id, dropStatus);
                 }}
@@ -348,32 +414,77 @@ export default function ProjectsPage() {
                       key={p.id}
                       draggable
                       onDragStart={(e) => e.dataTransfer.setData('text/plain', p.id)}
+                      onDragEnd={() => setDragCol(null)}
                       onClick={() => router.push(`/projects/${p.id}`)}
                     >
                       <h4>{p.title}</h4>
                       <div className="km">{byId[p.client_id] || 'عميل غير معروف'} · {p.service_type || '—'}</div>
+                      <div className="kprog"><i style={{ width: `${displayProgress(p)}%` }} /></div>
+                      <div className="kmeta">
+                        <span>التسليم: {fmtDate(p.due_date)}</span>
+                        {supervisorName(p) && <span>· {supervisorName(p)}</span>}
+                      </div>
                       <div className="kf"><span className="chk">{fmtNum(displayProgress(p))}%</span><span className="kp">{fmtMoney(p.sale_price)} ⃁</span></div>
                     </div>
                   ))}
+                  {rows.length === 0 && <div className="kempty">اسحب مشروعاً هنا</div>}
                 </div>
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="card">
-          <div className="calhead"><h3>{cal.label}</h3><span style={{ fontSize: 12.5, color: 'var(--muted)' }}>مواعيد التسليم والزيارات</span></div>
-          <div className="cal-week"><div>الأحد</div><div>الإثنين</div><div>الثلاثاء</div><div>الأربعاء</div><div>الخميس</div><div>الجمعة</div><div>السبت</div></div>
-          <div className="cal-grid">
-            {Array.from({ length: cal.emptyCells }, (_, i) => <div className="cell empty" key={`e-${i}`} />)}
-            {Array.from({ length: cal.days }, (_, i) => {
-              const day = i + 1;
-              const dayIso = `${cal.prefix}-${String(day).padStart(2, '0')}`;
-              const events = pageProjects.filter((p) => (p.due_date || p.start_date || '') === dayIso);
+        <div className="card calwrap">
+          <div className="cal-toolbar">
+            <div className="cal-nav">
+              <button className="cal-navbtn" type="button" aria-label="السابق" onClick={() => setCalAnchor((a) => (calMode === 'month' ? addMonthsIso(a, -1) : addDaysIso(a, -7)))}>‹</button>
+              <button className="cal-navbtn" type="button" aria-label="التالي" onClick={() => setCalAnchor((a) => (calMode === 'month' ? addMonthsIso(a, 1) : addDaysIso(a, 7)))}>›</button>
+              <button className="chip" type="button" onClick={() => setCalAnchor(isoLocal(new Date()))}>اليوم</button>
+              <h3 className="cal-title">{calMode === 'month' ? MONTH_LABEL(calAnchor) : WEEK_RANGE_LABEL(calAnchor)}</h3>
+            </div>
+            <div className="viewtoggle cal-modetoggle">
+              <button className={`vt${calMode === 'month' ? ' active' : ''}`} type="button" onClick={() => setCalMode('month')}>شهر</button>
+              <button className={`vt${calMode === 'week' ? ' active' : ''}`} type="button" onClick={() => setCalMode('week')}>أسبوع</button>
+            </div>
+          </div>
+          <div className="cal-week">{WEEKDAYS_AR.map((d) => <div key={d}>{d}</div>)}</div>
+          <div className={`cal-grid${calMode === 'week' ? ' cal-grid-week' : ''}`}>
+            {(calMode === 'month' ? monthMatrix(calAnchor) : weekDays(calAnchor)).map((dt) => {
+              const iso = isoLocal(dt);
+              const [ay, am] = calAnchor.split('-').map(Number);
+              const isOther = calMode === 'month' && (dt.getFullYear() !== ay || dt.getMonth() + 1 !== am);
+              const isToday = iso === isoLocal(new Date());
+              const events = boardProjects.filter((p) => p.due_date === iso);
               return (
-                <div className="cell" key={day}>
-                  <span className="dn">{day}</span>
-                  {events.map((p) => <div className="cev prog" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>{p.title}</div>)}
+                <div
+                  className={`cell${isOther ? ' other-month' : ''}${isToday ? ' today' : ''}${dragCol === iso ? ' drag-over' : ''}`}
+                  key={iso}
+                  onDragOver={(e) => { e.preventDefault(); if (dragCol !== iso) setDragCol(iso); }}
+                  onDragLeave={(e) => { if (e.currentTarget === e.target) setDragCol(null); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragCol(null);
+                    const id = e.dataTransfer.getData('text/plain');
+                    if (id) updateDueDate(id, iso);
+                  }}
+                >
+                  <span className="dn">{fmtNum(dt.getDate())}</span>
+                  {events.map((p) => {
+                    const st = PROJECT_STATUS[p.status] || { cls: 'p-wait' };
+                    return (
+                      <div
+                        className={`cev ${st.cls}`}
+                        key={p.id}
+                        draggable
+                        onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('text/plain', p.id); }}
+                        onDragEnd={() => setDragCol(null)}
+                        onClick={(e) => { e.stopPropagation(); router.push(`/projects/${p.id}`); }}
+                        title={`${p.title} — ${byId[p.client_id] || ''}`}
+                      >
+                        {p.title}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -381,7 +492,7 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {isBrowsing && (
+      {paginated && (
         <div className="pagination">
           <button className="btn ghost sm" type="button" disabled={currentPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>السابق</button>
           <span>
@@ -432,6 +543,13 @@ export default function ProjectsPage() {
                     <label>الحالة</label>
                     <select value={form.status} onChange={(e) => set('status', e.target.value)}>
                       {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label>المسؤول</label>
+                    <select value={form.supervisor_id} onChange={(e) => set('supervisor_id', e.target.value)}>
+                      <option value="">— بدون —</option>
+                      {(state?.employees || []).map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
                     </select>
                   </div>
                   <div className="field">

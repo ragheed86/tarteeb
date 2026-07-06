@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   getProjects, getClients, getSuppliers, getEmployees, updateProject,
   getProjectCosts, getProjectInvoices, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
+  getProjectCostAttachments, uploadProjectCostAttachment, removeProjectCostAttachment,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS, PROJECT_STATUS, progressForStatus } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
@@ -105,6 +106,9 @@ export default function CostPage() {
   const [dailyRows, setDailyRows] = useState([]);
   const [projectInvoices, setProjectInvoices] = useState([]);
   const [invoicePanelOpen, setInvoicePanelOpen] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachErr, setAttachErr] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
 
@@ -129,13 +133,17 @@ export default function CostPage() {
     setSalePrice(project.sale_price ?? '');
     setSaveMsg('');
     setProjectInvoices([]);
+    setAttachments([]);
+    setAttachErr('');
     setInvoicePanelOpen(false);
     try {
-      const [costs, invoices] = await Promise.all([
+      const [costs, invoices, files] = await Promise.all([
         getProjectCosts(project.id),
         getProjectInvoices(project.id).catch(() => []),
+        getProjectCostAttachments(project.id).catch(() => []),
       ]);
       setProjectInvoices(invoices || []);
+      setAttachments(files || []);
       const restored = costRowsToEstimate(costs);
       const rows = buildDailyRows(project, restored.dailyRows).map((day) => ({
         ...day,
@@ -218,6 +226,39 @@ export default function CostPage() {
     if (hasLabor) summary.days += 1;
     return summary;
   }, { days: 0, workerDays: 0, hours: 0, amount: 0 });
+
+  const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024; // حد Supabase الافتراضي 50 ميجابايت
+
+  async function onUploadAttachments(fileList) {
+    const files = Array.from(fileList || []);
+    if (!selected || !files.length) return;
+    setUploadingAttachment(true);
+    setAttachErr('');
+    try {
+      for (const file of files) {
+        if (file.size > MAX_ATTACHMENT_BYTES) {
+          setAttachErr(`«${file.name}» يتجاوز الحد الأقصى (50 ميجابايت)`);
+          continue;
+        }
+        const row = await uploadProjectCostAttachment(selected.id, file);
+        setAttachments((current) => [row, ...current]);
+      }
+    } catch (e) {
+      setAttachErr(e.message || 'تعذّر رفع المستند');
+    } finally {
+      setUploadingAttachment(false);
+    }
+  }
+
+  async function onDeleteAttachment(item) {
+    if (!confirm(`حذف المستند «${item.file_name}»؟`)) return;
+    try {
+      await removeProjectCostAttachment(item.id, item.file_path);
+      setAttachments((current) => current.filter((x) => x.id !== item.id));
+    } catch (e) {
+      setAttachErr(e.message || 'تعذّر حذف المستند');
+    }
+  }
 
   async function changeStatus(status) {
     if (!selected || status === selected.status) return;
@@ -348,7 +389,7 @@ export default function CostPage() {
           <div className="daily-actions">
             <button className="btn" onClick={addDay} type="button">+ إضافة يوم عمل</button>
             <button className="btn ghost" onClick={() => setInvoicePanelOpen(true)} type="button">
-              مرفقات الفواتير {projectInvoices.length ? `(${fmtNum(projectInvoices.length)})` : ''}
+              مرفقات الفواتير {(projectInvoices.length + attachments.length) ? `(${fmtNum(projectInvoices.length + attachments.length)})` : ''}
             </button>
             <button className="btn ghost" onClick={() => window.location.assign(`/projects/${selected.id}/report`)} type="button">تقرير PDF</button>
             <button className="btn ghost" onClick={save} disabled={saving} type="button">{saving ? 'جارٍ الحفظ…' : 'حفظ التكاليف اليومية'}</button>
@@ -358,6 +399,11 @@ export default function CostPage() {
           {invoicePanelOpen && (
             <InvoiceAttachmentsModal
               invoices={projectInvoices}
+              attachments={attachments}
+              uploading={uploadingAttachment}
+              attachErr={attachErr}
+              onUpload={onUploadAttachments}
+              onDeleteAttachment={onDeleteAttachment}
               onClose={() => setInvoicePanelOpen(false)}
             />
           )}
@@ -437,13 +483,27 @@ export default function CostPage() {
               );
             })}
           </div>
+
+          <div className="daily-actions" style={{ marginTop: 16 }}>
+            <button className="btn" onClick={save} disabled={saving} type="button">{saving ? 'جارٍ الحفظ…' : 'حفظ التكاليف اليومية'}</button>
+            {saveMsg && <span>{saveMsg}</span>}
+          </div>
         </>
       )}
     </>
   );
 }
 
-function InvoiceAttachmentsModal({ invoices, onClose }) {
+function fmtFileSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} بايت`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} ك.ب`;
+  return `${(n / (1024 * 1024)).toFixed(1)} م.ب`;
+}
+
+function InvoiceAttachmentsModal({
+  invoices, attachments, uploading, attachErr, onUpload, onDeleteAttachment, onClose,
+}) {
   const total = invoices.reduce((sum, invoice) => sum + num(invoice.total), 0);
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -459,7 +519,7 @@ function InvoiceAttachmentsModal({ invoices, onClose }) {
         </div>
 
         {invoices.length === 0 ? (
-          <Empty title="لا توجد مرفقات" desc="عند إنشاء فاتورة وربطها بهذا المشروع ستظهر هنا." />
+          <Empty title="لا فواتير مرتبطة" desc="عند إنشاء فاتورة وربطها بهذا المشروع ستظهر هنا." />
         ) : (
           <>
             <div className="invoice-attachments-total">
@@ -491,6 +551,44 @@ function InvoiceAttachmentsModal({ invoices, onClose }) {
               })}
             </div>
           </>
+        )}
+
+        <div className="sec-head" style={{ marginTop: 18 }}>
+          <h2>المستندات</h2>
+          <div style={{ marginInlineStart: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="more">{fmtNum(attachments.length)}</span>
+            <label className={`btn sm${uploading ? ' disabled' : ''}`} htmlFor="cost-attachment-file">
+              {uploading ? 'جارٍ الرفع…' : '+ إرفاق مستند'}
+            </label>
+            <input
+              id="cost-attachment-file"
+              type="file"
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+              multiple
+              hidden
+              disabled={uploading}
+              onChange={(e) => { onUpload(e.target.files); e.target.value = ''; }}
+            />
+          </div>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-6px 0 12px' }}>
+          فواتير موردين، إيصالات، أو أي مستند متعلّق بتكلفة هذا المشروع — الحد الأقصى 50 ميجابايت للملف
+        </div>
+        {attachErr && <div className="errbar">{attachErr}</div>}
+        {attachments.length === 0 ? (
+          <Empty title="لا مستندات بعد" desc="اضغط «+ إرفاق مستند» لإضافة أول مستند." />
+        ) : (
+          <div className="invoice-attachments-list">
+            {attachments.map((file) => (
+              <div className="invoice-attachment-row" key={file.id}>
+                <div>
+                  <a className="amt" href={file.file_url} target="_blank" rel="noreferrer">{file.file_name}</a>
+                  <span>{fmtDate(file.created_at)} · {fmtFileSize(file.file_size)}</span>
+                </div>
+                <button className="btn ghost sm" style={{ color: 'var(--neg)' }} type="button" onClick={() => onDeleteAttachment(file)}>حذف</button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

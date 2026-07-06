@@ -7,6 +7,11 @@ import { Loading, Empty, ErrorBar } from '../ui';
 
 const VAT_RATE = 15;
 const blankItem = () => ({ description: '', qty: 1, unit_price: '' });
+function addDaysISO(value, days) {
+  const date = value ? new Date(value) : new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
 
 export default function InvoicesPage() {
   const router = useRouter();
@@ -15,7 +20,7 @@ export default function InvoicesPage() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
-  const [head, setHead] = useState({ client_id: '', project_id: '', number: '', issue_at: '', vat_applicable: true, status: 'unpaid' });
+  const [head, setHead] = useState({ client_id: '', project_id: '', number: '', issue_at: '', due_at: '', vat_applicable: true, status: 'unpaid' });
   const [items, setItems] = useState([blankItem()]);
 
   async function load() {
@@ -27,14 +32,9 @@ export default function InvoicesPage() {
   }
   useEffect(() => { load(); }, []);
 
-  function nextNumber(invoices) {
-    const nums = invoices.map((i) => parseInt(String(i.number).replace(/\D/g, ''), 10)).filter((n) => !isNaN(n));
-    const max = nums.length ? Math.max(...nums) : 1000;
-    return `INV-${max + 1}`;
-  }
-
   function openAdd() {
-    setHead({ client_id: state?.clients[0]?.id || '', project_id: '', number: nextNumber(state.invoices), issue_at: new Date().toISOString().slice(0, 10), vat_applicable: true, status: 'unpaid' });
+    const issue = new Date().toISOString().slice(0, 10);
+    setHead({ client_id: state?.clients[0]?.id || '', project_id: '', number: '', issue_at: issue, due_at: addDaysISO(issue, 14), vat_applicable: true, status: 'unpaid' });
     setItems([blankItem()]); setFormErr(''); setOpen(true);
   }
   function close() { if (!saving) setOpen(false); }
@@ -54,10 +54,11 @@ export default function InvoicesPage() {
     if (validItems.length === 0) { setFormErr('أضف بنداً واحداً على الأقل بوصف وسعر'); return; }
     setSaving(true); setFormErr('');
     const invoice = {
-      number: head.number.trim() || nextNumber(state.invoices),
+      number: head.number.trim() || null,
       client_id: head.client_id,
       project_id: head.project_id || null,
       issue_at: head.issue_at ? new Date(head.issue_at).toISOString() : new Date().toISOString(),
+      due_at: head.due_at || null,
       subtotal, vat_applicable: head.vat_applicable, vat_rate: VAT_RATE, vat_amount: vatAmount, total,
       status: head.status,
     };
@@ -73,8 +74,9 @@ export default function InvoicesPage() {
   if (!state) return <Loading />;
 
   const { invoices, clients, projects, byId } = state;
-  const totalPaid = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + Number(i.total || 0), 0);
+  const totalPaid = invoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
   const totalAll = invoices.reduce((s, i) => s + Number(i.total || 0), 0);
+  const totalRemaining = invoices.reduce((s, i) => s + Number(i.remaining_amount || 0), 0);
   const clientProjects = projects.filter((p) => p.client_id === head.client_id);
 
   return (
@@ -85,7 +87,7 @@ export default function InvoicesPage() {
           فاتورة جديدة
         </button>
         <span className="more" style={{ marginInlineStart: 'auto' }}>
-          {fmtNum(invoices.length)} فاتورة · محصّل {fmtMoney(totalPaid)} من {fmtMoney(totalAll)} ⃁
+          {fmtNum(invoices.length)} فاتورة · محصّل {fmtMoney(totalPaid)} من {fmtMoney(totalAll)} ⃁ · متبقّي {fmtMoney(totalRemaining)} ⃁
         </span>
       </div>
       <div className="card" style={{ padding: '6px 0' }}>
@@ -93,7 +95,7 @@ export default function InvoicesPage() {
           <Empty title="لا توجد فواتير بعد" desc="أنشئ أول فاتورة لمشروع لتظهر هنا." />
         ) : (
           <table>
-            <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>التاريخ</th><th>الإجمالي</th><th>الضريبة</th><th>الحالة</th></tr></thead>
+            <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الإصدار</th><th>الاستحقاق</th><th>الإجمالي</th><th>المحصّل</th><th>المتبقي</th><th>الحالة</th></tr></thead>
             <tbody>
               {invoices.map((inv) => {
                 const st = INVOICE_STATUS[inv.status] || { label: inv.status, cls: 'p-wait' };
@@ -102,15 +104,17 @@ export default function InvoicesPage() {
                     <td><span className="nm amt">{inv.number || '—'}</span></td>
                     <td>{byId[inv.client_id] || '—'}</td>
                     <td>{fmtDate(inv.issue_at)}</td>
+                    <td>{fmtDate(inv.due_at)}</td>
                     <td className="amt">{fmtMoney(inv.total)} ⃁</td>
-                    <td className="amt">{inv.vat_applicable ? `${fmtMoney(inv.vat_amount)} ⃁` : 'معفاة'}</td>
+                    <td className="amt">{fmtMoney(inv.paid_amount)} ⃁</td>
+                    <td className="amt">{fmtMoney(inv.remaining_amount)} ⃁</td>
                     <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
-              <tr><td colSpan={3}><b>الإجمالي</b></td><td className="amt"><b>{fmtMoney(totalAll)} ⃁</b></td><td colSpan={2} /></tr>
+              <tr><td colSpan={4}><b>الإجمالي</b></td><td className="amt"><b>{fmtMoney(totalAll)} ⃁</b></td><td className="amt"><b>{fmtMoney(totalPaid)} ⃁</b></td><td className="amt"><b>{fmtMoney(totalRemaining)} ⃁</b></td><td /></tr>
             </tfoot>
           </table>
         )}
@@ -139,14 +143,13 @@ export default function InvoicesPage() {
                   {clientProjects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
                 </select>
               </div>
-              <div className="field"><label>رقم الفاتورة</label><input value={head.number} onChange={(e) => setH('number', e.target.value)} dir="ltr" /></div>
-              <div className="field"><label>تاريخ الإصدار</label><input type="date" value={head.issue_at} onChange={(e) => setH('issue_at', e.target.value)} dir="ltr" /></div>
+              <div className="field"><label>رقم الفاتورة (اختياري)</label><input value={head.number} onChange={(e) => setH('number', e.target.value)} placeholder="يولّد تلقائياً" dir="ltr" /></div>
+              <div className="field"><label>تاريخ الإصدار</label><input type="date" value={head.issue_at} onChange={(e) => { setH('issue_at', e.target.value); setH('due_at', addDaysISO(e.target.value, 14)); }} dir="ltr" /></div>
+              <div className="field"><label>تاريخ الاستحقاق</label><input type="date" value={head.due_at} onChange={(e) => setH('due_at', e.target.value)} dir="ltr" /></div>
               <div className="field"><label>الحالة</label>
                 <select value={head.status} onChange={(e) => setH('status', e.target.value)}>
                   <option value="draft">مسودة</option>
                   <option value="unpaid">غير مدفوعة</option>
-                  <option value="paid">مدفوعة</option>
-                  <option value="overdue">متأخرة</option>
                 </select>
               </div>
               <div className="field"><label>الضريبة (15%)</label>

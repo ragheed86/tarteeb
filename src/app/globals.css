@@ -246,6 +246,20 @@ tr.clickable{cursor:pointer}
 .permission-check span{display:block}
 .permission-check b{display:block;font-size:13.5px}
 .permission-check small{display:block;color:var(--muted);font-size:11.5px;margin-top:1px}
+.combobox{position:relative}
+.combobox-trigger{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:var(--surface);color:var(--ink);font-family:var(--body);font-size:14px;cursor:pointer;text-align:start}
+.combobox-trigger .ph{color:var(--faint)}
+.combobox-trigger svg{flex-shrink:0;color:var(--muted)}
+.combobox-pop{position:absolute;z-index:5;top:calc(100% + 4px);inset-inline-start:0;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 40px rgba(39,33,64,.18);padding:8px;overflow:hidden}
+.combobox-search{width:100%;margin-bottom:6px}
+.combobox-list{max-height:240px;overflow-y:auto;display:flex;flex-direction:column}
+.combobox-opt{display:flex;align-items:center;gap:9px;width:100%;text-align:start;padding:8px 10px;border:0;border-radius:9px;background:transparent;color:var(--ink);font-family:var(--body);font-size:13.5px;cursor:pointer}
+.combobox-opt:hover{background:var(--surface-2)}
+.combobox-opt.sel{background:var(--sage-bg);color:var(--pine);font-weight:500}
+.combobox-opt .cflag{font-size:17px;line-height:1;flex-shrink:0}
+.combobox-opt .cnm{flex:1}
+.combobox-opt .cen{color:var(--faint);font-size:11.5px}
+.combobox-empty{padding:14px;text-align:center;color:var(--muted);font-size:13px}
 .notebar{background:var(--gold-bg);border:1px solid #E8D6AC;border-radius:11px;padding:11px 16px;font-size:13px;color:#7c5c1c;margin-bottom:18px}
 .perm{display:flex;align-items:center;gap:14px;padding:14px 4px;border-bottom:1px solid var(--surface-2);font-size:13.5px}
 .perm:last-child{border-bottom:0}

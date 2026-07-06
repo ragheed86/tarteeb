@@ -1,17 +1,26 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getEmployees, createEmployee, updateEmployee, removeEmployee,
   getEmployeeDocuments, createEmployeeDocument, removeEmployeeDocument,
+  uploadEmployeePhoto,
 } from '@/lib/data';
 import { fmtNum, fmtDate } from '@/lib/format';
+import { COUNTRIES_SORTED, countryByCode } from '@/lib/countries';
 import { Loading, Empty, ErrorBar } from '../ui';
 
 const WAGE = { fixed: 'ثابت', daily: 'يومي', hourly: 'بالساعة' };
 const STATUS = { active: { label: 'نشط', cls: 'p-prog' }, on_project: { label: 'في مشروع', cls: 'p-quote' }, inactive: { label: 'غير نشط', cls: 'p-wait' } };
 const DOC_TYPE = { national_id: 'هوية وطنية', iqama: 'إقامة', contract: 'عقد', health_cert: 'شهادة صحية', driving_license: 'رخصة قيادة', other: 'أخرى' };
 
-const EMPTY = { name: '', role: '', phone: '', national_id: '', wage: 'fixed', status: 'active', photo_url: '' };
+const ROLE_GROUPS = [
+  { group: 'الإدارة', items: [['المدير العام', 'General Manager'], ['مدير العمليات', 'Operations Manager'], ['مسؤول المبيعات', 'Sales Officer']] },
+  { group: 'التشغيل', items: [['مشرف مشروع', 'Project Supervisor'], ['منظم مساحات', 'Space Organizer'], ['عامل مساعد', 'Assistant Worker'], ['مسؤول مشتريات', 'Purchasing Officer'], ['مسؤول مخزون', 'Inventory Officer'], ['محاسب', 'Accountant']] },
+  { group: 'التسويق والإسناد', items: [['مسؤول تسويق', 'Marketing Officer'], ['صانع محتوى', 'Content Creator'], ['مصور', 'Photographer'], ['سائق', 'Driver'], ['مشرف جودة', 'Quality Supervisor']] },
+];
+const KNOWN_ROLES = ROLE_GROUPS.flatMap((g) => g.items.map(([ar]) => ar));
+
+const EMPTY = { name: '', role: '', phone: '', national_id: '', nationality: '', wage: 'fixed', status: 'active', photo_url: '' };
 
 function daysUntil(d) {
   if (!d) return null;
@@ -32,6 +41,7 @@ export default function EmployeesPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [photoPreview, setPhotoPreview] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [docFor, setDocFor] = useState(null); // الموظف الذي تُعرض مستنداته
@@ -47,17 +57,29 @@ export default function EmployeesPage() {
     setEditing(em);
     setForm({
       name: em.name || '', role: em.role || '', phone: em.phone || '', national_id: em.national_id || '',
+      nationality: em.nationality || '',
       wage: em.wage || 'fixed', status: em.status || 'active', photo_url: em.photo_url || '',
     });
     setPhotoPreview('');
     setFormErr(''); setOpen(true);
   }
-  function close() { if (!saving) { setOpen(false); setEditing(null); setPhotoPreview(''); } }
+  function close() { if (!saving && !uploadingPhoto) { setOpen(false); setEditing(null); setPhotoPreview(''); } }
 
-  function handlePhotoFile(e) {
+  async function handlePhotoFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     setPhotoPreview(URL.createObjectURL(file));
+    setUploadingPhoto(true); setFormErr('');
+    try {
+      const url = await uploadEmployeePhoto(file);
+      setForm((f) => ({ ...f, photo_url: url }));
+    } catch (e2) {
+      setFormErr(e2.message || 'تعذّر رفع الصورة');
+      setPhotoPreview('');
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
+    }
   }
 
   async function submit(e) {
@@ -67,6 +89,7 @@ export default function EmployeesPage() {
     const payload = {
       name: form.name.trim(), role: form.role.trim() || null, phone: form.phone.trim() || null,
       national_id: form.national_id.trim() || null,
+      nationality: form.nationality || null,
       wage: form.wage, status: form.status, photo_url: form.photo_url.trim() || null,
     };
     try {
@@ -118,6 +141,7 @@ export default function EmployeesPage() {
                 <div className="pb">
                   <h3>{em.name}</h3>
                   <div className="cl">{em.role || 'بدون دور'}{em.national_id ? ` · هوية/إقامة ${em.national_id}` : ''}</div>
+                  {(() => { const c = countryByCode(em.nationality); return c ? <div className="cl" style={{ marginTop: 2 }}>{c.flag} {c.ar}</div> : null; })()}
                   <div className="row">
                     <span className={`pill ${st.cls}`}>{st.label}</span>
                     <span>{WAGE[em.wage] || em.wage || '—'}</span>
@@ -147,7 +171,20 @@ export default function EmployeesPage() {
             {formErr && <div className="errbar">{formErr}</div>}
             <div className="form-grid">
               <div className="field span-2"><label>الاسم</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
-              <div className="field"><label>الدور</label><input value={form.role} onChange={(e) => set('role', e.target.value)} placeholder="مشرف / فني / محاسب…" /></div>
+              <div className="field"><label>الدور</label>
+                <select value={form.role} onChange={(e) => set('role', e.target.value)}>
+                  <option value="">— اختر الدور —</option>
+                  {form.role && !KNOWN_ROLES.includes(form.role) && <option value={form.role}>{form.role}</option>}
+                  {ROLE_GROUPS.map((g) => (
+                    <optgroup key={g.group} label={g.group}>
+                      {g.items.map(([ar, en]) => <option key={ar} value={ar}>{ar} | {en}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div className="field"><label>الجنسية</label>
+                <NationalityPicker value={form.nationality} onChange={(code) => set('nationality', code)} />
+              </div>
               <div className="field"><label>الجوال</label><input value={form.phone} onChange={(e) => set('phone', e.target.value)} dir="ltr" inputMode="tel" /></div>
               <div className="field"><label>رقم الهوية/الإقامة</label><input value={form.national_id} onChange={(e) => set('national_id', e.target.value)} dir="ltr" inputMode="numeric" /></div>
               <div className="field"><label>نوع الأجر</label>
@@ -163,21 +200,21 @@ export default function EmployeesPage() {
               <div className="field span-2">
                 <label>صورة الموظف</label>
                 <div className="upload-row">
-                  <label className="btn ghost sm" htmlFor="employee-photo">رفع صورة الموظف</label>
-                  <input id="employee-photo" type="file" accept="image/*" hidden onChange={handlePhotoFile} />
+                  <label className="btn ghost sm" htmlFor="employee-photo">{uploadingPhoto ? 'جارٍ الرفع…' : 'رفع صورة الموظف'}</label>
+                  <input id="employee-photo" type="file" accept="image/*" hidden disabled={uploadingPhoto} onChange={handlePhotoFile} />
                   <input
                     value={form.photo_url} onChange={(e) => set('photo_url', e.target.value)} dir="ltr"
                     placeholder="أو الصق رابط الصورة المستضافة" style={{ flex: 1, minWidth: 200 }}
                   />
                 </div>
                 {(photoPreview || form.photo_url) && (
-                  <img className="upload-preview" src={photoPreview || form.photo_url} alt="صورة الموظف" style={{ maxWidth: 140, borderRadius: '50%', aspectRatio: '1/1' }} />
+                  <img className="upload-preview" src={photoPreview || form.photo_url} alt="صورة الموظف" style={{ maxWidth: 140, borderRadius: '50%', aspectRatio: '1/1', objectFit: 'cover', opacity: uploadingPhoto ? 0.5 : 1 }} />
                 )}
               </div>
             </div>
             <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الموظف'}</button>
+              <button className="btn ghost" type="button" onClick={close} disabled={saving || uploadingPhoto}>إلغاء</button>
+              <button className="btn" type="submit" disabled={saving || uploadingPhoto}>{saving ? 'جارٍ الحفظ…' : 'حفظ الموظف'}</button>
             </div>
           </form>
         </div>
@@ -185,6 +222,54 @@ export default function EmployeesPage() {
 
       {docFor && <DocsModal employee={docFor} onClose={() => setDocFor(null)} />}
     </>
+  );
+}
+
+function NationalityPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef(null);
+  const selected = countryByCode(value);
+
+  const list = useMemo(() => {
+    const term = q.trim();
+    if (!term) return COUNTRIES_SORTED;
+    const low = term.toLowerCase();
+    return COUNTRIES_SORTED.filter((c) => c.ar.includes(term) || c.en.toLowerCase().includes(low));
+  }, [q]);
+
+  useEffect(() => {
+    function onDoc(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  function pick(code) { onChange(code); setOpen(false); setQ(''); }
+
+  return (
+    <div className="combobox" ref={ref}>
+      <button type="button" className="combobox-trigger" onClick={() => setOpen((o) => !o)}>
+        {selected ? <span>{selected.flag} {selected.ar}</span> : <span className="ph">— اختر الجنسية —</span>}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <div className="combobox-pop">
+          <input className="combobox-search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث عن جنسية" />
+          <div className="combobox-list">
+            {value && <button type="button" className="combobox-opt" onClick={() => pick('')}>— بدون —</button>}
+            {list.length === 0 ? (
+              <div className="combobox-empty">لا نتائج</div>
+            ) : list.map((c) => (
+              <button key={c.code} type="button" className={`combobox-opt${c.code === value ? ' sel' : ''}`} onClick={() => pick(c.code)}>
+                <span className="cflag">{c.flag}</span>
+                <span className="cnm">{c.ar}</span>
+                <span className="cen" dir="ltr">{c.en}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

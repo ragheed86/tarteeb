@@ -572,6 +572,18 @@ export async function removeInventoryItem(id) {
 // ============================================================
 //  الموظفون · CRUD + مستندات
 // ============================================================
+// يرفع صورة الموظف إلى حاوية التخزين العامة ويعيد الرابط العام
+const EMPLOYEE_PHOTOS_BUCKET = 'employee-photos';
+export async function uploadEmployeePhoto(file) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: upErr } = await supabase.storage.from(EMPLOYEE_PHOTOS_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (upErr) throw upErr;
+  const { data: pub } = supabase.storage.from(EMPLOYEE_PHOTOS_BUCKET).getPublicUrl(path);
+  return pub.publicUrl;
+}
+
 export async function createEmployee(p) {
   const { data, error } = await supabase.from('employees').insert(p).select('*').single();
   if (error) throw error; return data;

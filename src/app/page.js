@@ -101,7 +101,8 @@ export default function Dashboard() {
   const periodSales = periodProjects.reduce((s, p) => s + Number(p.sale_price || 0), 0);
   const periodProfit = periodProjects.reduce((s, p) => s + (Number(p.sale_price || 0) - (data.costByProject[p.id] || 0)), 0);
   const periodMargin = periodSales > 0 ? Math.round((periodProfit / periodSales) * 100) : 0;
-  const periodNewClients = data.clients.filter((c) => withinDays(c.created_at, days)).length;
+  // يفضَّل تاريخ أول تواصل الحقيقي؛ created_at يعكس تاريخ الإدخال لا اكتساب العميل
+  const periodNewClients = data.clients.filter((c) => withinDays(c.first_contact_at || c.created_at, days)).length;
 
   // إيرادات الفواتير المدفوعة لآخر 6 أشهر تقويمية
   const now = new Date();

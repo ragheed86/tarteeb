@@ -7,6 +7,7 @@ import {
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, displayProgress, OPEN_DELIVERY_STATUSES } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from './ui';
+import AnimatedNumber from './AnimatedNumber';
 
 const ACTIVE = ['quote', 'preparing', 'in_progress'];
 const OPEN_DELIVERY = OPEN_DELIVERY_STATUSES;
@@ -151,12 +152,12 @@ export default function Dashboard() {
         </div>
       </div>
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-        <div className="kpi"><div className="lbl">{PERIOD_LABEL[period]}</div><div className="val">{fmtMoney(periodRevenue)} ⃁</div><div className="trend"><span>فواتير مدفوعة خلال الفترة</span></div></div>
-        <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val">{fmtMoney(periodProfit)} ⃁</div><div className="trend"><span>سعر البيع بعد خصم التكاليف</span></div></div>
-        <div className="kpi"><div className="lbl">هامش الربح</div><div className="val">{fmtNum(periodMargin)}%</div><div className="trend"><span>على مستوى المشاريع</span></div></div>
-        <div className="kpi"><div className="lbl">العملاء الجدد</div><div className="val">{fmtNum(periodNewClients)}</div><div className="trend"><span>خلال الفترة المختارة</span></div></div>
-        <div className="kpi"><div className="lbl">مشاريع نشطة</div><div className="val">{fmtNum(data.activeProjects)}</div><div className="trend"><span>{fmtNum(data.upcoming.length)} تسليم قريب</span></div></div>
-        <div className="kpi alert"><div className="lbl">تنبيهات المستودع</div><div className="val">{fmtNum(data.lowStock.length)}</div><div className="trend down">أصناف وصلت حد النفاد</div></div>
+        <div className="kpi"><div className="lbl">{PERIOD_LABEL[period]}</div><div className="val"><AnimatedNumber value={periodRevenue} format={fmtMoney} /> ⃁</div><div className="trend"><span>فواتير مدفوعة خلال الفترة</span></div></div>
+        <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val"><AnimatedNumber value={periodProfit} format={fmtMoney} /> ⃁</div><div className="trend"><span>سعر البيع بعد خصم التكاليف</span></div></div>
+        <div className="kpi"><div className="lbl">هامش الربح</div><div className="val"><AnimatedNumber value={periodMargin} format={fmtNum} />%</div><div className="trend"><span>على مستوى المشاريع</span></div></div>
+        <div className="kpi"><div className="lbl">العملاء الجدد</div><div className="val"><AnimatedNumber value={periodNewClients} format={fmtNum} /></div><div className="trend"><span>خلال الفترة المختارة</span></div></div>
+        <div className="kpi"><div className="lbl">مشاريع نشطة</div><div className="val"><AnimatedNumber value={data.activeProjects} format={fmtNum} /></div><div className="trend"><span>{fmtNum(data.upcoming.length)} تسليم قريب</span></div></div>
+        <div className="kpi alert"><div className="lbl">تنبيهات المستودع</div><div className="val"><AnimatedNumber value={data.lowStock.length} format={fmtNum} /></div><div className="trend down">أصناف وصلت حد النفاد</div></div>
       </div>
 
       <div className="grid2">

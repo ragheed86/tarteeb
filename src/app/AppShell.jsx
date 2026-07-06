@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Toaster } from './toast';
 import { supabase, supabaseReady } from '@/lib/supabase';
 import { ROLE_LABELS, canAccess, permissionForPath } from '@/lib/permissions';
 import { useAccess } from '@/lib/useAccess';
@@ -36,8 +37,18 @@ export default function AppShell({ children }) {
   const pathname = usePathname();
   const { session, access } = useAccess();
   const [open, setOpen] = useState(false);
+  const navRef = useRef(null);
+  const [glide, setGlide] = useState(null);
 
   useEffect(() => setOpen(false), [pathname]); // إغلاق القائمة عند التنقّل
+
+  // مؤشر منزلق خلف الرابط النشط في الشريط الجانبي
+  useEffect(() => {
+    const nav = navRef.current;
+    const link = nav?.querySelector('a.active');
+    if (!link) { setGlide(null); return; }
+    setGlide({ top: link.offsetTop, height: link.offsetHeight });
+  }, [pathname, session, access]);
   useRouteMemory(Boolean(session)); // يستعيد آخر مسار عند إطلاق بارد للتطبيق (PWA) على الشاشة الرئيسية
 
   if (session === undefined || (session && access === undefined)) {
@@ -64,7 +75,8 @@ export default function AppShell({ children }) {
           <div className="mark"><span /><span /><span /><span /></div>
           <div><h1>ترتيب</h1><small>نظام إدارة الأعمال</small></div>
         </div>
-        <nav className="nav">
+        <nav className={`nav${glide ? ' has-glider' : ''}`} ref={navRef}>
+          {glide && <span className="nav-glider" style={{ top: glide.top, height: glide.height }} aria-hidden="true" />}
           {visibleNav.map((g, gi) => (
             <div key={gi}>
               {g.group && <div className="nav-label">{g.group}</div>}
@@ -110,6 +122,7 @@ export default function AppShell({ children }) {
         })}
       </nav>
       <IOSInstallBanner />
+      <Toaster />
     </div>
   );
 }

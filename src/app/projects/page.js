@@ -413,8 +413,8 @@ export default function ProjectsPage() {
                       className="kcard"
                       key={p.id}
                       draggable
-                      onDragStart={(e) => e.dataTransfer.setData('text/plain', p.id)}
-                      onDragEnd={() => setDragCol(null)}
+                      onDragStart={(e) => { e.dataTransfer.setData('text/plain', p.id); e.currentTarget.classList.add('dragging'); }}
+                      onDragEnd={(e) => { e.currentTarget.classList.remove('dragging'); setDragCol(null); }}
                       onClick={() => router.push(`/projects/${p.id}`)}
                     >
                       <h4>{p.title}</h4>

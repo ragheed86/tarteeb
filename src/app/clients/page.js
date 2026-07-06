@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { createClient, updateClient, removeClient, getClients, getEmployees } from '@/lib/data';
 import { fmtNum, CLIENT_STATUS, SOURCE_LABEL } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
+import { toast } from '../toast';
 
 // القائمة الكاملة لأحياء الرياض (ويكيبيديا: https://ar.wikipedia.org/wiki/أحياء_الرياض)
 const RIYADH_DISTRICTS = [
@@ -81,6 +82,7 @@ function ClientsPageInner() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
+  const [popped, setPopped] = useState(null); // آخر عميل تغيّرت حالته — لنبضة الـpill
 
   useEffect(() => {
     Promise.all([getClients(), getEmployees()])
@@ -161,20 +163,22 @@ function ClientsPageInner() {
     try {
       await removeClient(c.id);
       setClients((current) => (current || []).filter((x) => x.id !== c.id));
+      toast(`حُذف العميل «${c.name}»`);
     } catch (error) {
-      setErr(error.message || 'تعذّر الحذف');
+      toast(error.message || 'تعذّر الحذف', 'err');
     }
   }
 
   async function changeStatus(c, status) {
     if (status === c.status) return;
     const prev = c.status;
+    setPopped(c.id);
     setClients((current) => (current || []).map((x) => (x.id === c.id ? { ...x, status } : x)));
     try {
       await updateClient(c.id, { status });
     } catch (error) {
       setClients((current) => (current || []).map((x) => (x.id === c.id ? { ...x, status: prev } : x)));
-      setErr(error.message || 'تعذّر تحديث الحالة');
+      toast(error.message || 'تعذّر تحديث الحالة', 'err');
     }
   }
 
@@ -228,7 +232,8 @@ function ClientsPageInner() {
                     <td>{c.district || '—'}</td>
                     <td>
                       <select
-                        className={`status-select pill ${st.cls}`}
+                        key={c.status}
+                        className={`status-select pill ${popped === c.id ? 'pop ' : ''}${st.cls}`}
                         value={c.status || 'active'}
                         onChange={(e) => changeStatus(c, e.target.value)}
                         aria-label={`حالة العميل ${c.name}`}

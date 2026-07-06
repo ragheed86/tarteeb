@@ -855,3 +855,68 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
 @media(max-width:768px) and (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
 }
+
+/* ============================================================
+   طبقة الحركة (Motion Layer) — منحنى موحّد + مدد قصيرة
+   ============================================================ */
+:root{--ease-m:cubic-bezier(.22,1,.36,1);--spring-m:cubic-bezier(.34,1.56,.64,1)}
+@keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes popIn{0%{transform:scale(.9)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
+@keyframes growUp{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes modalUp{from{opacity:0;transform:translateY(26px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes toastOut{to{opacity:0;transform:translateY(8px)}}
+@keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* المرحلة 1 — دخول متدرّج + تفاعلات دقيقة */
+.page-enter{animation:pageIn .32s var(--ease-m) both}
+.card,.pcard{animation:riseIn .45s var(--ease-m) both}
+.kpis .kpi{animation:riseIn .5s var(--ease-m) both;transition:transform .25s var(--ease-m),box-shadow .25s var(--ease-m)}
+.kpis .kpi:hover{transform:translateY(-4px)}
+.kpis .kpi:nth-child(2){animation-delay:.06s}.kpis .kpi:nth-child(3){animation-delay:.12s}
+.kpis .kpi:nth-child(4){animation-delay:.18s}.kpis .kpi:nth-child(5){animation-delay:.24s}
+.kpis .kpi:nth-child(6){animation-delay:.3s}.kpis .kpi:nth-child(7){animation-delay:.36s}.kpis .kpi:nth-child(8){animation-delay:.42s}
+.pgrid .pcard:nth-child(2){animation-delay:.05s}.pgrid .pcard:nth-child(3){animation-delay:.1s}
+.pgrid .pcard:nth-child(4){animation-delay:.15s}.pgrid .pcard:nth-child(5){animation-delay:.2s}
+.pgrid .pcard:nth-child(6){animation-delay:.25s}.pgrid .pcard:nth-child(n+7){animation-delay:.3s}
+.pcard{transition:transform .22s var(--ease-m),box-shadow .22s var(--ease-m)}
+.pcard:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(91,61,196,.12)}
+.btn{transition:background .15s,opacity .15s,transform .12s ease}
+.btn:active{transform:scale(.96)}
+.pill{transition:background .25s,color .25s}
+.pill.pop{animation:popIn .35s var(--spring-m)}
+
+/* المرحلة 2 — مخطط الأعمدة + المودالات + الهيكل العظمي + المؤشر المنزلق */
+.bars .bar .fill{transform-origin:bottom;animation:growUp .7s var(--ease-m) both}
+.bars .bar:nth-child(2) .fill{animation-delay:.08s}.bars .bar:nth-child(3) .fill{animation-delay:.16s}
+.bars .bar:nth-child(4) .fill{animation-delay:.24s}.bars .bar:nth-child(5) .fill{animation-delay:.32s}
+.bars .bar:nth-child(6) .fill{animation-delay:.4s}
+.modal-backdrop{animation:fadeIn .22s ease both}
+.modal-card{animation:modalUp .38s var(--ease-m) both}
+.skeleton{display:flex;flex-direction:column;gap:13px;padding:26px 22px}
+.sk-bar{height:14px;border-radius:8px;background:linear-gradient(90deg,var(--surface-2) 25%,#E4DEF7 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.4s linear infinite}
+.nav{position:relative}
+.nav a{position:relative;z-index:1}
+.nav-glider{position:absolute;inset-inline:0;border-radius:11px;background:linear-gradient(135deg,#8A6CFF,#6C4DE0);box-shadow:0 6px 16px rgba(108,77,224,.32);transition:top .32s var(--ease-m),height .32s var(--ease-m);z-index:0;pointer-events:none}
+.nav.has-glider a.active{background:transparent;box-shadow:none}
+
+/* المرحلة 3 — سحب الكانبان + التوست */
+.kcard{transition:transform .2s var(--ease-m),box-shadow .2s var(--ease-m);cursor:grab}
+.kcard:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(91,61,196,.1)}
+.kcard.dragging{opacity:.55;transform:rotate(2deg) scale(1.02);cursor:grabbing}
+.toaster{position:fixed;bottom:22px;inset-inline-start:50%;transform:translateX(50%);display:flex;flex-direction:column;gap:8px;z-index:120;pointer-events:none}
+.toast{display:flex;align-items:center;gap:9px;background:var(--ink);color:#fff;font-size:13.5px;padding:11px 18px;border-radius:12px;box-shadow:0 12px 34px rgba(39,33,64,.28);animation:toastIn .3s var(--spring-m) both,toastOut .3s ease 3s both;white-space:nowrap}
+.toast svg{flex-shrink:0}
+.toast.ok svg{color:#7BE3B0}
+.toast.err{background:#8E3040}
+@media(max-width:768px){.toaster{bottom:calc(86px + env(safe-area-inset-bottom));width:calc(100% - 32px)}.toast{white-space:normal;justify-content:center}}
+
+/* احترام تفضيل تقليل الحركة على كل المقاسات */
+@media (prefers-reduced-motion:reduce){
+  .page-enter,.card,.pcard,.kpis .kpi,.bars .bar .fill,.modal-backdrop,.modal-card,.pill.pop,.toast{animation:none!important}
+  .sk-bar{animation:none}
+  .nav-glider{transition:none}
+  .kpis .kpi,.pcard,.kcard,.btn{transition:none}
+}

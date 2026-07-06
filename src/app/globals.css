@@ -674,7 +674,7 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
 
   .btn,.btn.sm,.btn.ghost{min-height:44px;min-width:44px;padding:11px 15px;border-radius:12px;justify-content:center}
   .btn.sm{font-size:13px}
-  .chip,.settab{min-height:40px}
+  .chip,.fchip{min-height:40px}
   .pill,.src{min-height:28px;align-items:center}
   a,button,label,select,input[type=checkbox]{touch-action:manipulation}
   .x-btn{display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px}

@@ -23,6 +23,12 @@ function withinDays(date, days) {
   const diff = (Date.now() - new Date(date).getTime()) / 86400000;
   return diff >= 0 && diff <= days;
 }
+// صيغة مختصرة للقيم على أعمدة المخطط: 13229 → «13.2K»، 950 → «950»
+function compactMoney(n) {
+  const v = Number(n) || 0;
+  if (v >= 1000) return `${(v / 1000).toFixed(v >= 100000 ? 0 : 1).replace(/\.0$/, '')}K`;
+  return String(Math.round(v));
+}
 
 const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // حد Supabase الافتراضي 50 ميجابايت
 
@@ -165,11 +171,17 @@ export default function Dashboard() {
         <div className="card">
           <div className="sec-head"><h2>الإيرادات المحصّلة</h2><span className="more">آخر 6 أشهر</span></div>
           <div className="bars">
-            {months.map((m, i) => (
-              <div className={`bar${i === months.length - 1 ? ' cur' : ''}`} key={`${m.year}-${m.month}`}>
-                <div className="col"><div className="fill" style={{ height: `${Math.round((monthTotals[i] / maxMonth) * 100)}%` }} /></div><small>{m.label}</small>
-              </div>
-            ))}
+            {months.map((m, i) => {
+              const val = monthTotals[i];
+              const pct = val > 0 ? Math.max(Math.round((val / maxMonth) * 100), 8) : 0;
+              return (
+                <div className={`bar${i === months.length - 1 ? ' cur' : ''}`} key={`${m.year}-${m.month}`} title={`${m.label}: ${fmtMoney(val)} ⃁`}>
+                  <span className="bval">{val > 0 ? compactMoney(val) : ''}</span>
+                  <div className="col"><div className="fill" style={{ height: `${pct}%` }} /></div>
+                  <small>{m.label}</small>
+                </div>
+              );
+            })}
           </div>
         </div>
         <div className="card">

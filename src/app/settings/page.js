@@ -47,6 +47,11 @@ const NAV = [
   },
 ];
 
+async function authHeaders() {
+  const { data } = await supabase.auth.getSession();
+  return { Authorization: `Bearer ${data.session?.access_token || ''}` };
+}
+
 const TITLES = {
   suppliers: { title: 'الموردون', icon: IconTruck },
   team: { title: 'الفريق والصلاحيات', icon: IconUsers },
@@ -62,12 +67,11 @@ export default function SettingsPage() {
   const [err, setErr] = useState('');
 
   async function loadUsers() {
-    const { data, error } = await supabase
-      .from('app_user_access')
-      .select('user_id,email,display_name,role,permissions,active,created_at,updated_at')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    setUsers(data || []);
+    // القراءة عبر API الأدمن حتى تعمل الشاشة لأي مدير (لا للأدمن الأساسي فقط كما مع RLS المباشرة)
+    const res = await fetch('/api/admin/users', { headers: await authHeaders() });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'تعذّر تحميل المستخدمين');
+    setUsers(json.users || []);
   }
 
   useEffect(() => {
@@ -310,14 +314,7 @@ function GovPanel() {
       <div className="notebar">جدول موحّد لحسابات الجهات الحكومية وبيانات الدخول والمستندات وتواريخ الانتهاء. ينبّه النظام قبل 30 يوماً من انتهاء أي رخصة.</div>
       <div className="card">
         <div className="sec-head"><h2>الجهات الحكومية والرخص</h2><Link className="btn" href="/government">فتح إدارة الجهات</Link></div>
-        <table>
-          <thead><tr><th>#</th><th>الجهة</th><th>الدخول</th><th>المستندات</th><th>الحالة</th></tr></thead>
-          <tbody>
-            {['البنك', 'بلدي', 'قوى', 'أبشر أعمال', 'وزارة الموارد البشرية', 'مقيم', 'الدفاع المدني (سلامة)', 'هيئة الزكاة والضريبة والجمارك', 'البريد السعودي (سبل)', 'التأمينات الاجتماعية', 'الغرفة التجارية', 'وزارة التجارة'].map((name, i) => (
-              <tr key={name}><td>{i + 1}</td><td className="nm">{name}</td><td><span className="link">فتح ↗</span></td><td><span className="link">📎 إرفاق</span></td><td><span className="pill p-wait">غير مكتمل</span></td></tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="note" style={{ textAlign: 'start' }}>تُدار الجهات (قوى، أبشر أعمال، الزكاة، البلدية…) من صفحة الجهات الحكومية: إضافة الحسابات، مراجع الأسرار، وتواريخ انتهاء الرخص.</div>
       </div>
     </div>
   );
@@ -351,11 +348,6 @@ function UserPermissions({ users, reload }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
-
-  async function authHeaders() {
-    const { data } = await supabase.auth.getSession();
-    return { Authorization: `Bearer ${data.session?.access_token || ''}` };
-  }
 
   const filtered = useMemo(() => {
     if (!users) return null;
@@ -403,22 +395,13 @@ function UserPermissions({ users, reload }) {
     e.preventDefault();
     setBusy(true); setErr(''); setMsg('');
     try {
-      if (editing && !form.password) {
-        const { error } = await supabase.from('app_user_access').upsert({
-          user_id: form.user_id, email: form.email, display_name: form.display_name || null,
-          role: isPrimaryAdmin(form.email) ? 'admin' : form.role,
-          permissions: isPrimaryAdmin(form.email) ? ALL_PERMISSIONS : form.permissions,
-          active: isPrimaryAdmin(form.email) ? true : form.active,
-        }, { onConflict: 'user_id' });
-        if (error) throw error;
-      } else {
-        const res = await fetch('/api/admin/users', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-          body: JSON.stringify(form),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'تعذّر حفظ المستخدم');
-      }
+      // كل عمليات الإنشاء والتعديل تمر عبر API الأدمن (يتكفّل بالتحقق وحماية الأدمن الأساسي)
+      const res = await fetch('/api/admin/users', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+        body: JSON.stringify(form),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'تعذّر حفظ المستخدم');
       setMsg(editing ? 'تم تحديث صلاحيات المستخدم' : 'تم إنشاء المستخدم وتفعيل صلاحياته');
       await reload();
       setEditorOpen(false); setEditing(null);
@@ -432,8 +415,11 @@ function UserPermissions({ users, reload }) {
     if (!confirm(`تعطيل دخول ${user.email}؟`)) return;
     setBusy(true); setErr(''); setMsg('');
     try {
-      const { error } = await supabase.from('app_user_access').update({ active: false }).eq('user_id', user.user_id);
-      if (error) throw error;
+      const res = await fetch(`/api/admin/users?user_id=${encodeURIComponent(user.user_id)}`, {
+        method: 'DELETE', headers: await authHeaders(),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'تعذّر تعطيل المستخدم');
       setMsg('تم تعطيل المستخدم'); await reload();
     } catch (e2) { setErr(e2.message || 'تعذّر تعطيل المستخدم'); }
     finally { setBusy(false); }

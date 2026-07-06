@@ -9,13 +9,23 @@ import { supabase } from './supabase';
 export async function getClients() {
   const { data, error } = await supabase
     .from('clients')
-    .select('id,code,name,phone,source,district,status,first_contact_at,notes,created_at')
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
     .order('created_at', { ascending: false });
   if (error) throw error; return data;
 }
 export async function getClient(id) {
   const { data, error } = await supabase.from('clients').select('*').eq('id', id).single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  // جلب اسم المُحيل (عميل أو موظف) إن وُجد
+  const [refClient, refEmployee] = await Promise.all([
+    data.referred_by_client_id
+      ? supabase.from('clients').select('id,name').eq('id', data.referred_by_client_id).maybeSingle().then((r) => r.data)
+      : null,
+    data.referred_by_employee_id
+      ? supabase.from('employees').select('id,name').eq('id', data.referred_by_employee_id).maybeSingle().then((r) => r.data)
+      : null,
+  ]);
+  return { ...data, referred_by_client: refClient || null, referred_by_employee: refEmployee || null };
 }
 export async function createClient(input) {
   const payload = {
@@ -26,11 +36,13 @@ export async function createClient(input) {
     status: input.status || 'active',
     first_contact_at: input.first_contact_at || null,
     notes: input.notes?.trim() || null,
+    referred_by_client_id: input.referred_by_client_id || null,
+    referred_by_employee_id: input.referred_by_employee_id || null,
   };
   const { data, error } = await supabase
     .from('clients')
     .insert(payload)
-    .select('id,code,name,phone,source,district,status,first_contact_at,notes,created_at')
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
     .single();
   if (error) throw error; return data;
 }
@@ -44,11 +56,13 @@ export async function updateClient(id, input) {
   if (input.status !== undefined) payload.status = input.status || 'active';
   if (input.first_contact_at !== undefined) payload.first_contact_at = input.first_contact_at || null;
   if (input.notes !== undefined) payload.notes = input.notes?.trim() || null;
+  if (input.referred_by_client_id !== undefined) payload.referred_by_client_id = input.referred_by_client_id || null;
+  if (input.referred_by_employee_id !== undefined) payload.referred_by_employee_id = input.referred_by_employee_id || null;
   const { data, error } = await supabase
     .from('clients')
     .update(payload)
     .eq('id', id)
-    .select('id,code,name,phone,source,district,status,first_contact_at,notes,created_at')
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
     .single();
   if (error) throw error; return data;
 }
@@ -97,21 +111,6 @@ export async function getAllProjectCosts() {
 }
 // بنود «الجدول التقديري» (عمالة/إشراف/مواد/نقل/أخرى بلا وصف مخصّص) مقابل بنود التكلفة الحرة
 // التي يضيفها المستخدم يدوياً بنوع ووصف ومبلغ من اختياره.
-function isManagedCostRow(c) {
-  const managedLabels = new Set(['عمالة', 'إشراف']);
-  const managedKinds = new Set(['materials', 'transport', 'other']);
-  return (c.kind === 'labor' && (managedLabels.has(c.label) || String(c.label || '').startsWith('عمالة:') || c.note))
-    || (c.kind === 'materials' && (!c.label || String(c.label || '').startsWith('منتج:') || c.product_name))
-    || (managedKinds.has(c.kind) && !c.label);
-}
-function isDailyCostRow(c) {
-  return Boolean(c.work_date) || String(c.label || '').startsWith('يومي:');
-}
-export function splitManagedCosts(costs) {
-  const managed = []; const adhoc = [];
-  for (const c of costs || []) ((isManagedCostRow(c) || isDailyCostRow(c)) ? managed : adhoc).push(c);
-  return { managed, adhoc };
-}
 // يستبدل بنود الجدول التقديري فقط دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً
 export async function saveProjectCosts(projectId, rows, options = {}) {
   const scope = options.scope || 'estimate';
@@ -602,11 +601,6 @@ export async function getEmployeeDocuments(employeeId) {
     .order('expiry_date', { ascending: true });
   if (error) throw error; return data;
 }
-export async function getAllEmployeeDocuments() {
-  const { data, error } = await supabase.from('employee_documents')
-    .select('id,employee_id,doc_type,file_url,expiry_date').order('expiry_date', { ascending: true });
-  if (error) throw error; return data;
-}
 export async function createEmployeeDocument(p) {
   const { data, error } = await supabase.from('employee_documents').insert(p).select().single();
   if (error) throw error; return data;
@@ -712,6 +706,12 @@ export async function getInvoicePayments(invoiceId) {
   const { data, error } = await supabase.from('invoice_payments')
     .select('id,invoice_id,amount,paid_at,method,note,created_at')
     .eq('invoice_id', invoiceId)
+    .order('paid_at', { ascending: false });
+  if (error) throw error; return data;
+}
+export async function getAllInvoicePayments() {
+  const { data, error } = await supabase.from('invoice_payments')
+    .select('id,invoice_id,amount,paid_at,method,created_at')
     .order('paid_at', { ascending: false });
   if (error) throw error; return data;
 }

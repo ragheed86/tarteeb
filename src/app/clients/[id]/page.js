@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  getClient, getProjectsByClient, getInvoicesByClient, getCommunications,
+  getClient, getProjectsByClient, getInvoicesByClient, getCommunications, createCommunication,
 } from '@/lib/data';
 import {
   fmtMoney, fmtNum, fmtDate, CLIENT_STATUS, PROJECT_STATUS, INVOICE_STATUS, SOURCE_LABEL,
@@ -11,6 +11,47 @@ import { Loading, Empty, ErrorBar } from '../../ui';
 
 const CHANNEL = { whatsapp: 'واتساب', telegram: 'تيليجرام', email: 'بريد', phone: 'هاتف', system: 'النظام' };
 const DIRECTION = { in: 'وارد', out: 'صادر', system: 'النظام' };
+
+function CommForm({ clientId, onAdded }) {
+  const [form, setForm] = useState({ channel: 'whatsapp', direction: 'out', body: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function add(e) {
+    e.preventDefault();
+    if (!form.body.trim()) { setErr('اكتب نص التواصل'); return; }
+    setBusy(true); setErr('');
+    try {
+      const row = await createCommunication({
+        client_id: clientId, channel: form.channel, direction: form.direction, body: form.body.trim(),
+      });
+      setForm((f) => ({ ...f, body: '' }));
+      onAdded(row);
+    } catch (e2) {
+      setErr(e2.message || 'تعذّر تسجيل التواصل');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <form onSubmit={add} style={{ marginBottom: 14 }}>
+      {err && <div className="errbar">{err}</div>}
+      <div className="inline-add" style={{ flexWrap: 'wrap' }}>
+        <select value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))} style={{ maxWidth: 120 }}>
+          {Object.entries(CHANNEL).filter(([v]) => v !== 'system').map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select value={form.direction} onChange={(e) => setForm((f) => ({ ...f, direction: e.target.value }))} style={{ maxWidth: 100 }}>
+          <option value="out">صادر</option>
+          <option value="in">وارد</option>
+        </select>
+        <input
+          placeholder="ماذا دار في التواصل؟" value={form.body}
+          onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))} style={{ flex: 1, minWidth: 180 }}
+        />
+        <button className="btn sm" disabled={busy}>{busy ? 'جارٍ…' : 'إضافة'}</button>
+      </div>
+    </form>
+  );
+}
 
 export default function ClientProfile() {
   const { id } = useParams();
@@ -64,6 +105,9 @@ export default function ClientProfile() {
           <div className="kv"><span className="k">الجوال</span><span className="v amt" dir="ltr">{client.phone || '—'}</span></div>
           <div className="kv"><span className="k">الحي</span><span className="v">{client.district || '—'}</span></div>
           <div className="kv"><span className="k">المصدر</span><span className="v">{SOURCE_LABEL[client.source] || client.source || '—'}</span></div>
+          {(client.referred_by_client || client.referred_by_employee) && (
+            <div className="kv"><span className="k">أحاله</span><span className="v">{client.referred_by_client?.name || client.referred_by_employee?.name}</span></div>
+          )}
           <div className="kv"><span className="k">الكود</span><span className="v amt" dir="ltr">{client.code || '—'}</span></div>
           <div className="kv"><span className="k">أول تواصل</span><span className="v">{fmtDate(client.first_contact_at)}</span></div>
           <div className="kv"><span className="k">مُضاف في</span><span className="v">{fmtDate(client.created_at)}</span></div>
@@ -78,8 +122,9 @@ export default function ClientProfile() {
         {/* سجل التواصل */}
         <div className="card">
           <div className="sec-head"><h2>سجل التواصل</h2><span className="more">{fmtNum(comms.length)}</span></div>
+          <CommForm clientId={client.id} onAdded={(m) => setData((d) => ({ ...d, comms: [m, ...d.comms] }))} />
           {comms.length === 0 ? (
-            <Empty title="لا سجلات" desc="لا يوجد سجل تواصل لهذا العميل بعد." />
+            <Empty title="لا سجلات" desc="سجّل أول تواصل مع هذا العميل من النموذج أعلاه." />
           ) : (
             <div className="timeline">
               {comms.map((m) => (

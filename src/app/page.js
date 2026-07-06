@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   getClients, getProjects, getInvoices, getInventory, getAllProjectCosts,
-  getDashboardMedia, uploadDashboardMedia, removeDashboardMedia,
+  getAllInvoicePayments, getDashboardMedia, uploadDashboardMedia, removeDashboardMedia,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, displayProgress, OPEN_DELIVERY_STATUSES } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from './ui';
@@ -37,8 +37,8 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [clients, projects, invoices, inventory, costs] = await Promise.all([
-          getClients(), getProjects(), getInvoices(), getInventory(), getAllProjectCosts(),
+        const [clients, projects, invoices, payments, inventory, costs] = await Promise.all([
+          getClients(), getProjects(), getInvoices(), getAllInvoicePayments(), getInventory(), getAllProjectCosts(),
         ]);
         const activeProjects = projects.filter((p) => ACTIVE.includes(p.status)).length;
         const lowStock = inventory.filter((it) => Number(it.quantity) < Number(it.reorder_level));
@@ -49,7 +49,7 @@ export default function Dashboard() {
         const costByProject = {};
         for (const c of costs) costByProject[c.project_id] = (costByProject[c.project_id] || 0) + Number(c.amount || 0);
 
-        setData({ clients, projects, invoices, activeProjects, lowStock, upcoming, costByProject });
+        setData({ clients, projects, invoices, payments, activeProjects, lowStock, upcoming, costByProject });
       } catch (e) {
         setErr(e.message || 'تعذّر تحميل البيانات');
       }
@@ -93,9 +93,9 @@ export default function Dashboard() {
   if (!data) return <Loading />;
 
   const days = PERIOD_DAYS[period];
-  const periodRevenue = data.invoices
-    .filter((i) => withinDays(i.last_payment_at || i.issue_at, days))
-    .reduce((s, i) => s + Number(i.paid_amount || 0), 0);
+  const periodRevenue = data.payments
+    .filter((payment) => withinDays(payment.paid_at, days))
+    .reduce((s, payment) => s + Number(payment.amount || 0), 0);
   const periodProjects = data.projects.filter((p) => withinDays(p.due_date || p.created_at, days));
   const periodSales = periodProjects.reduce((s, p) => s + Number(p.sale_price || 0), 0);
   const periodProfit = periodProjects.reduce((s, p) => s + (Number(p.sale_price || 0) - (data.costByProject[p.id] || 0)), 0);
@@ -108,9 +108,12 @@ export default function Dashboard() {
     const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
     return { year: d.getFullYear(), month: d.getMonth(), label: ARABIC_MONTHS[d.getMonth()] };
   });
-  const monthTotals = months.map((m) => data.invoices
-    .filter((i) => Number(i.paid_amount || 0) > 0 && (() => { const d = new Date(i.last_payment_at || i.issue_at); return d.getFullYear() === m.year && d.getMonth() === m.month; })())
-    .reduce((s, i) => s + Number(i.paid_amount || 0), 0));
+  const monthTotals = months.map((m) => data.payments
+    .filter((payment) => {
+      const d = new Date(payment.paid_at);
+      return d.getFullYear() === m.year && d.getMonth() === m.month;
+    })
+    .reduce((s, payment) => s + Number(payment.amount || 0), 0));
   const maxMonth = Math.max(...monthTotals, 1);
 
   // توزيع مصدر العملاء الفعلي

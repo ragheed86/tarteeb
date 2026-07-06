@@ -54,7 +54,7 @@ function toForm(c) {
     name: c.name || '',
     phone: c.phone || '',
     source: c.source || 'instagram',
-    source_ref: '',
+    source_ref: c.referred_by_client_id || c.referred_by_employee_id || '',
     district: c.district || '',
     status: c.status || 'active',
     first_contact_at: c.first_contact_at || '',
@@ -100,20 +100,13 @@ function ClientsPageInner() {
   }
 
   function buildPayload() {
-    const refClient = clients?.find((c) => c.id === form.source_ref);
-    const refEmployee = employees.find((em) => em.id === form.source_ref);
-    const refName = form.source === 'client_referral'
-      ? refClient?.name
-      : form.source === 'employee_referral'
-        ? refEmployee?.name
-        : '';
-    const cleanNotes = form.notes
-      .split('\n')
-      .filter((line) => !line.startsWith('مصدر الإحالة:'))
-      .join('\n')
-      .trim();
-    const notes = refName ? [`مصدر الإحالة: ${refName}`, cleanNotes].filter(Boolean).join('\n') : cleanNotes;
-    return { ...form, notes };
+    // الإحالة تُخزَّن بأعمدة حقيقية (referred_by_*) لا نصاً داخل الملاحظات
+    const { source_ref, ...rest } = form;
+    return {
+      ...rest,
+      referred_by_client_id: form.source === 'client_referral' ? source_ref || null : null,
+      referred_by_employee_id: form.source === 'employee_referral' ? source_ref || null : null,
+    };
   }
 
   function openAdd() {

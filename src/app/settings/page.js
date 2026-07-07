@@ -53,12 +53,16 @@ async function authHeaders() {
   return { Authorization: `Bearer ${data.session?.access_token || ''}` };
 }
 
-const TITLES = {
-  suppliers: { title: 'الموردون', icon: IconTruck },
-  team: { title: 'الفريق والصلاحيات', icon: IconUsers },
-  gov: { title: 'الجهات الحكومية والرخص', icon: IconBank },
-  company: { title: 'معلومات الشركة', icon: IconStore },
-};
+// رأس موحّد لكل قسم: الأيقونة والعنوان يميناً وأدوات القسم يساراً على سطر واحد
+function PanelHead({ icon: Icon, title, children }) {
+  return (
+    <div className="set-head">
+      <Icon />
+      <h1>{title}</h1>
+      {children && <div className="set-head-actions">{children}</div>}
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const [tab, setTab] = useState('suppliers');
@@ -93,7 +97,6 @@ export default function SettingsPage() {
   }, []);
 
   const counts = { suppliers: suppliers?.length, users: users?.length, gov: gov?.length };
-  const head = TITLES[tab];
 
   if (err && !company) return <ErrorBar message={err} />;
 
@@ -124,11 +127,6 @@ export default function SettingsPage() {
       </aside>
 
       <main className="set-main">
-        <div className="set-head">
-          {head && <head.icon />}
-          <h1>{head?.title}</h1>
-        </div>
-
         {tab === 'suppliers' && <SuppliersPanel rows={suppliers} setRows={setSuppliers} />}
         {tab === 'team' && <UserPermissions users={users} reload={loadUsers} />}
         {tab === 'gov' && <GovPanel rows={gov} setRows={setGov} />}
@@ -187,10 +185,7 @@ function SuppliersPanel({ rows, setRows }) {
 
   return (
     <>
-      <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>إدارة الموردين وربطهم بمنتجات المستودع — كل شيء من هنا مباشرة.</div>
-      {err && <div className="errbar">{err}</div>}
-
-      <div className="filterbar">
+      <PanelHead icon={IconTruck} title="الموردون">
         <div className="searchbox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث في الموردين" />
@@ -199,7 +194,9 @@ function SuppliersPanel({ rows, setRows }) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
           مورّد جديد
         </button>
-      </div>
+      </PanelHead>
+      <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>إدارة الموردين وربطهم بمنتجات المستودع — كل شيء من هنا مباشرة.</div>
+      {err && <div className="errbar">{err}</div>}
 
       <div className="card" style={{ padding: '6px 0' }}>
         {filtered.length === 0 ? (
@@ -295,8 +292,9 @@ function CompanyForm({ row, setRow }) {
   if (!row) return <Loading />;
 
   return (
-    <form className="card" style={{ maxWidth: 760 }} onSubmit={submit}>
-      <div className="notebar">هذه البيانات تظهر تلقائياً على الفواتير والمستندات الرسمية.</div>
+    <form onSubmit={submit}>
+      <PanelHead icon={IconStore} title="معلومات الشركة" />
+      <div className="card" style={{ maxWidth: 760 }}>
       {err && <div className="errbar">{err}</div>}
       {saved && <div className="okbar">تم حفظ التغييرات بنجاح ✓</div>}
       <div className="form-grid">
@@ -313,6 +311,7 @@ function CompanyForm({ row, setRow }) {
       </div>
       <div className="modal-actions" style={{ marginTop: 18 }}>
         <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المعلومات'}</button>
+      </div>
       </div>
     </form>
   );
@@ -358,13 +357,11 @@ function GovPanel({ rows, setRows }) {
 
   return (
     <div>
-      <div className="notebar">جدول موحّد لحسابات الجهات الحكومية: الدخول والمستندات وتواريخ الانتهاء. لتعديل اسم المستخدم والمرجع والتواصل افتح إدارة الجهات.</div>
+      <PanelHead icon={IconBank} title="الجهات الحكومية والرخص">
+        <Link className="btn ghost sm" href="/government">فتح إدارة الجهات</Link>
+      </PanelHead>
       {err && <div className="errbar">{err}</div>}
       <div className="card" style={{ padding: '6px 0' }}>
-        <div className="sec-head" style={{ padding: '14px 20px 0' }}>
-          <h2>الجهات الحكومية والرخص</h2>
-          <Link className="btn ghost sm" href="/government" style={{ marginInlineStart: 'auto' }}>فتح إدارة الجهات</Link>
-        </div>
         <table>
           <thead>
             <tr><th>#</th><th>الجهة</th><th>الدخول</th><th>اسم المستخدم</th><th>كلمة المرور</th><th>التواصل</th><th>المستندات</th><th>الانتهاء</th><th>الحالة</th></tr>
@@ -532,13 +529,7 @@ function UserPermissions({ users, reload }) {
 
   return (
     <div>
-      <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>
-        رغيد هو الأدمن الأساسي دائماً، ولا يمكن تعطيل حسابه أو إزالة صلاحياته.
-      </div>
-      {msg && <div className="okbar">{msg}</div>}
-      {err && !editorOpen && <div className="errbar">{err}</div>}
-
-      <div className="filterbar">
+      <PanelHead icon={IconUsers} title="الفريق والصلاحيات">
         <div className="searchbox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث باسم أو بريد" />
@@ -547,7 +538,13 @@ function UserPermissions({ users, reload }) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
           مستخدم جديد
         </button>
+      </PanelHead>
+      <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>
+        رغيد هو الأدمن الأساسي دائماً، ولا يمكن تعطيل حسابه أو إزالة صلاحياته.
       </div>
+      {msg && <div className="okbar">{msg}</div>}
+      {err && !editorOpen && <div className="errbar">{err}</div>}
+
       <div className="chiprow">
         {USER_FILTERS.map((f) => (
           <button key={f.key} type="button" className={`fchip${filter === f.key ? ' active' : ''}`} onClick={() => setFilter(f.key)}>{f.label}</button>

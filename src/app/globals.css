@@ -235,7 +235,9 @@ tr.clickable{cursor:pointer}
 .set-badge{background:var(--surface);color:var(--pine);font-size:11px;padding:1px 8px;border-radius:20px;border:1px solid var(--line);font-variant-numeric:tabular-nums}
 .set-nav-item.active .set-badge{background:#fff;border-color:transparent}
 .set-main{min-width:0}
-.set-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.set-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.set-head-actions{margin-inline-start:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.set-head-actions .searchbox{width:220px}
 .set-head .nav-ico{width:22px;height:22px;color:var(--pine)}
 .set-head h1{font-family:var(--display);font-size:19px;font-weight:600}
 .filterbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}

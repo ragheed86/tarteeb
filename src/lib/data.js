@@ -338,7 +338,7 @@ export async function getProjectFinancials(projectId) {
 // ---------- المستودع ----------
 export async function getInventory() {
   const { data, error } = await supabase.from('inventory_items')
-    .select('id,barcode,name,category_id,unit,quantity,reorder_level,unit_cost,supplier_id,warehouse_id')
+    .select('*')
     .order('created_at', { ascending: false });
   if (error) throw error; return data;
 }
@@ -554,18 +554,33 @@ export async function removeProjectCost(id) {
 // ============================================================
 //  المستودع · أصناف
 // ============================================================
-const ITEM_COLS = 'id,barcode,name,category_id,unit,quantity,reorder_level,unit_cost,supplier_id,warehouse_id,created_at';
 export async function createInventoryItem(p) {
-  const { data, error } = await supabase.from('inventory_items').insert(p).select(ITEM_COLS).single();
+  const { data, error } = await supabase.from('inventory_items').insert(p).select('*').single();
   if (error) throw error; return data;
 }
 export async function updateInventoryItem(id, p) {
-  const { data, error } = await supabase.from('inventory_items').update(p).eq('id', id).select(ITEM_COLS).single();
+  const { data, error } = await supabase.from('inventory_items').update(p).eq('id', id).select('*').single();
   if (error) throw error; return data;
 }
-export async function removeInventoryItem(id) {
+export async function removeInventoryItem(id, imagePath) {
+  if (imagePath) await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([imagePath]).catch(() => {});
   const { error } = await supabase.from('inventory_items').delete().eq('id', id);
   if (error) throw error;
+}
+
+// يرفع صورة المنتج إلى حاوية التخزين العامة ويعيد الرابط والمسار
+const PRODUCT_IMAGES_BUCKET = 'product-images';
+export async function uploadProductImage(file) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: upErr } = await supabase.storage.from(PRODUCT_IMAGES_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (upErr) throw upErr;
+  const { data: pub } = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(path);
+  return { url: pub.publicUrl, path };
+}
+export async function removeProductImage(path) {
+  if (path) await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([path]).catch(() => {});
 }
 
 // ============================================================

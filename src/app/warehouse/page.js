@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   getInventory, getWarehouses, getCategories, getSuppliers,
   createInventoryItem, updateInventoryItem, removeInventoryItem,
+  uploadProductImage, removeProductImage,
 } from '@/lib/data';
 import { canAccess } from '@/lib/permissions';
 import { useAccess } from '@/lib/useAccess';
@@ -20,6 +21,17 @@ function BarcodeIcon({ size = 15 }) {
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
       <path d="M3 6v12M7 6v12M10.5 6v12M14 6v8M14 17.5v.5M17.5 6v12M21 6v12" />
     </svg>
+  );
+}
+
+function ProductThumb({ item }) {
+  if (item.image_url) {
+    return <img className="prod-thumb" src={item.image_url} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />;
+  }
+  return (
+    <span className="prod-thumb prod-thumb-empty">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="9" cy="9" r="2" /><path d="m21 15-4.5-4.5L7 20" /></svg>
+    </span>
   );
 }
 
@@ -76,7 +88,7 @@ export default function WarehousePage() {
       unit: it.unit || 'قطعة', quantity: it.quantity ?? '', reorder_level: it.reorder_level ?? '',
       unit_cost: it.unit_cost ?? '', supplier_id: it.supplier_id || '', warehouse_id: it.warehouse_id || '',
     });
-    setProductImage({ name: '', preview: '' });
+    setProductImage({ name: '', preview: it.image_url || '' });
     setFormErr(''); setOpen(true);
   }
   function openInventory(it) {
@@ -90,7 +102,7 @@ export default function WarehousePage() {
   function handleProductImage(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setProductImage({ name: file.name, preview: URL.createObjectURL(file) });
+    setProductImage({ name: file.name, preview: URL.createObjectURL(file), file });
   }
 
   function stopScan() {
@@ -145,8 +157,14 @@ export default function WarehousePage() {
       warehouse_id: form.warehouse_id || null,
     };
     try {
+      if (productImage.file) {
+        const img = await uploadProductImage(productImage.file);
+        payload.image_url = img.url;
+        payload.image_path = img.path;
+      }
       if (editing) {
         const up = await updateInventoryItem(editing.id, payload);
+        if (payload.image_path && editing.image_path) removeProductImage(editing.image_path);
         setD((s) => ({ ...s, items: s.items.map((x) => (x.id === up.id ? up : x)) }));
       } else {
         const ni = await createInventoryItem(payload);
@@ -174,7 +192,7 @@ export default function WarehousePage() {
   async function del(it) {
     if (!canAccess(access, 'warehouse_products')) { setErr('لا تملك صلاحية حذف المنتجات'); return; }
     if (!confirm(`حذف الصنف «${it.name}»؟`)) return;
-    try { await removeInventoryItem(it.id); setD((s) => ({ ...s, items: s.items.filter((x) => x.id !== it.id) })); }
+    try { await removeInventoryItem(it.id, it.image_path); setD((s) => ({ ...s, items: s.items.filter((x) => x.id !== it.id) })); }
     catch (e2) { setErr(e2.message || 'تعذّر الحذف'); }
   }
 
@@ -254,7 +272,7 @@ export default function WarehousePage() {
         {filtered.length === 0 ? (
           <Empty title="لا أصناف" desc={canManageProducts ? 'أضف أصناف المخزون لإدارتها هنا.' : 'لا توجد أصناف مطابقة للفلاتر الحالية.'} />
         ) : (
-          <table>
+          <table className="wh-table">
             <thead><tr><th>الصنف</th><th>التصنيف</th><th>المستودع</th><th>الكمية</th><th>حد التنبيه</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th><th>المورّد</th><th></th></tr></thead>
             <tbody>
               {filtered.map((it) => {
@@ -262,8 +280,13 @@ export default function WarehousePage() {
                 return (
                   <tr key={it.id} className={low ? 'row-low' : ''}>
                     <td>
-                      <span className="nm">{it.name}</span>
-                      {it.barcode && <><br /><span className="uid amt bc-code"><BarcodeIcon size={13} />{it.barcode}</span></>}
+                      <span className="prod-cell">
+                        <ProductThumb item={it} />
+                        <span className="prod-info">
+                          <span className="nm">{it.name}</span>
+                          {it.barcode && <span className="uid amt bc-code"><BarcodeIcon size={13} />{it.barcode}</span>}
+                        </span>
+                      </span>
                     </td>
                     <td>{catName[it.category_id] || '—'}</td>
                     <td>{whName[it.warehouse_id] || '—'}</td>
@@ -276,9 +299,21 @@ export default function WarehousePage() {
                     <td className="amt"><b>{fmtMoney(itemValue(it))}</b> ⃁</td>
                     <td><SupplierCell supplier={supById[it.supplier_id]} /></td>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      {canRunInventory && <button className="btn ghost sm" onClick={() => openInventory(it)}>جرد</button>}
-                      {canManageProducts && <button className="btn ghost sm" style={{ marginInlineStart: canRunInventory ? 8 : 0 }} onClick={() => openEdit(it)}>تعديل</button>}
-                      {canManageProducts && <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(it)}>حذف</button>}
+                      {canRunInventory && (
+                        <button className="btn ghost sm act-ico" title="جرد" aria-label="جرد" onClick={() => openInventory(it)}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12l2 2 4-4" /></svg>
+                        </button>
+                      )}
+                      {canManageProducts && (
+                        <button className="btn ghost sm act-ico" title="تعديل" aria-label="تعديل" style={{ marginInlineStart: canRunInventory ? 6 : 0 }} onClick={() => openEdit(it)}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                        </button>
+                      )}
+                      {canManageProducts && (
+                        <button className="btn ghost sm act-ico" title="حذف" aria-label="حذف" style={{ marginInlineStart: 6, color: 'var(--neg)' }} onClick={() => del(it)}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" /></svg>
+                        </button>
+                      )}
                       {!canRunInventory && !canManageProducts && <span className="uid">—</span>}
                     </td>
                   </tr>

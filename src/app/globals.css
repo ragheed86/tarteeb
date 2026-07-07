@@ -605,6 +605,13 @@ tr.clickable{cursor:pointer}
 .sup-logo{width:26px;height:26px;border-radius:8px;object-fit:contain;background:#fff;border:1px solid var(--line);flex-shrink:0}
 .sup-logo-fallback{display:inline-grid;place-items:center;font-size:12px;font-weight:600;color:var(--muted);background:var(--surface-2)}
 .stock-value{display:flex;align-items:center;min-height:45px;background:var(--surface-2);border:1px dashed var(--line);border-radius:10px;padding:12px 13px;font-weight:600;color:var(--green)}
+.wh-table th,.wh-table td{white-space:nowrap}
+.prod-cell{display:inline-flex;align-items:center;gap:10px}
+.prod-info{display:flex;flex-direction:column;gap:2px}
+.prod-thumb{width:40px;height:40px;border-radius:10px;object-fit:cover;border:1px solid var(--line);background:var(--surface-2);flex-shrink:0}
+.prod-thumb-empty{display:inline-grid;place-items:center;color:var(--faint)}
+.act-ico{padding:8px!important;width:34px;height:34px;justify-content:center}
+.act-ico svg{width:16px;height:16px;flex-shrink:0}
 /* معرض وسائط لوحة المعلومات */
 .btn.disabled{opacity:.62;cursor:not-allowed;pointer-events:none}
 .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:4px}

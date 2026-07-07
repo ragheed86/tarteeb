@@ -345,6 +345,28 @@ export async function getInventory() {
 export async function getWarehouses() { const { data, error } = await supabase.from('warehouses').select('*'); if (error) throw error; return data; }
 export async function getCategories() { const { data, error } = await supabase.from('categories').select('*'); if (error) throw error; return data; }
 
+// المنتجات الأكثر طلباً: تُجمَّع من مواد تكاليف المشاريع (kind=materials) حسب اسم المنتج
+export async function getProductDemand() {
+  const { data, error } = await supabase.from('project_costs')
+    .select('product_name, qty, project_id')
+    .eq('kind', 'materials')
+    .not('product_name', 'is', null);
+  if (error) throw error;
+  const map = new Map();
+  for (const r of data || []) {
+    const name = (r.product_name || '').trim();
+    if (!name) continue;
+    const cur = map.get(name) || { name, qty: 0, times: 0, projects: new Set() };
+    cur.qty += Number(r.qty) || 0;
+    cur.times += 1;
+    if (r.project_id) cur.projects.add(r.project_id);
+    map.set(name, cur);
+  }
+  return [...map.values()]
+    .map((x) => ({ name: x.name, qty: x.qty, times: x.times, projects: x.projects.size }))
+    .sort((a, b) => b.qty - a.qty || b.times - a.times);
+}
+
 // ---------- الموردون / الموظفون / الجهات / الإعدادات ----------
 export async function getSuppliers()        { const { data, error } = await supabase.from('suppliers').select('*');            if (error) throw error; return data; }
 export async function getEmployees()        { const { data, error } = await supabase.from('employees').select('*');            if (error) throw error; return data; }

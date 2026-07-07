@@ -277,13 +277,19 @@ export default function ProjectsPage() {
   const paginated = view === 'table' || view === 'cards';
   return (
     <>
-      <div className="toolbar">
+      <div className="toolbar toolbar-viewrow">
         <div className="viewtoggle">
           <button className={`vt${view === 'table' ? ' active' : ''}`} onClick={() => setView('table')}>جدول</button>
           <button className={`vt${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')}>بطاقات</button>
           <button className={`vt${view === 'kanban' ? ' active' : ''}`} onClick={() => setView('kanban')}>كانبان</button>
           <button className={`vt${view === 'calendar' ? ' active' : ''}`} onClick={() => setView('calendar')}>تقويم</button>
         </div>
+        <button className="btn" onClick={openAdd}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
+          مشروع جديد
+        </button>
+      </div>
+      <div className="toolbar">
         <div className="search" style={{ marginInlineStart: 0, width: 220 }}>
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
           <input placeholder="بحث بالمشروع أو العميل أو التاريخ…" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -294,10 +300,6 @@ export default function ProjectsPage() {
         <input type="date" className="fdate" value={to} onChange={(e) => setTo(e.target.value)} />
         <button className="chip" onClick={resetCurrentMonth}>هذا الشهر</button>
         <button className={`chip${showAll ? ' active' : ''}`} onClick={showAllProjects}>عرض كل المشاريع</button>
-        <button className="btn" style={{ marginInlineStart: 'auto' }} onClick={openAdd}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
-          مشروع جديد
-        </button>
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-4px 0 16px' }}>
         {!isBrowsing ? 'ابحث عن مشروع أو عميل، أو اختر نطاق تاريخ، لعرض المشاريع' : hasDateFilter ? 'يعرض المشاريع ضمن نطاق التاريخ المحدد' : 'يعرض كل المشاريع'} · البحث يعمل باسم المشروع أو العميل أو التاريخ{isBrowsing ? ` · ${fmtNum(filtered.length)} نتيجة` : ''}

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   getInventory, getWarehouses, getCategories, getSuppliers,
   createInventoryItem, updateInventoryItem, removeInventoryItem,
-  uploadProductImage, removeProductImage,
+  uploadProductImage, removeProductImage, getProductDemand,
 } from '@/lib/data';
 import { canAccess } from '@/lib/permissions';
 import { useAccess } from '@/lib/useAccess';
@@ -69,10 +69,11 @@ export default function WarehousePage() {
 
   async function load() {
     try {
-      const [items, warehouses, categories, suppliers] = await Promise.all([
+      const [items, warehouses, categories, suppliers, demand] = await Promise.all([
         getInventory(), getWarehouses(), getCategories(), getSuppliers(),
+        getProductDemand().catch(() => []),
       ]);
-      setD({ items, warehouses, categories, suppliers });
+      setD({ items, warehouses, categories, suppliers, demand });
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
@@ -199,7 +200,8 @@ export default function WarehousePage() {
   if (err) return <ErrorBar message={err} />;
   if (!d || access === undefined) return <Loading />;
 
-  const { items, warehouses, categories, suppliers } = d;
+  const { items, warehouses, categories, suppliers, demand } = d;
+  const topProduct = (demand || [])[0] || null;
   const canManageProducts = canAccess(access, 'warehouse_products');
   const canRunInventory = canAccess(access, 'warehouse_inventory');
   const catName = Object.fromEntries(categories.map((c) => [c.id, c.name]));
@@ -256,6 +258,17 @@ export default function WarehousePage() {
             <span>{fmtNum(items.length)} صنف في كل المستودعات</span>
           </div>
           <strong className="amt">{fmtMoney(totalStockValue)} ⃁</strong>
+        </div>
+        <div className="warehouse-stat warehouse-stat-top">
+          <div>
+            <b>المنتج الأكثر طلباً</b>
+            {topProduct
+              ? <span>{topProduct.name} · {fmtNum(topProduct.projects)} مشروع</span>
+              : <span>لا طلبات مواد بعد</span>}
+          </div>
+          {topProduct
+            ? <strong className="amt">{fmtNum(topProduct.qty)} <small>مطلوب</small></strong>
+            : <strong className="amt">—</strong>}
         </div>
         {visibleStats.map((warehouse) => (
           <div className="warehouse-stat" key={warehouse.id}>

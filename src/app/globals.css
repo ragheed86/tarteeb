@@ -153,6 +153,8 @@ tr.clickable{cursor:pointer}
 
 .viewtoggle{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
 .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+/* صف العرض: أزرار العرض ثم زر «مشروع جديد» تحتها محاذى للبداية (يمين في RTL) */
+.toolbar-viewrow{flex-direction:column;align-items:flex-start;gap:10px;margin-bottom:14px}
 .vt{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border:0;background:none;border-radius:8px;font-family:var(--body);font-size:13.5px;color:var(--muted);cursor:pointer}
 .vt.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500}
 .fdate{font-family:var(--body);font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:8px 12px;outline:none;cursor:pointer}
@@ -581,12 +583,15 @@ tr.clickable{cursor:pointer}
 .filter-sel{font-family:var(--body);font-size:13px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 12px;outline:none;cursor:pointer}
 .filter-sel:focus{border-color:var(--sage)}
 .warehouse-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:18px}
-.warehouse-stat-total{background:var(--sage-bg);border-color:#bcd4c5}
-.warehouse-stat-total strong{font-size:18px}
 .warehouse-stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:15px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px}
 .warehouse-stat b{display:block;font-size:14px;font-weight:600}
 .warehouse-stat span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
 .warehouse-stat strong{font-family:var(--display);font-size:16px;color:var(--green)}
+.warehouse-stat-total{background:var(--sage-bg);border-color:#bcd4c5}
+.warehouse-stat-total strong{font-size:18px}
+.warehouse-stat-top{background:var(--gold-bg,#fbf3e2);border-color:#e8d6ac}
+.warehouse-stat-top strong{color:#8a6d1f}
+.warehouse-stat-top strong small{font-size:11px;font-weight:500;color:var(--muted);margin-inline-start:2px}
 .upload-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .upload-row span{font-size:12px;color:var(--muted)}
 .upload-preview{width:100%;max-width:220px;height:140px;border:1px solid var(--line);border-radius:10px;object-fit:cover;background:var(--surface-2)}

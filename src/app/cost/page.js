@@ -117,7 +117,7 @@ export default function CostPage() {
       .then(([projects, clients, suppliers, employees]) => {
         const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
         setState({ projects, suppliers, employees: employees || [], byId });
-        if (projects[0]) pick(projects[0], { projects, suppliers, employees, byId });
+        // تُفتح الصفحة فارغة: يبحث المستخدم عن المشروع بنفسه بدل اختيار أول مشروع تلقائياً
       })
       .catch((e) => setErr(e.message || 'تعذّر التحميل'));
     // eslint-disable-next-line react-hooks/exhaustive-deps

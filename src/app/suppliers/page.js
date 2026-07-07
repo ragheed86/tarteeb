@@ -6,6 +6,26 @@ import { Loading, Empty, ErrorBar } from '../ui';
 
 const EMPTY = { name: '', category: '', city: '', logo_url: '' };
 
+// يصغّر صورة الشعار ويعيدها كـ data URL يُخزَّن مباشرة في logo_url فلا يضيع
+function logoFileToDataUrl(file, max = 256) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('صورة غير صالحة')); };
+    img.src = url;
+  });
+}
+
 export default function SuppliersPage() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
@@ -25,10 +45,16 @@ export default function SuppliersPage() {
   function openAdd() { setEditing(null); setForm(EMPTY); setLogoPreview(''); setFormErr(''); setOpen(true); }
   function openEdit(s) { setEditing(s); setForm({ name: s.name || '', category: s.category || '', city: s.city || '', logo_url: s.logo_url || '' }); setLogoPreview(''); setFormErr(''); setOpen(true); }
   function close() { if (!saving) { setOpen(false); setEditing(null); setLogoPreview(''); } }
-  function handleLogoFile(e) {
+  async function handleLogoFile(e) {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    setLogoPreview(URL.createObjectURL(file));
+    try {
+      const dataUrl = await logoFileToDataUrl(file);
+      set('logo_url', dataUrl); // يُحفظ فعلياً عند الإرسال فلا يضيع
+      setLogoPreview(dataUrl);
+      setFormErr('');
+    } catch { setFormErr('تعذّر معالجة صورة الشعار'); }
   }
 
   async function submit(e) {

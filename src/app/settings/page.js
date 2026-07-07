@@ -138,6 +138,26 @@ export default function SettingsPage() {
 
 const EMPTY_SUPPLIER = { name: '', category: '', city: '', logo_url: '' };
 
+// يصغّر صورة الشعار ويعيدها كـ data URL يُخزَّن مباشرة في logo_url (يبقى دائماً بلا حاجة لحاوية تخزين)
+function logoFileToDataUrl(file, max = 256) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/png')); // PNG يحافظ على شفافية الشعار
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('صورة غير صالحة')); };
+    img.src = url;
+  });
+}
+
 function SuppliersPanel({ rows, setRows }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -159,7 +179,17 @@ function SuppliersPanel({ rows, setRows }) {
   function openAdd() { setEditing(null); setForm(EMPTY_SUPPLIER); setLogoPreview(''); setFormErr(''); setOpen(true); }
   function openEdit(s) { setEditing(s); setForm({ name: s.name || '', category: s.category || '', city: s.city || '', logo_url: s.logo_url || '' }); setLogoPreview(''); setFormErr(''); setOpen(true); }
   function close() { if (!saving) { setOpen(false); setEditing(null); setLogoPreview(''); } }
-  function handleLogoFile(e) { const file = e.target.files?.[0]; if (file) setLogoPreview(URL.createObjectURL(file)); }
+  async function handleLogoFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const dataUrl = await logoFileToDataUrl(file);
+      set('logo_url', dataUrl); // يُحفظ فعلياً عند الإرسال فلا يضيع
+      setLogoPreview(dataUrl);
+      setFormErr('');
+    } catch { setFormErr('تعذّر معالجة صورة الشعار'); }
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -205,7 +235,14 @@ function SuppliersPanel({ rows, setRows }) {
             <tbody>
               {filtered.map((s) => (
                 <tr key={s.id}>
-                  <td><span className="nm">{s.name}</span></td>
+                  <td>
+                    <span className="sup-cell">
+                      {s.logo_url
+                        ? <img className="sup-logo" src={s.logo_url} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        : <span className="sup-logo sup-logo-fallback">{(s.name || '؟').slice(0, 1)}</span>}
+                      <span className="nm">{s.name}</span>
+                    </span>
+                  </td>
                   <td><span className="src">{s.category || '—'}</span></td>
                   <td>{s.city || '—'}</td>
                   <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>

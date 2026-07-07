@@ -659,6 +659,18 @@ export async function removePartnerTransaction(id) {
 // ============================================================
 //  الجهات الحكومية · CRUD
 // ============================================================
+// يرفع مستند جهة حكومية إلى حاوية التخزين ويعيد الرابط العام
+const GOV_DOCUMENTS_BUCKET = 'gov-documents';
+export async function uploadGovDocument(file) {
+  const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
+  const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: upErr } = await supabase.storage.from(GOV_DOCUMENTS_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (upErr) throw upErr;
+  const { data: pub } = supabase.storage.from(GOV_DOCUMENTS_BUCKET).getPublicUrl(path);
+  return pub.publicUrl;
+}
+
 export async function createGovernmentAccount(p) {
   const { data, error } = await supabase.from('government_accounts').insert(p).select('*').single();
   if (error) throw error; return data;

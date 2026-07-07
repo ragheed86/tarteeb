@@ -4,9 +4,10 @@ import Link from 'next/link';
 import {
   getCompanySettings, updateCompanySettings,
   getSuppliers, createSupplier, updateSupplier, removeSupplier,
+  getGovernmentAccounts, updateGovernmentAccount, uploadGovDocument,
 } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
-import { fmtNum } from '@/lib/format';
+import { fmtNum, fmtDate } from '@/lib/format';
 import {
   ALL_PERMISSIONS, PERMISSION_GROUPS, ROLE_LABELS, ROLE_PRESETS, isPrimaryAdmin,
 } from '@/lib/permissions';
@@ -38,7 +39,7 @@ const NAV = [
     label: 'الإدارة',
     items: [
       { key: 'team', label: 'الفريق والصلاحيات', icon: IconUsers, badge: 'users' },
-      { key: 'gov', label: 'الجهات الحكومية والرخص', icon: IconBank },
+      { key: 'gov', label: 'الجهات الحكومية والرخص', icon: IconBank, badge: 'gov' },
     ],
   },
   {
@@ -64,23 +65,34 @@ export default function SettingsPage() {
   const [company, setCompany] = useState(null);
   const [suppliers, setSuppliers] = useState(null);
   const [users, setUsers] = useState(null);
+  const [gov, setGov] = useState(null);
   const [err, setErr] = useState('');
 
   async function loadUsers() {
     // القراءة عبر API الأدمن حتى تعمل الشاشة لأي مدير (لا للأدمن الأساسي فقط كما مع RLS المباشرة)
     const res = await fetch('/api/admin/users', { headers: await authHeaders() });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'تعذّر تحميل المستخدمين');
-    setUsers(json.users || []);
+    if (res.ok) {
+      const json = await res.json();
+      setUsers(json.users || []);
+      return;
+    }
+    // فولباك عند غياب مفتاح الخدمة على السيرفر: قراءة مباشرة تنجح للأدمن الأساسي عبر RLS
+    const { data, error } = await supabase
+      .from('app_user_access')
+      .select('user_id,email,display_name,role,permissions,active,created_at,updated_at')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    setUsers(data || []);
   }
 
   useEffect(() => {
     getCompanySettings().then((r) => setCompany(r || {})).catch((e) => setErr(e.message || 'تعذّر التحميل'));
     getSuppliers().then((r) => setSuppliers(r || [])).catch(() => setSuppliers([]));
+    getGovernmentAccounts().then((r) => setGov(r || [])).catch(() => setGov([]));
     loadUsers().catch(() => setUsers([]));
   }, []);
 
-  const counts = { suppliers: suppliers?.length, users: users?.length };
+  const counts = { suppliers: suppliers?.length, users: users?.length, gov: gov?.length };
   const head = TITLES[tab];
 
   if (err && !company) return <ErrorBar message={err} />;
@@ -119,7 +131,7 @@ export default function SettingsPage() {
 
         {tab === 'suppliers' && <SuppliersPanel rows={suppliers} setRows={setSuppliers} />}
         {tab === 'team' && <UserPermissions users={users} reload={loadUsers} />}
-        {tab === 'gov' && <GovPanel />}
+        {tab === 'gov' && <GovPanel rows={gov} setRows={setGov} />}
         {tab === 'company' && <CompanyForm row={company} setRow={setCompany} />}
       </main>
     </div>
@@ -308,13 +320,85 @@ function CompanyForm({ row, setRow }) {
 
 /* ============================ الجهات الحكومية ============================ */
 
-function GovPanel() {
+const GOV_STATUS = {
+  incomplete: { label: 'غير مكتمل', cls: 'p-wait' },
+  active: { label: 'نشط', cls: 'p-done' },
+  expiring: { label: 'قريب الانتهاء', cls: 'p-prog' },
+  expired: { label: 'منتهٍ', cls: 'p-cancel' },
+};
+const GOV_ORDER = ['البنك', 'بلدي', 'قوى', 'أبشر أعمال', 'وزارة الموارد البشرية', 'مقيم', 'الدفاع المدني (سلامة)', 'هيئة الزكاة والضريبة والجمارك', 'البريد السعودي (سبل)', 'التأمينات الاجتماعية', 'الغرفة التجارية', 'وزارة التجارة'];
+
+function GovPanel({ rows, setRows }) {
+  const [busyId, setBusyId] = useState(null);
+  const [err, setErr] = useState('');
+
+  const sorted = useMemo(() => {
+    if (!rows) return null;
+    const rank = (g) => { const i = GOV_ORDER.indexOf(g.entity_name); return i === -1 ? 999 : i; };
+    return [...rows].sort((a, b) => rank(a) - rank(b) || a.entity_name.localeCompare(b.entity_name, 'ar'));
+  }, [rows]);
+
+  async function attach(g, e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setBusyId(g.id); setErr('');
+    try {
+      const url = await uploadGovDocument(file);
+      const up = await updateGovernmentAccount(g.id, { doc_url: url });
+      setRows((s) => s.map((x) => (x.id === up.id ? up : x)));
+    } catch (e2) {
+      setErr(e2.message || 'تعذّر رفع المستند');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (!sorted) return <Loading />;
+
   return (
     <div>
-      <div className="notebar">جدول موحّد لحسابات الجهات الحكومية وبيانات الدخول والمستندات وتواريخ الانتهاء. ينبّه النظام قبل 30 يوماً من انتهاء أي رخصة.</div>
-      <div className="card">
-        <div className="sec-head"><h2>الجهات الحكومية والرخص</h2><Link className="btn" href="/government">فتح إدارة الجهات</Link></div>
-        <div className="note" style={{ textAlign: 'start' }}>تُدار الجهات (قوى، أبشر أعمال، الزكاة، البلدية…) من صفحة الجهات الحكومية: إضافة الحسابات، مراجع الأسرار، وتواريخ انتهاء الرخص.</div>
+      <div className="notebar">جدول موحّد لحسابات الجهات الحكومية: الدخول والمستندات وتواريخ الانتهاء. لتعديل اسم المستخدم والمرجع والتواصل افتح إدارة الجهات.</div>
+      {err && <div className="errbar">{err}</div>}
+      <div className="card" style={{ padding: '6px 0' }}>
+        <div className="sec-head" style={{ padding: '14px 20px 0' }}>
+          <h2>الجهات الحكومية والرخص</h2>
+          <Link className="btn ghost sm" href="/government" style={{ marginInlineStart: 'auto' }}>فتح إدارة الجهات</Link>
+        </div>
+        <table>
+          <thead>
+            <tr><th>#</th><th>الجهة</th><th>الدخول</th><th>اسم المستخدم</th><th>كلمة المرور</th><th>التواصل</th><th>المستندات</th><th>الانتهاء</th><th>الحالة</th></tr>
+          </thead>
+          <tbody>
+            {sorted.map((g, i) => {
+              const st = GOV_STATUS[g.status] || { label: g.status, cls: 'p-wait' };
+              return (
+                <tr key={g.id}>
+                  <td>{fmtNum(i + 1)}</td>
+                  <td><span className="nm">{g.entity_name}</span></td>
+                  <td>{g.login_url ? <a className="link" href={g.login_url} target="_blank" rel="noreferrer">فتح ↗</a> : '—'}</td>
+                  <td dir="ltr" style={{ textAlign: 'start' }}>{g.username || '—'}</td>
+                  <td dir="ltr" style={{ textAlign: 'start' }}>{g.secret_ref || '—'}</td>
+                  <td>{g.contact || '—'}</td>
+                  <td>
+                    {g.doc_url ? (
+                      <a className="link" href={g.doc_url} target="_blank" rel="noreferrer">📎 عرض</a>
+                    ) : (
+                      <>
+                        <label className="link" htmlFor={`gov-doc-${g.id}`} style={{ cursor: 'pointer' }}>
+                          {busyId === g.id ? 'جارٍ الرفع…' : '📎 إرفاق'}
+                        </label>
+                        <input id={`gov-doc-${g.id}`} type="file" hidden disabled={busyId === g.id} onChange={(e) => attach(g, e)} />
+                      </>
+                    )}
+                  </td>
+                  <td>{g.expiry_date ? fmtDate(g.expiry_date) : '—'}</td>
+                  <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -400,8 +484,21 @@ function UserPermissions({ users, reload }) {
         method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify(form),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'تعذّر حفظ المستخدم');
+      if (!res.ok) {
+        const json = await res.json();
+        // فولباك عند غياب مفتاح الخدمة: التعديل بلا كلمة مرور يمكن كتابته مباشرة (ينجح للأدمن الأساسي)
+        if (editing && !form.password) {
+          const { error } = await supabase.from('app_user_access').upsert({
+            user_id: form.user_id, email: form.email, display_name: form.display_name || null,
+            role: isPrimaryAdmin(form.email) ? 'admin' : form.role,
+            permissions: isPrimaryAdmin(form.email) ? ALL_PERMISSIONS : form.permissions,
+            active: isPrimaryAdmin(form.email) ? true : form.active,
+          }, { onConflict: 'user_id' });
+          if (error) throw error;
+        } else {
+          throw new Error(json.error || 'تعذّر حفظ المستخدم');
+        }
+      }
       setMsg(editing ? 'تم تحديث صلاحيات المستخدم' : 'تم إنشاء المستخدم وتفعيل صلاحياته');
       await reload();
       setEditorOpen(false); setEditing(null);
@@ -418,8 +515,14 @@ function UserPermissions({ users, reload }) {
       const res = await fetch(`/api/admin/users?user_id=${encodeURIComponent(user.user_id)}`, {
         method: 'DELETE', headers: await authHeaders(),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'تعذّر تعطيل المستخدم');
+      if (!res.ok) {
+        // فولباك عند غياب مفتاح الخدمة: تعطيل مباشر (ينجح للأدمن الأساسي عبر RLS)
+        const { error } = await supabase.from('app_user_access').update({ active: false }).eq('user_id', user.user_id);
+        if (error) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || error.message || 'تعذّر تعطيل المستخدم');
+        }
+      }
       setMsg('تم تعطيل المستخدم'); await reload();
     } catch (e2) { setErr(e2.message || 'تعذّر تعطيل المستخدم'); }
     finally { setBusy(false); }

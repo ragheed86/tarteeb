@@ -126,12 +126,10 @@ export default function SettingsPage() {
         ))}
       </aside>
 
-      <main className="set-main">
-        {tab === 'suppliers' && <SuppliersPanel rows={suppliers} setRows={setSuppliers} />}
-        {tab === 'team' && <UserPermissions users={users} reload={loadUsers} />}
-        {tab === 'gov' && <GovPanel rows={gov} setRows={setGov} />}
-        {tab === 'company' && <CompanyForm row={company} setRow={setCompany} />}
-      </main>
+      {tab === 'suppliers' && <SuppliersPanel rows={suppliers} setRows={setSuppliers} />}
+      {tab === 'team' && <UserPermissions users={users} reload={loadUsers} />}
+      {tab === 'gov' && <GovPanel rows={gov} setRows={setGov} />}
+      {tab === 'company' && <CompanyForm row={company} setRow={setCompany} />}
     </div>
   );
 }
@@ -195,7 +193,7 @@ function SuppliersPanel({ rows, setRows }) {
           مورّد جديد
         </button>
       </PanelHead>
-      <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>إدارة الموردين وربطهم بمنتجات المستودع — كل شيء من هنا مباشرة.</div>
+      <div className="set-body">
       {err && <div className="errbar">{err}</div>}
 
       <div className="card" style={{ padding: '6px 0' }}>
@@ -254,6 +252,7 @@ function SuppliersPanel({ rows, setRows }) {
           </form>
         </div>
       )}
+      </div>
     </>
   );
 }
@@ -292,8 +291,9 @@ function CompanyForm({ row, setRow }) {
   if (!row) return <Loading />;
 
   return (
-    <form onSubmit={submit}>
+    <>
       <PanelHead icon={IconStore} title="معلومات الشركة" />
+      <form className="set-body" onSubmit={submit}>
       <div className="card" style={{ maxWidth: 760 }}>
       {err && <div className="errbar">{err}</div>}
       {saved && <div className="okbar">تم حفظ التغييرات بنجاح ✓</div>}
@@ -313,7 +313,8 @@ function CompanyForm({ row, setRow }) {
         <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المعلومات'}</button>
       </div>
       </div>
-    </form>
+      </form>
+    </>
   );
 }
 
@@ -356,10 +357,11 @@ function GovPanel({ rows, setRows }) {
   if (!sorted) return <Loading />;
 
   return (
-    <div>
+    <>
       <PanelHead icon={IconBank} title="الجهات الحكومية والرخص">
         <Link className="btn ghost sm" href="/government">فتح إدارة الجهات</Link>
       </PanelHead>
+      <div className="set-body">
       {err && <div className="errbar">{err}</div>}
       <div className="card" style={{ padding: '6px 0' }}>
         <table>
@@ -397,7 +399,8 @@ function GovPanel({ rows, setRows }) {
           </tbody>
         </table>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -528,7 +531,7 @@ function UserPermissions({ users, reload }) {
   const primaryForm = isPrimaryAdmin(form.email);
 
   return (
-    <div>
+    <>
       <PanelHead icon={IconUsers} title="الفريق والصلاحيات">
         <div className="searchbox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
@@ -539,6 +542,7 @@ function UserPermissions({ users, reload }) {
           مستخدم جديد
         </button>
       </PanelHead>
+      <div className="set-body">
       <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>
         رغيد هو الأدمن الأساسي دائماً، ولا يمكن تعطيل حسابه أو إزالة صلاحياته.
       </div>
@@ -664,7 +668,8 @@ function UserPermissions({ users, reload }) {
           </form>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

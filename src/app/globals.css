@@ -226,8 +226,9 @@ tr.clickable{cursor:pointer}
 .ptcard .ln{display:flex;justify-content:space-between;font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--surface-2)}
 .ptcard .ln:last-child{border-bottom:0}.ptcard .bal{font-family:var(--display);font-weight:600;color:var(--green)}
 
-.set-layout{display:grid;grid-template-columns:214px minmax(0,1fr);gap:18px;align-items:start}
-.set-side{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 8px;position:sticky;top:16px}
+.set-layout{display:grid;grid-template-columns:214px minmax(0,1fr);grid-template-rows:auto 1fr;grid-template-areas:"head head" "side body";column-gap:18px;row-gap:0;align-items:start}
+.set-body{grid-area:body;min-width:0}
+.set-side{grid-area:side;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 8px;position:sticky;top:16px}
 .set-nav-label{font-size:11px;color:var(--faint);padding:8px 10px 4px;letter-spacing:.02em}
 .set-nav-item{display:flex;align-items:center;gap:9px;width:100%;text-align:start;padding:10px;border-radius:11px;border:0;background:transparent;color:var(--muted);font-family:var(--body);font-size:14px;cursor:pointer}
 .set-nav-item:hover{background:var(--surface-2)}
@@ -236,16 +237,16 @@ tr.clickable{cursor:pointer}
 .set-nav-item .nav-ico{width:18px;height:18px;flex-shrink:0}
 .set-badge{background:var(--surface);color:var(--pine);font-size:11px;padding:1px 8px;border-radius:20px;border:1px solid var(--line);font-variant-numeric:tabular-nums}
 .set-nav-item.active .set-badge{background:#fff;border-color:transparent}
-.set-main{min-width:0}
-.set-head{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.set-head{grid-area:head;display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
 .set-head-actions{margin-inline-start:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .set-head-actions .searchbox{width:220px}
 .set-head .nav-ico{width:22px;height:22px;color:var(--pine)}
 .set-head h1{font-family:var(--display);font-size:19px;font-weight:600}
 .filterbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
-.searchbox{position:relative;flex:1;min-width:180px}
-.searchbox svg{position:absolute;inset-inline-start:11px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--faint);pointer-events:none}
-.searchbox input{width:100%;padding-inline-start:36px}
+.searchbox{position:relative;flex:1;min-width:180px;background:var(--surface);border:1px solid var(--line);border-radius:10px;transition:border-color .15s}
+.searchbox:focus-within{border-color:var(--sage)}
+.searchbox svg{position:absolute;inset-inline-start:11px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--faint);pointer-events:none;z-index:1}
+.searchbox input{width:100%;padding:10px 13px;padding-inline-start:36px;border:0;background:none;outline:none;font-family:var(--body);font-size:13.5px;color:var(--ink);border-radius:10px}
 .searchbox.sm{flex:0 0 200px;min-width:160px}
 .chiprow{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
 .fchip{font-size:12px;padding:6px 13px;border-radius:20px;border:1px solid var(--line);color:var(--muted);background:transparent;cursor:pointer;font-family:var(--body)}
@@ -777,7 +778,7 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .section-title{flex-direction:column;gap:4px}
   .project-info-grid,.compact-costs{grid-template-columns:1fr}
   .permission-groups{grid-template-columns:1fr}
-  .set-layout{grid-template-columns:1fr}
+  .set-layout{grid-template-columns:1fr;grid-template-areas:"head" "side" "body";row-gap:14px}
   .set-side{position:static;display:flex;flex-wrap:wrap;gap:4px}
   .set-side>div{flex:1;min-width:150px}
   .searchbox.sm{flex:1 1 100%}
@@ -830,6 +831,17 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .inline-add{flex-direction:column}
   .inline-add .btn{width:100%}
   .upload-preview{max-width:100%;height:160px}
+}
+
+/* على الأجهزة اللوحية والنوافذ المتوسطة تبقى النوافذ حوارية مركزية بدل شيت العرض الكامل (الشيت للجوال ≤600) فلا تتمطّط الحقول */
+@media(min-width:601px) and (max-width:768px){
+  .modal-backdrop{align-items:center;place-items:center;padding:22px;background:rgba(39,33,64,.42)}
+  .modal-card,.modal-card.modal-sm,.modal-card.project-modal{width:min(560px,100%)!important;max-height:calc(100dvh - 44px);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 24px 70px rgba(39,33,64,.24)}
+  .modal-card.modal-sm{width:min(440px,100%)!important}
+  .modal-head,.project-modal .modal-head{position:static;margin:0 0 16px;padding:0;background:none;border:0;border-radius:0}
+  .modal-head p{display:block}
+  .modal-actions{position:static;margin:18px 0 0;padding:0;background:none;border:0}
+  .modal-actions .btn{width:auto}
 }
 
 @media print{

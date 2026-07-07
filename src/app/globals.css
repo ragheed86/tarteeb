@@ -126,8 +126,8 @@ tr.clickable{cursor:pointer}
 
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .pcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-.employee-card{position:relative;overflow:visible;padding-top:46px;margin-top:34px}
-.employee-card .pb{padding-top:30px}
+.employee-card{position:relative;overflow:visible;padding-top:46px;margin-top:34px;display:flex;flex-direction:column}
+.employee-card .pb{padding-top:30px;flex:1;display:flex;flex-direction:column}
 .employee-photo{position:absolute;top:-34px;left:50%;transform:translateX(-50%);width:86px;height:86px;border-radius:50%;background:linear-gradient(135deg,#F8F6FE,#E7F5EF);border:4px solid #fff;box-shadow:0 14px 32px rgba(39,33,64,.18);display:flex;align-items:center;justify-content:center;overflow:hidden;z-index:2}
 .employee-photo img{width:100%;height:100%;object-fit:cover;display:block}
 .employee-photo span{font-family:var(--display);font-size:30px;font-weight:800;color:var(--green);line-height:1}
@@ -140,7 +140,7 @@ tr.clickable{cursor:pointer}
 .employee-card .emp-drow{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:5px 0}
 .employee-card .emp-drow>span:first-child{color:var(--muted)}
 .employee-card .emp-drow b{font-weight:500}
-.emp-actions{display:flex;gap:8px}
+.emp-actions{display:flex;gap:8px;margin-top:auto}
 .emp-actions .btn{flex:1;justify-content:center;padding-inline:6px}
 .emp-actions .btn.danger{color:var(--neg)}
 .pcard .ph{height:96px;background:var(--sage-bg);display:grid;place-items:center;color:var(--sage);position:relative}

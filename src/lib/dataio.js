@@ -109,6 +109,10 @@ export const ENTITIES = {
     }),
     validate: (p) => (p.name ? null : 'اسم العميل مطلوب'),
     create: createClient,
+    example: {
+      name: 'سارة البراهيم', phone: '0501234567', source: 'انستقرام', district: 'النرجس',
+      status: 'عميل نشط', first_contact_at: '2026-07-01', code: '', notes: 'عميلة مميزة',
+    },
   },
   suppliers: {
     label: 'الموردون',
@@ -124,6 +128,7 @@ export const ENTITIES = {
     buildPayload: (raw) => ({ name: clean(raw.name), category: clean(raw.category) || 'أخرى', city: clean(raw.city) }),
     validate: (p) => (p.name ? null : 'اسم المورّد مطلوب'),
     create: createSupplier,
+    example: { name: 'مؤسسة النخبة للتخزين', category: 'تخزين', city: 'الرياض' },
   },
   employees: {
     label: 'الموظفون',
@@ -151,6 +156,10 @@ export const ENTITIES = {
     }),
     validate: (p) => (p.name ? null : 'اسم الموظف مطلوب'),
     create: createEmployee,
+    example: {
+      name: 'دلال الجعويني', role: 'منظم مساحات', phone: '0555555555',
+      national_id: '1234567890', nationality: 'سعودية', wage: 'يومي', status: 'نشط',
+    },
   },
   projects: {
     label: 'المشاريع',
@@ -241,6 +250,23 @@ export async function exportEntity(entityKey, format) {
     downloadBlob(toCSV(rows, entity.columns), `tarteeb-${entityKey}-${stamp()}.csv`, 'text/csv;charset=utf-8');
   }
   return rows.length;
+}
+
+// قالب استيراد معتمد: رؤوس الأعمدة الصحيحة + صف توضيحي واحد يبيّن القيم المقبولة
+export function templateCSV(entityKey) {
+  const entity = ENTITIES[entityKey];
+  const rows = entity.example ? [entity.example] : [];
+  return toCSV(rows, entity.columns);
+}
+
+export function downloadTemplate(entityKey, format = 'csv') {
+  const entity = ENTITIES[entityKey];
+  if (format === 'json') {
+    const sample = entity.example ? [entity.example] : [];
+    downloadBlob(JSON.stringify(sample, null, 2), `tarteeb-template-${entityKey}.json`, 'application/json');
+  } else {
+    downloadBlob(templateCSV(entityKey), `tarteeb-template-${entityKey}.csv`, 'text/csv;charset=utf-8');
+  }
 }
 
 // نسخة احتياطية كاملة لكل الكيانات في ملف JSON واحد

@@ -8,7 +8,7 @@ import {
 } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
 import { fmtNum, fmtDate } from '@/lib/format';
-import { EXPORTABLE, IMPORTABLE, ENTITIES, exportEntity, exportFullBackup, readImportFile, importRows } from '@/lib/dataio';
+import { EXPORTABLE, IMPORTABLE, ENTITIES, exportEntity, exportFullBackup, downloadTemplate, readImportFile, importRows } from '@/lib/dataio';
 import { toast } from '../toast';
 import {
   ALL_PERMISSIONS, PERMISSION_GROUPS, ROLE_LABELS, ROLE_PRESETS, isPrimaryAdmin,
@@ -848,13 +848,14 @@ function ImportExportPanel() {
                 {IMPORTABLE.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
               </select>
             </div>
+            <button className="btn ghost" type="button" onClick={() => downloadTemplate(impEntity, 'csv')}>تحميل القالب (CSV)</button>
             <label className="btn ghost" htmlFor="io-file" style={{ cursor: 'pointer' }}>{file ? 'تغيير الملف' : 'اختيار ملف CSV/JSON'}</label>
             <input id="io-file" type="file" accept=".csv,.json,text/csv,application/json" hidden onChange={onFile} />
           </div>
 
           <div className="note" style={{ textAlign: 'start' }}>
-            الأعمدة المتوقعة: {ENTITIES[impEntity].columns.map((c) => c.label).join('، ')}.
-            {' '}أو نزّل ملف تصدير لنفس الجدول وعدّله ثم أعد رفعه.
+            نزّل القالب المعتمد، عبّئه (استبدل الصف التوضيحي ببياناتك)، ثم ارفعه هنا.
+            {' '}الأعمدة المتوقعة: {ENTITIES[impEntity].columns.map((c) => c.label).join('، ')}.
           </div>
 
           {file && preview && !preview.error && (

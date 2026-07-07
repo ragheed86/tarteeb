@@ -982,3 +982,20 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .nav-glider{transition:none}
   .kpis .kpi,.pcard,.kcard,.btn{transition:none}
 }
+
+/* الاستيراد والتصدير */
+.io-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.io-row .field{margin:0}
+.io-divider{height:1px;background:var(--line);margin:16px 0}
+.io-preview{margin-top:12px;padding:11px 14px;background:var(--sage-bg);border:1px solid #cfc3f0;border-radius:11px;font-size:13px;color:var(--pine)}
+.io-progress{margin-top:14px;display:flex;align-items:center;gap:10px}
+.io-track{flex:1;height:8px;background:var(--surface-2);border-radius:20px;overflow:hidden}
+.io-track-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,#8A6CFF,#6C4DE0);transition:width .2s ease}
+.io-progress span{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:38px;text-align:end}
+.io-result{margin-top:16px}
+.io-stats{display:flex;gap:8px;flex-wrap:wrap}
+.io-stat{font-size:12.5px;font-weight:500;padding:5px 12px;border-radius:20px}
+.io-stat.ok{background:var(--pos-bg);color:#2c6043}
+.io-stat.skip{background:var(--surface-2);color:var(--muted)}
+.io-stat.err{background:var(--neg-bg);color:var(--neg)}
+.io-errors{margin-top:12px;padding-inline-start:18px;font-size:12.5px;color:var(--neg);display:flex;flex-direction:column;gap:4px}

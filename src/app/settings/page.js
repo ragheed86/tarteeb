@@ -8,6 +8,8 @@ import {
 } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
 import { fmtNum, fmtDate } from '@/lib/format';
+import { EXPORTABLE, IMPORTABLE, ENTITIES, exportEntity, exportFullBackup, readImportFile, importRows } from '@/lib/dataio';
+import { toast } from '../toast';
 import {
   ALL_PERMISSIONS, PERMISSION_GROUPS, ROLE_LABELS, ROLE_PRESETS, isPrimaryAdmin,
 } from '@/lib/permissions';
@@ -45,6 +47,10 @@ const NAV = [
   {
     label: 'بيانات ثابتة',
     items: [{ key: 'company', label: 'معلومات الشركة', icon: IconStore }],
+  },
+  {
+    label: 'النظام',
+    items: [{ key: 'data', label: 'الاستيراد والتصدير', icon: IconData }],
   },
 ];
 
@@ -130,6 +136,7 @@ export default function SettingsPage() {
       {tab === 'team' && <UserPermissions users={users} reload={loadUsers} />}
       {tab === 'gov' && <GovPanel rows={gov} setRows={setGov} />}
       {tab === 'company' && <CompanyForm row={company} setRow={setCompany} />}
+      {tab === 'data' && <ImportExportPanel />}
     </div>
   );
 }
@@ -367,6 +374,7 @@ const GOV_ORDER = ['البنك', 'بلدي', 'قوى', 'أبشر أعمال', '�
 
 function GovPanel({ rows, setRows }) {
   const [busyId, setBusyId] = useState(null);
+  const [logoBusyId, setLogoBusyId] = useState(null);
   const [err, setErr] = useState('');
 
   const sorted = useMemo(() => {
@@ -374,6 +382,23 @@ function GovPanel({ rows, setRows }) {
     const rank = (g) => { const i = GOV_ORDER.indexOf(g.entity_name); return i === -1 ? 999 : i; };
     return [...rows].sort((a, b) => rank(a) - rank(b) || a.entity_name.localeCompare(b.entity_name, 'ar'));
   }, [rows]);
+
+  // شعار الجهة: يُصغَّر إلى data URL ويُحفظ في logo_url فلا يضيع (نفس مبدأ الموردين)
+  async function setLogo(g, e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setLogoBusyId(g.id); setErr('');
+    try {
+      const dataUrl = await logoFileToDataUrl(file);
+      const up = await updateGovernmentAccount(g.id, { logo_url: dataUrl });
+      setRows((s) => s.map((x) => (x.id === up.id ? up : x)));
+    } catch (e2) {
+      setErr(e2.message || 'تعذّر رفع الشعار');
+    } finally {
+      setLogoBusyId(null);
+    }
+  }
 
   async function attach(g, e) {
     const file = e.target.files?.[0];
@@ -411,7 +436,17 @@ function GovPanel({ rows, setRows }) {
               return (
                 <tr key={g.id}>
                   <td>{fmtNum(i + 1)}</td>
-                  <td><span className="nm">{g.entity_name}</span></td>
+                  <td>
+                    <span className="sup-cell">
+                      <label className="gov-logo-pick" htmlFor={`gov-logo-${g.id}`} title="اضغط لتغيير شعار الجهة">
+                        {g.logo_url
+                          ? <img className="sup-logo" src={g.logo_url} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                          : <span className="sup-logo sup-logo-fallback">{logoBusyId === g.id ? '…' : (g.entity_name || '؟').slice(0, 1)}</span>}
+                        <input id={`gov-logo-${g.id}`} type="file" accept="image/*" hidden disabled={logoBusyId === g.id} onChange={(e) => setLogo(g, e)} />
+                      </label>
+                      <span className="nm">{g.entity_name}</span>
+                    </span>
+                  </td>
                   <td>{g.login_url ? <a className="link" href={g.login_url} target="_blank" rel="noreferrer">فتح ↗</a> : '—'}</td>
                   <td dir="ltr" style={{ textAlign: 'start' }}>{g.username || '—'}</td>
                   <td dir="ltr" style={{ textAlign: 'start' }}>{g.secret_ref || '—'}</td>
@@ -710,6 +745,161 @@ function UserPermissions({ users, reload }) {
   );
 }
 
+/* ============================ الاستيراد والتصدير ============================ */
+
+function ImportExportPanel() {
+  const [expEntity, setExpEntity] = useState('clients');
+  const [expBusy, setExpBusy] = useState(false);
+
+  const [impEntity, setImpEntity] = useState('clients');
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null); // { rows, error }
+  const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState(null);
+
+  async function doExport(format) {
+    setExpBusy(true);
+    try {
+      const n = await exportEntity(expEntity, format);
+      toast(`صُدّر ${fmtNum(n)} سجلاً`);
+    } catch (e) {
+      toast(e.message || 'تعذّر التصدير', 'err');
+    } finally { setExpBusy(false); }
+  }
+
+  async function doBackup() {
+    setExpBusy(true);
+    try {
+      await exportFullBackup();
+      toast('تم تنزيل النسخة الاحتياطية الكاملة');
+    } catch (e) {
+      toast(e.message || 'تعذّر إنشاء النسخة', 'err');
+    } finally { setExpBusy(false); }
+  }
+
+  async function onFile(e) {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    setResult(null); setProgress(0);
+    if (!f) { setFile(null); setPreview(null); return; }
+    setFile(f);
+    try {
+      const rows = await readImportFile(f, impEntity);
+      setPreview({ rows, error: '' });
+    } catch (e2) {
+      setPreview({ rows: [], error: e2.message || 'تعذّر قراءة الملف' });
+    }
+  }
+
+  async function runImport() {
+    if (!preview?.rows?.length) return;
+    setImporting(true); setResult(null); setProgress(0);
+    try {
+      const res = await importRows(impEntity, preview.rows, {
+        onProgress: (done, total) => setProgress(Math.round((done / total) * 100)),
+      });
+      setResult(res);
+      setFile(null); setPreview(null);
+      if (res.added > 0) toast(`أُضيف ${fmtNum(res.added)} سجلاً`);
+      else if (res.errors.length) toast('لم يُضف أي سجل — راجع الأخطاء', 'err');
+      else toast('كل السجلات موجودة مسبقاً');
+    } catch (e) {
+      toast(e.message || 'تعذّر الاستيراد', 'err');
+    } finally { setImporting(false); }
+  }
+
+  return (
+    <>
+      <PanelHead icon={IconData} title="الاستيراد والتصدير" />
+      <div className="set-body">
+        <div className="notebar">صدّر بياناتك إلى CSV (يفتح في Excel) أو JSON، أو استورد دفعة من ملف. الاستيراد يتحقق من الحقول ويتجاوز المكرّر تلقائياً.</div>
+
+        {/* التصدير */}
+        <div className="card">
+          <div className="sec-head"><h2>تصدير البيانات</h2></div>
+          <div className="io-row">
+            <div className="field" style={{ flex: 1, minWidth: 200 }}>
+              <label>الجدول المراد تصديره</label>
+              <select value={expEntity} onChange={(e) => setExpEntity(e.target.value)}>
+                {EXPORTABLE.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </div>
+            <button className="btn" type="button" disabled={expBusy} onClick={() => doExport('csv')}>تنزيل CSV</button>
+            <button className="btn ghost" type="button" disabled={expBusy} onClick={() => doExport('json')}>تنزيل JSON</button>
+          </div>
+          <div className="io-divider" />
+          <div className="io-row">
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <b style={{ fontSize: 14 }}>نسخة احتياطية كاملة</b>
+              <div className="note" style={{ textAlign: 'start', marginTop: 2 }}>كل الجداول في ملف JSON واحد.</div>
+            </div>
+            <button className="btn ghost" type="button" disabled={expBusy} onClick={doBackup}>تنزيل نسخة كاملة</button>
+          </div>
+        </div>
+
+        {/* الاستيراد */}
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="sec-head"><h2>استيراد البيانات</h2></div>
+          <div className="io-row">
+            <div className="field" style={{ flex: 1, minWidth: 200 }}>
+              <label>الجدول المستهدف</label>
+              <select value={impEntity} onChange={(e) => { setImpEntity(e.target.value); setFile(null); setPreview(null); setResult(null); }}>
+                {IMPORTABLE.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </div>
+            <label className="btn ghost" htmlFor="io-file" style={{ cursor: 'pointer' }}>{file ? 'تغيير الملف' : 'اختيار ملف CSV/JSON'}</label>
+            <input id="io-file" type="file" accept=".csv,.json,text/csv,application/json" hidden onChange={onFile} />
+          </div>
+
+          <div className="note" style={{ textAlign: 'start' }}>
+            الأعمدة المتوقعة: {ENTITIES[impEntity].columns.map((c) => c.label).join('، ')}.
+            {' '}أو نزّل ملف تصدير لنفس الجدول وعدّله ثم أعد رفعه.
+          </div>
+
+          {file && preview && !preview.error && (
+            <div className="io-preview">
+              <b>{file.name}</b> — {fmtNum(preview.rows.length)} صف جاهز للاستيراد.
+            </div>
+          )}
+          {preview?.error && <div className="errbar" style={{ marginTop: 12 }}>{preview.error}</div>}
+
+          {importing && (
+            <div className="io-progress">
+              <div className="io-track"><div className="io-track-fill" style={{ width: `${progress}%` }} /></div>
+              <span>{fmtNum(progress)}%</span>
+            </div>
+          )}
+
+          {preview?.rows?.length > 0 && !preview.error && (
+            <div className="modal-actions" style={{ marginTop: 14 }}>
+              <button className="btn" type="button" disabled={importing} onClick={runImport}>
+                {importing ? 'جارٍ الاستيراد…' : `استيراد ${fmtNum(preview.rows.length)} صف`}
+              </button>
+            </div>
+          )}
+
+          {result && (
+            <div className="io-result">
+              <div className="io-stats">
+                <span className="io-stat ok">أُضيف: {fmtNum(result.added)}</span>
+                <span className="io-stat skip">مكرّر متجاوَز: {fmtNum(result.skipped)}</span>
+                <span className="io-stat err">أخطاء: {fmtNum(result.errors.length)}</span>
+              </div>
+              {result.errors.length > 0 && (
+                <ul className="io-errors">
+                  {result.errors.slice(0, 12).map((msg, i) => <li key={i}>{msg}</li>)}
+                  {result.errors.length > 12 && <li>… و{fmtNum(result.errors.length - 12)} خطأ آخر</li>}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ============================ أيقونات ============================ */
 
 function IconTruck() {
@@ -723,4 +913,7 @@ function IconBank() {
 }
 function IconStore() {
   return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 9h14v11H5zM3.5 9l1.3-4.5h14.4L20.5 9M12 20v-6" /></svg>;
+}
+function IconData() {
+  return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>;
 }

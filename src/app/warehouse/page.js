@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   getInventory, getWarehouses, getCategories, getSuppliers,
   createInventoryItem, updateInventoryItem, removeInventoryItem,
@@ -7,12 +7,33 @@ import {
 import { canAccess } from '@/lib/permissions';
 import { useAccess } from '@/lib/useAccess';
 import { fmtMoney, fmtNum } from '@/lib/format';
+import { decodeBarcodeFromFile, startBarcodeScanner } from '@/lib/barcode';
 import { Loading, Empty, ErrorBar } from '../ui';
 
 const EMPTY = {
   name: '', barcode: '', category_id: '', unit: 'قطعة', quantity: '', reorder_level: '',
   unit_cost: '', supplier_id: '', warehouse_id: '',
 };
+
+function BarcodeIcon({ size = 15 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M3 6v12M7 6v12M10.5 6v12M14 6v8M14 17.5v.5M17.5 6v12M21 6v12" />
+    </svg>
+  );
+}
+
+function SupplierCell({ supplier }) {
+  if (!supplier) return <>—</>;
+  return (
+    <span className="sup-cell">
+      {supplier.logo_url
+        ? <img className="sup-logo" src={supplier.logo_url} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        : <span className="sup-logo sup-logo-fallback">{(supplier.name || '؟').slice(0, 1)}</span>}
+      {supplier.name}
+    </span>
+  );
+}
 
 export default function WarehousePage() {
   const [d, setD] = useState(null);
@@ -26,9 +47,13 @@ export default function WarehousePage() {
   const [form, setForm] = useState(EMPTY);
   const [inventoryForm, setInventoryForm] = useState({ quantity: '', reorder_level: '' });
   const [productImage, setProductImage] = useState({ name: '', preview: '' });
-  const [barcodeImage, setBarcodeImage] = useState({ name: '', preview: '' });
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [scanErr, setScanErr] = useState('');
+  const [decoding, setDecoding] = useState(false);
+  const videoRef = useRef(null);
+  const stopScanRef = useRef(null);
 
   async function load() {
     try {
@@ -39,14 +64,11 @@ export default function WarehousePage() {
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
+  useEffect(() => () => { stopScanRef.current?.(); }, []);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
   function setInventory(k, v) { setInventoryForm((f) => ({ ...f, [k]: v })); }
-  function resetImages() {
-    setProductImage({ name: '', preview: '' });
-    setBarcodeImage({ name: '', preview: '' });
-  }
-  function openAdd() { setEditing(null); setForm(EMPTY); resetImages(); setFormErr(''); setOpen(true); }
+  function openAdd() { setEditing(null); setForm(EMPTY); setProductImage({ name: '', preview: '' }); setFormErr(''); setOpen(true); }
   function openEdit(it) {
     setEditing(it);
     setForm({
@@ -54,18 +76,15 @@ export default function WarehousePage() {
       unit: it.unit || 'قطعة', quantity: it.quantity ?? '', reorder_level: it.reorder_level ?? '',
       unit_cost: it.unit_cost ?? '', supplier_id: it.supplier_id || '', warehouse_id: it.warehouse_id || '',
     });
-    resetImages();
+    setProductImage({ name: '', preview: '' });
     setFormErr(''); setOpen(true);
   }
   function openInventory(it) {
     setInventorying(it);
-    setInventoryForm({
-      quantity: it.quantity ?? '',
-      reorder_level: it.reorder_level ?? '',
-    });
+    setInventoryForm({ quantity: it.quantity ?? '', reorder_level: it.reorder_level ?? '' });
     setFormErr('');
   }
-  function close() { if (!saving) { setOpen(false); setEditing(null); resetImages(); } }
+  function close() { if (!saving) { stopScan(); setOpen(false); setEditing(null); setProductImage({ name: '', preview: '' }); } }
   function closeInventory() { if (!saving) { setInventorying(null); setInventoryForm({ quantity: '', reorder_level: '' }); } }
 
   function handleProductImage(e) {
@@ -74,29 +93,43 @@ export default function WarehousePage() {
     setProductImage({ name: file.name, preview: URL.createObjectURL(file) });
   }
 
+  function stopScan() {
+    stopScanRef.current?.();
+    stopScanRef.current = null;
+    setScanning(false);
+    setScanErr('');
+  }
+
+  async function startScan() {
+    setScanErr('');
+    setScanning(true);
+    // ننتظر ظهور عنصر الفيديو في الـDOM
+    requestAnimationFrame(async () => {
+      try {
+        if (!videoRef.current) throw new Error('no-video');
+        stopScanRef.current = await startBarcodeScanner(videoRef.current, (text) => {
+          set('barcode', text);
+          setFormErr('');
+          stopScan();
+        });
+      } catch (e2) {
+        setScanning(false);
+        setScanErr(e2?.name === 'NotAllowedError'
+          ? 'تم رفض إذن الكاميرا — فعّله من إعدادات المتصفح ثم أعد المحاولة.'
+          : 'تعذّر فتح الكاميرا. يمكنك التقاط صورة للباركود بدلاً من ذلك.');
+      }
+    });
+  }
+
   async function handleBarcodeImage(e) {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    setBarcodeImage({ name: file.name, preview: URL.createObjectURL(file) });
-    if (!('BarcodeDetector' in window)) {
-      setFormErr('تمت إضافة صورة الباركود. إذا لم يظهر الرقم تلقائياً أدخله يدوياً.');
-      return;
-    }
-    try {
-      const bitmap = await createImageBitmap(file);
-      const detector = new BarcodeDetector({
-        formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code'],
-      });
-      const codes = await detector.detect(bitmap);
-      if (codes[0]?.rawValue) {
-        set('barcode', codes[0].rawValue);
-        setFormErr('');
-      } else {
-        setFormErr('تمت إضافة صورة الباركود، لكن لم يتم قراءة الرقم تلقائياً.');
-      }
-    } catch {
-      setFormErr('تمت إضافة صورة الباركود، لكن لم يتم قراءة الرقم تلقائياً.');
-    }
+    setDecoding(true); setScanErr('');
+    const text = await decodeBarcodeFromFile(file);
+    setDecoding(false);
+    if (text) { set('barcode', text); setFormErr(''); }
+    else setScanErr('لم يُقرأ الباركود من الصورة — قرّب الكاميرا وحاول مجدداً أو أدخل الرقم يدوياً.');
   }
 
   async function submit(e) {
@@ -153,21 +186,24 @@ export default function WarehousePage() {
   const canRunInventory = canAccess(access, 'warehouse_inventory');
   const catName = Object.fromEntries(categories.map((c) => [c.id, c.name]));
   const whName = Object.fromEntries(warehouses.map((w) => [w.id, w.name]));
-  const supName = Object.fromEntries(suppliers.map((s) => [s.id, s.name]));
+  const supById = Object.fromEntries(suppliers.map((s) => [s.id, s]));
 
+  const itemValue = (it) => (Number(it.quantity) || 0) * (Number(it.unit_cost) || 0);
   const filtered = items.filter((it) =>
     (!fCat || it.category_id === fCat) && (!fWh || it.warehouse_id === fWh));
   const lowCount = items.filter((it) => Number(it.quantity) < Number(it.reorder_level)).length;
+  const totalStockValue = items.reduce((sum, it) => sum + itemValue(it), 0);
   const warehouseStats = warehouses.map((warehouse) => {
     const rows = items.filter((item) => item.warehouse_id === warehouse.id);
     return {
       id: warehouse.id,
       name: warehouse.name,
       count: rows.length,
-      cost: rows.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unit_cost) || 0), 0),
+      cost: rows.reduce((sum, item) => sum + itemValue(item), 0),
     };
   });
   const visibleStats = warehouseStats.slice(0, 3);
+  const formValue = (Number(form.quantity) || 0) * (Number(form.unit_cost) || 0);
 
   return (
     <>
@@ -196,6 +232,13 @@ export default function WarehousePage() {
       )}
 
       <div className="warehouse-stats">
+        <div className="warehouse-stat warehouse-stat-total">
+          <div>
+            <b>إجمالي قيمة المخزون</b>
+            <span>{fmtNum(items.length)} صنف في كل المستودعات</span>
+          </div>
+          <strong className="amt">{fmtMoney(totalStockValue)} ⃁</strong>
+        </div>
         {visibleStats.map((warehouse) => (
           <div className="warehouse-stat" key={warehouse.id}>
             <div>
@@ -212,7 +255,7 @@ export default function WarehousePage() {
           <Empty title="لا أصناف" desc={canManageProducts ? 'أضف أصناف المخزون لإدارتها هنا.' : 'لا توجد أصناف مطابقة للفلاتر الحالية.'} />
         ) : (
           <table>
-            <thead><tr><th>الصنف</th><th>التصنيف</th><th>المستودع</th><th>الكمية</th><th>حد التنبيه</th><th>التكلفة</th><th>المورّد</th><th></th></tr></thead>
+            <thead><tr><th>الصنف</th><th>التصنيف</th><th>المستودع</th><th>الكمية</th><th>حد التنبيه</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th><th>المورّد</th><th></th></tr></thead>
             <tbody>
               {filtered.map((it) => {
                 const low = Number(it.quantity) < Number(it.reorder_level);
@@ -220,7 +263,7 @@ export default function WarehousePage() {
                   <tr key={it.id} className={low ? 'row-low' : ''}>
                     <td>
                       <span className="nm">{it.name}</span>
-                      {it.barcode && <><br /><span className="uid amt">{it.barcode}</span></>}
+                      {it.barcode && <><br /><span className="uid amt bc-code"><BarcodeIcon size={13} />{it.barcode}</span></>}
                     </td>
                     <td>{catName[it.category_id] || '—'}</td>
                     <td>{whName[it.warehouse_id] || '—'}</td>
@@ -230,7 +273,8 @@ export default function WarehousePage() {
                     </td>
                     <td className="amt">{fmtNum(it.reorder_level)}</td>
                     <td className="amt">{fmtMoney(it.unit_cost)} ⃁</td>
-                    <td>{supName[it.supplier_id] || '—'}</td>
+                    <td className="amt"><b>{fmtMoney(itemValue(it))}</b> ⃁</td>
+                    <td><SupplierCell supplier={supById[it.supplier_id]} /></td>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                       {canRunInventory && <button className="btn ghost sm" onClick={() => openInventory(it)}>جرد</button>}
                       {canManageProducts && <button className="btn ghost sm" style={{ marginInlineStart: canRunInventory ? 8 : 0 }} onClick={() => openEdit(it)}>تعديل</button>}
@@ -256,26 +300,31 @@ export default function WarehousePage() {
             </div>
             {formErr && <div className="errbar">{formErr}</div>}
             <div className="form-grid">
-              <div className="field span-2"><label>اسم الصنف</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
+              <div className="field span-2"><label>اسم الصنف</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required /></div>
+
               <div className="field span-2">
-                <label>صورة المنتج</label>
-                <div className="upload-row">
-                  <label className="btn ghost sm" htmlFor="product-image">رفع صورة المنتج</label>
-                  <input id="product-image" type="file" accept="image/*" hidden onChange={handleProductImage} />
-                  {productImage.name && <span>{productImage.name}</span>}
-                </div>
-                {productImage.preview && <img className="upload-preview" src={productImage.preview} alt="صورة المنتج" />}
-              </div>
-              <div className="field"><label>الباركود</label><input value={form.barcode} onChange={(e) => set('barcode', e.target.value)} dir="ltr" /></div>
-              <div className="field">
-                <label>تصوير الباركود</label>
-                <div className="upload-row">
-                  <label className="btn ghost sm" htmlFor="barcode-image">تصوير الباركود</label>
+                <label><span className="lbl-ico"><BarcodeIcon /></span> الباركود</label>
+                <div className="bc-row">
+                  <div className="bc-input">
+                    <span className="bc-input-ico"><BarcodeIcon size={17} /></span>
+                    <input value={form.barcode} onChange={(e) => set('barcode', e.target.value)} dir="ltr" placeholder="0000000000000" inputMode="numeric" />
+                  </div>
+                  <button className="btn ghost sm" type="button" onClick={scanning ? stopScan : startScan}>
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M3 12h18" /></svg>
+                    {scanning ? 'إيقاف المسح' : 'مسح بالكاميرا'}
+                  </button>
+                  <label className="btn ghost sm" htmlFor="barcode-image">{decoding ? 'جارٍ القراءة…' : 'صورة باركود'}</label>
                   <input id="barcode-image" type="file" accept="image/*" capture="environment" hidden onChange={handleBarcodeImage} />
                 </div>
-                {barcodeImage.preview && <img className="upload-preview barcode" src={barcodeImage.preview} alt="صورة الباركود" />}
+                {scanning && (
+                  <div className="scan-box">
+                    <video ref={videoRef} className="scan-video" muted playsInline autoPlay />
+                    <span className="scan-line" />
+                  </div>
+                )}
+                {scanErr && <span className="scan-err">{scanErr}</span>}
               </div>
-              <div className="field"><label>الوحدة</label><input value={form.unit} onChange={(e) => set('unit', e.target.value)} /></div>
+
               <div className="field"><label>التصنيف</label>
                 <select value={form.category_id} onChange={(e) => set('category_id', e.target.value)}>
                   <option value="">— بدون —</option>
@@ -288,14 +337,31 @@ export default function WarehousePage() {
                   {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
               </div>
+
               <div className="field"><label>الكمية</label><input type="number" min="0" step="0.01" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} dir="ltr" /></div>
-              <div className="field"><label>حد التنبيه</label><input type="number" min="0" step="0.01" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} dir="ltr" /></div>
+              <div className="field"><label>الوحدة</label><input value={form.unit} onChange={(e) => set('unit', e.target.value)} /></div>
+
               <div className="field"><label>تكلفة الوحدة (⃁)</label><input type="number" min="0" step="0.01" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} dir="ltr" /></div>
+              <div className="field"><label>حد التنبيه</label><input type="number" min="0" step="0.01" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} dir="ltr" /></div>
+
               <div className="field"><label>المورّد</label>
                 <select value={form.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
                   <option value="">— بدون —</option>
                   {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
+              </div>
+              <div className="field"><label>إجمالي قيمة المخزون (⃁)</label>
+                <div className="stock-value amt">{fmtMoney(formValue)} ⃁</div>
+              </div>
+
+              <div className="field span-2">
+                <label>صورة المنتج</label>
+                <div className="upload-row">
+                  <label className="btn ghost sm" htmlFor="product-image">رفع صورة المنتج</label>
+                  <input id="product-image" type="file" accept="image/*" hidden onChange={handleProductImage} />
+                  {productImage.name && <span>{productImage.name}</span>}
+                </div>
+                {productImage.preview && <img className="upload-preview" src={productImage.preview} alt="صورة المنتج" />}
               </div>
             </div>
             <div className="modal-actions">

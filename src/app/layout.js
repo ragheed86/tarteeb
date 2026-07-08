@@ -11,7 +11,11 @@ export const metadata = {
     title: 'ترتيب',
   },
   icons: {
-    icon: '/app-icon.svg',
+    icon: [
+      { url: '/favicon-48.png', sizes: '48x48', type: 'image/png' },
+      { url: '/app-icon.png', sizes: '512x512', type: 'image/png' },
+    ],
+    shortcut: '/favicon-48.png',
     apple: '/icons/apple-touch-icon.png',
   },
 };

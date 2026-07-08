@@ -109,6 +109,12 @@ export async function getAllProjectCosts() {
   const { data, error } = await supabase.from('project_costs').select('project_id,amount');
   if (error) throw error; return data;
 }
+// تكاليف مفصّلة لكل المشاريع — لتقارير التصدير (تفريق الخدمة عن المنظمات/المواد)
+export async function getAllProjectCostsDetailed() {
+  const { data, error } = await supabase.from('project_costs')
+    .select('project_id,kind,amount,sale_price,markup_percent');
+  if (error) throw error; return data;
+}
 // بنود «الجدول التقديري» (عمالة/إشراف/مواد/نقل/أخرى بلا وصف مخصّص) مقابل بنود التكلفة الحرة
 // التي يضيفها المستخدم يدوياً بنوع ووصف ومبلغ من اختياره.
 // يستبدل بنود الجدول التقديري فقط دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً

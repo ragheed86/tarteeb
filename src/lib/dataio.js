@@ -1,7 +1,8 @@
 // طبقة استيراد/تصدير البيانات — CSV (يفتح في Excel) و JSON. بلا مكتبات خارجية.
 import {
   getClients, getProjects, getSuppliers, getEmployees, getInvoices, getGovernmentAccounts,
-  createClient, createSupplier, createEmployee,
+  getAllProjectCostsDetailed,
+  createClient, createSupplier, createEmployee, createProject, createProjectCost,
 } from '@/lib/data';
 import { SOURCE_LABEL, CLIENT_STATUS, PROJECT_STATUS, INVOICE_STATUS } from '@/lib/format';
 
@@ -69,8 +70,17 @@ function normEnum(value, keys, labelMap, fallback) {
   return rev[v] || fallback;
 }
 
+// يحوّل نصاً رقمياً (بفواصل آلاف أو أرقام عربية) إلى رقم، وإلا 0
+const num = (v) => {
+  const s = String(v ?? '').replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,،\s]/g, '').replace(/[^\d.-]/g, '');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+};
+const round2 = (n) => Math.round(n * 100) / 100;
+
 const CLIENT_SOURCES = ['instagram', 'tiktok', 'referral', 'client_referral', 'employee_referral', 'other'];
 const CLIENT_STATUSES = ['lead', 'active', 'completed', 'waiting'];
+const PROJECT_STATUSES = ['quote', 'preparing', 'in_progress', 'delivered', 'completed', 'cancelled'];
 const EMP_WAGES = ['fixed', 'daily', 'hourly'];
 const EMP_STATUSES = ['active', 'on_project', 'inactive'];
 const WAGE_LABELS = { fixed: 'ثابت', daily: 'يومي', hourly: 'بالساعة' };
@@ -223,6 +233,130 @@ export const ENTITIES = {
       entity_name: g.entity_name, login_url: g.login_url, username: g.username,
       contact: g.contact, expiry_date: g.expiry_date, status: g.status,
     })),
+  },
+
+  // ملخص حسابات العملاء والمنظمات: كل صف = عميل + مشروع + تفكيك تكاليف (خدمة + منظمات بهامش)
+  // الأعمدة المشتقّة (ربح الخدمة/نسبها/ربح المنظمات) تُحسب عند التصدير وتُتجاهل عند الاستيراد
+  accounts: {
+    label: 'ملخص العملاء والمنظمات',
+    importable: true,
+    columns: [
+      { k: 'name', label: 'الاسم' },
+      { k: 'date', label: 'التاريخ' },
+      { k: 'sale', label: 'مبلغ البيع' },
+      { k: 'service_cost', label: 'مصاريف الخدمة' },
+      { k: 'service_profit', label: 'ربح الخدمة' },
+      { k: 'service_margin', label: 'نسبة ربح الخدمة (%)' },
+      { k: 'org_markup', label: 'نسبة إضافة المنظمات (%)' },
+      { k: 'org_before', label: 'المنظمات قبل الإضافة' },
+      { k: 'org_after', label: 'المنظمات بعد الإضافة' },
+      { k: 'org_profit', label: 'ربح المنظمات' },
+      { k: 'notes', label: 'ملاحظات' },
+      { k: 'phone', label: 'الجوال' },
+      { k: 'source', label: 'المصدر' },
+      { k: 'district', label: 'الحي' },
+      { k: 'status', label: 'الحالة' },
+    ],
+    fetchExport: async () => {
+      const [projects, clients, costs] = await Promise.all([getProjects(), getClients(), getAllProjectCostsDetailed()]);
+      const byId = Object.fromEntries(clients.map((c) => [c.id, c]));
+      const costsByProject = {};
+      for (const c of costs) (costsByProject[c.project_id] ||= []).push(c);
+      return projects.map((p) => {
+        const rows = costsByProject[p.id] || [];
+        const mats = rows.filter((r) => r.kind === 'materials');
+        const orgBefore = round2(mats.reduce((s, r) => s + Number(r.amount || 0), 0));
+        const orgAfter = round2(mats.reduce((s, r) => s + Number(r.sale_price || r.amount || 0), 0));
+        const serviceCost = round2(rows.filter((r) => r.kind !== 'materials').reduce((s, r) => s + Number(r.amount || 0), 0));
+        const sale = Number(p.sale_price || 0);
+        const serviceRevenue = sale - orgAfter;
+        const serviceProfit = round2(serviceRevenue - serviceCost);
+        const c = byId[p.client_id] || {};
+        return {
+          name: c.name || '',
+          date: p.due_date || p.start_date || '',
+          sale,
+          service_cost: serviceCost,
+          service_profit: serviceProfit,
+          service_margin: serviceRevenue > 0 ? Math.round((serviceProfit / serviceRevenue) * 100) : 0,
+          org_markup: orgBefore > 0 ? Math.round((orgAfter / orgBefore - 1) * 100) : 0,
+          org_before: orgBefore,
+          org_after: orgAfter,
+          org_profit: round2(orgAfter - orgBefore),
+          notes: p.title && p.title !== 'مشروع تنظيم' ? p.title : (c.notes || ''),
+          phone: c.phone || '',
+          source: SOURCE_LABEL[c.source] || c.source || '',
+          district: c.district || '',
+          status: PROJECT_STATUS[p.status]?.label || p.status || '',
+        };
+      });
+    },
+    // منع التكرار: نفس العميل + التاريخ + مبلغ البيع = نفس السجل
+    fetchExisting: async () => {
+      const [projects, clients] = await Promise.all([getProjects(), getClients()]);
+      const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
+      return projects.map((p) => ({
+        _name: byId[p.client_id] || '', _date: p.due_date || p.start_date || '', _sale: Number(p.sale_price || 0),
+      }));
+    },
+    dedupeKey: (r) => {
+      const name = (r._name ?? r.name ?? '').toString().trim();
+      const date = (r._date ?? r.date ?? '').toString().trim();
+      const sale = r._sale ?? num(r.sale);
+      return name ? `${name}|${date}|${sale}` : '';
+    },
+    buildPayload: (raw) => ({
+      client: {
+        name: clean(raw.name),
+        phone: clean(raw.phone),
+        source: normEnum(raw.source, CLIENT_SOURCES, SOURCE_LABEL, 'other'),
+        district: clean(raw.district),
+      },
+      project: {
+        date: clean(raw.date),
+        sale: num(raw.sale),
+        status: normEnum(raw.status, PROJECT_STATUSES, PROJECT_STATUS, 'delivered'),
+        notes: clean(raw.notes),
+      },
+      serviceCost: num(raw.service_cost),
+      org: { before: num(raw.org_before), after: num(raw.org_after), markup: num(raw.org_markup) },
+      name: clean(raw.name), date: clean(raw.date), sale: num(raw.sale),
+    }),
+    validate: (p) => (p.client.name ? null : 'اسم العميل مطلوب'),
+    // إنشاء متعدّد الجداول: عميل (أو استخدام الموجود) + مشروع + بنود تكلفة
+    create: async (p) => {
+      const existingClients = await getClients();
+      const key = (c) => (c.phone ? `p:${String(c.phone).trim()}` : `n:${String(c.name).trim()}`);
+      const wantKey = p.client.phone ? `p:${p.client.phone}` : `n:${p.client.name}`;
+      let client = existingClients.find((c) => key(c) === wantKey);
+      if (!client) client = await createClient({ ...p.client, status: 'active' });
+
+      const project = await createProject({
+        client_id: client.id,
+        title: p.project.notes || 'مشروع تنظيم',
+        sale_price: p.project.sale,
+        status: p.project.status,
+        start_date: p.project.date || null,
+        due_date: p.project.date || null,
+      });
+
+      if (p.serviceCost > 0) {
+        await createProjectCost({ project_id: project.id, kind: 'other', label: 'مصاريف الخدمة', amount: p.serviceCost });
+      }
+      if (p.org.before > 0 || p.org.after > 0) {
+        await createProjectCost({
+          project_id: project.id, kind: 'materials', product_name: 'منظمات',
+          amount: p.org.before, sale_price: p.org.after || null,
+          markup_percent: p.org.markup || null,
+        });
+      }
+      return project;
+    },
+    example: {
+      name: 'سارة البراهيم', date: '2026-07-01', sale: '6800', service_cost: '2000',
+      service_profit: '', service_margin: '', org_markup: '30', org_before: '2000', org_after: '2600',
+      org_profit: '', notes: 'تنظيم مطبخ', phone: '0501234567', source: 'انستقرام', district: 'جرير', status: 'مكتمل',
+    },
   },
 };
 

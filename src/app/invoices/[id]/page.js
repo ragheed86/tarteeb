@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import QRCode from 'qrcode';
 import {
   getInvoice, getInvoiceItems, getInvoicePayments, getClient, getCompanySettings,
   updateInvoice, createInvoicePayment, removeInvoicePayment,
@@ -24,15 +25,20 @@ const PAYMENT_METHOD = {
   other: 'أخرى',
 };
 
-// شعار ترتيب (نسخة متجهة للفاتورة)
-function TarteebMark() {
-  return (
-    <svg className="inv2-logo" viewBox="0 0 560 168" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ترتيب">
-      <path d="M182 54 C 244 28, 322 28, 392 50" fill="none" stroke="#F0A896" strokeWidth="2.4" strokeLinecap="round" />
-      <text x="280" y="106" textAnchor="middle" fontFamily="'Julius Sans One', sans-serif" fontSize="76" letterSpacing="10" fill="#F0A896">TARTEEB</text>
-      <text x="280" y="144" textAnchor="middle" fontFamily="'Julius Sans One', sans-serif" fontSize="16.5" letterSpacing="11" fill="#83C0B4">ARRANGE &amp; ORGANIZE</text>
-    </svg>
-  );
+// ترميز ZATCA TLV (المرحلة الأولى) ثم Base64 لبناء محتوى رمز QR
+function zatcaTlvBase64({ seller, vat, ts, total, vatAmount }) {
+  const enc = new TextEncoder();
+  const field = (tag, val) => {
+    const b = enc.encode(String(val ?? ''));
+    return [tag, b.length, ...b];
+  };
+  const bytes = [
+    ...field(1, seller), ...field(2, vat), ...field(3, ts),
+    ...field(4, total), ...field(5, vatAmount),
+  ];
+  let bin = '';
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin);
 }
 
 // رقم واتساب دولي من رقم سعودي محلي
@@ -53,6 +59,7 @@ export default function InvoiceDetail() {
   const [payment, setPayment] = useState({ amount: '', paid_at: new Date().toISOString().slice(0, 10), method: 'bank_transfer', note: '' });
   const [paymentErr, setPaymentErr] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
+  const [qrUrl, setQrUrl] = useState('');
 
   async function load() {
     setErr('');
@@ -70,16 +77,26 @@ export default function InvoiceDetail() {
   }
   useEffect(() => { load(); }, [id]);
 
+  // توليد رمز QR فعلي (ZATCA) لكل فاتورة — يُستخدم المخزَّن إن وُجد، وإلا يُبنى من بيانات الفاتورة
+  useEffect(() => {
+    if (!d?.invoice) return;
+    const { invoice, company } = d;
+    if (invoice.zatca_qr) { setQrUrl(invoice.zatca_qr); return; }
+    const payload = zatcaTlvBase64({
+      seller: company?.name_ar || 'ترتيب لتنظيم المساحات',
+      vat: company?.vat_number || '',
+      ts: invoice.issue_at || new Date().toISOString(),
+      total: Number(invoice.total || 0).toFixed(2),
+      vatAmount: Number(invoice.vat_amount || 0).toFixed(2),
+    });
+    QRCode.toDataURL(payload, { margin: 0, width: 240, errorCorrectionLevel: 'M' })
+      .then(setQrUrl).catch(() => setQrUrl(''));
+  }, [d]);
+
   async function changeStatus(status) {
     setBusy(true);
     try { const up = await updateInvoice(id, { status }); setD((s) => ({ ...s, invoice: up })); }
     catch (e) { setErr(e.message || 'تعذّر التحديث'); }
-    finally { setBusy(false); }
-  }
-  async function changeDueAt(dueAt) {
-    setBusy(true);
-    try { const up = await updateInvoice(id, { due_at: dueAt || null }); setD((s) => ({ ...s, invoice: up })); }
-    catch (e) { setErr(e.message || 'تعذّر تحديث تاريخ الاستحقاق'); }
     finally { setBusy(false); }
   }
   async function addPayment(e) {
@@ -152,111 +169,107 @@ export default function InvoiceDetail() {
         <div className="kpi"><div className="lbl">عدد الدفعات</div><div className="val amt">{fmtNum(payments.length)}</div></div>
       </div>
 
-      {/* ورقة الفاتورة — التصميم المعتمد (فيروزي/مرجاني) */}
-      <div className="inv2-sheet" dir="rtl">
-        {/* الرأس */}
-        <div className="inv2-head">
-          <div className="inv2-title">
-            <div className="inv2-title-lg">فاتورة</div>
-            <div className="inv2-title-sm">{invoice.vat_applicable ? 'فاتورة ضريبية' : 'فاتورة'}</div>
+      {/* ورقة الفاتورة — التصميم المعتمد بمقاس A4 (مطابق 100%) */}
+      <div className="inv2-page no-print-shadow">
+        <div className="inv2-sheet" dir="rtl">
+          {/* الرأس */}
+          <div className="inv2-head">
+            <div className="inv2-title">
+              <div className="inv2-title-lg">فاتورة</div>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="inv2-logo" src="/tarteeb-logo.png" alt="شعار ترتيب" />
           </div>
-          <TarteebMark />
-        </div>
 
-        {/* شريط البيانات + QR */}
-        <div className="inv2-meta">
-          <div className="inv2-meta-cols">
-            <div className="inv2-meta-item">
-              <div className="inv2-k">رقم الفاتورة:</div>
-              <div className="inv2-v amt" dir="ltr">#{invoice.number}</div>
-            </div>
-            <div className="inv2-meta-item">
-              <div className="inv2-k">التاريخ:</div>
-              <div className="inv2-v">{fmtDate(invoice.issue_at)}</div>
-            </div>
-            {invoice.due_at && (
+          {/* شريط البيانات + QR */}
+          <div className="inv2-meta">
+            <div className="inv2-meta-cols">
               <div className="inv2-meta-item">
-                <div className="inv2-k">تاريخ الاستحقاق:</div>
-                <div className="inv2-v">{fmtDate(invoice.due_at)}</div>
+                <div className="inv2-k">التاريخ:</div>
+                <div className="inv2-v">{fmtDate(invoice.issue_at)}</div>
               </div>
-            )}
-          </div>
-          {invoice.zatca_qr
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img className="inv2-qr" src={invoice.zatca_qr} alt="رمز الاستجابة السريعة" width={88} height={88} />
-            : <div className="inv2-qr inv2-qr-ph"><span>QR</span></div>}
-        </div>
-
-        {/* بطاقتا الطرفين */}
-        <div className="inv2-parties">
-          <div className="inv2-party">
-            <div className="inv2-k">مصدرة من:</div>
-            <div className="inv2-party-name">{company?.name_ar || 'ترتيب لتنظيم المساحات'}</div>
-            {company?.cr_number && <div className="inv2-party-line"><b>سجل تجاري:</b> <span dir="ltr">{company.cr_number}</span></div>}
-            {company?.vat_number && <div className="inv2-party-line"><b>الرقم الضريبي:</b> <span dir="ltr">{company.vat_number}</span></div>}
-          </div>
-          <div className="inv2-party">
-            <div className="inv2-k">مصدرة إلى:</div>
-            <div className="inv2-party-name">{client?.name || '—'}</div>
-            {client?.phone && <div className="inv2-party-line">رقم الجوال: <span dir="ltr">{client.phone}</span></div>}
-            <div className="inv2-party-line">{client?.district ? `${client.district}، الرياض` : 'الرياض، المملكة العربية السعودية'}</div>
-          </div>
-        </div>
-
-        {/* جدول البنود */}
-        <div className="inv2-table">
-          <div className="inv2-row inv2-thead">
-            <div className="c-desc">وصف البند</div>
-            <div className="c-num">السعر</div>
-            <div className="c-num">الكمية</div>
-            <div className="c-num">المجموع</div>
-          </div>
-          {items.length === 0 ? (
-            <div className="inv2-row inv2-empty">لا بنود</div>
-          ) : items.map((it) => (
-            <div className="inv2-row inv2-tr" key={it.id}>
-              <div className="c-desc">{it.description}</div>
-              <div className="c-num muted"><span dir="ltr">⃁ {fmtMoney(it.unit_price)}</span></div>
-              <div className="c-num muted">{fmtNum(it.qty)}</div>
-              <div className="c-num strong"><span dir="ltr">⃁ {fmtMoney(Number(it.qty) * Number(it.unit_price))}</span></div>
+              <div className="inv2-meta-item">
+                <div className="inv2-k">رقم الفاتورة:</div>
+                <div className="inv2-v amt" dir="ltr">#{invoice.number}</div>
+              </div>
             </div>
-          ))}
+            {qrUrl
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img className="inv2-qr" src={qrUrl} alt="رمز الاستجابة السريعة" width={88} height={88} />
+              : <div className="inv2-qr inv2-qr-ph"><span>QR</span></div>}
+          </div>
 
-          <div className="inv2-row inv2-total-row">
-            <div className="inv2-total-lbl">الإجمالي الفرعي</div>
-            <div className="c-num"><span dir="ltr">⃁ {fmtMoney(invoice.subtotal)}</span></div>
+          {/* بطاقتا الطرفين */}
+          <div className="inv2-parties">
+            <div className="inv2-party">
+              <div className="inv2-k">مصدرة من:</div>
+              <div className="inv2-party-name">{company?.name_ar || 'مؤسسة دلال محمد عبدالله الجعويني التجارية'}</div>
+              {company?.cr_number && <div className="inv2-party-line"><b>سجل تجاري:</b> <span dir="ltr">{company.cr_number}</span></div>}
+              {company?.vat_number && <div className="inv2-party-line"><b>الرقم الضريبي:</b> <span dir="ltr">{company.vat_number}</span></div>}
+            </div>
+            <div className="inv2-party">
+              <div className="inv2-k">مصدرة إلى:</div>
+              <div className="inv2-party-name">{client?.name || '—'}</div>
+              {client?.phone && <div className="inv2-party-line">رقم الجوال: <span dir="ltr">{client.phone}</span></div>}
+              <div className="inv2-party-line">{client?.district ? `${client.district}، الرياض` : 'الرياض، المملكة العربية السعودية'}</div>
+            </div>
           </div>
-          <div className="inv2-row inv2-total-row">
-            <div className="inv2-total-lbl">{invoice.vat_applicable ? `ضريبة القيمة المضافة (${fmtNum(invoice.vat_rate)}٪)` : 'ضريبة القيمة المضافة (معفاة)'}</div>
-            <div className="c-num"><span dir="ltr">⃁ {fmtMoney(invoice.vat_amount)}</span></div>
-          </div>
-          <div className="inv2-row inv2-grand">
-            <div className="inv2-total-lbl">الإجمالي</div>
-            <div className="c-num"><span dir="ltr">⃁ {fmtMoney(invoice.total)}</span></div>
-          </div>
-        </div>
 
-        {/* ملاحظة */}
-        <div className="inv2-note">
-          حرصًا على سلامة مقتنياتكم، نأمل حفظ الأغراض الثمينة وإبلاغ المشرفة عن القطع الحساسة، والتأكد من اكتمال الخدمة قبل مغادرة الفريق. وبعد اعتماد الخدمة ومغادرة الفريق، لا تتحمل «ترتيب» مسؤولية أي فقدان أو ملاحظات يتم الإبلاغ عنها لاحقًا.
-        </div>
+          {/* جدول البنود */}
+          <div className="inv2-table">
+            <div className="inv2-row inv2-thead">
+              <div className="c-desc">وصف البند</div>
+              <div className="c-num">السعر</div>
+              <div className="c-num">الوحدة</div>
+              <div className="c-num">الكمية</div>
+              <div className="c-num">المجموع</div>
+            </div>
+            {items.length === 0 ? (
+              <div className="inv2-empty">لا بنود</div>
+            ) : items.map((it) => (
+              <div className="inv2-row inv2-tr" key={it.id}>
+                <div className="c-desc">{it.description}</div>
+                <div className="c-num muted"><span dir="ltr">⃁ {fmtMoney(it.unit_price)}</span></div>
+                <div className="c-num muted">ساعة</div>
+                <div className="c-num muted">{fmtNum(it.qty)}</div>
+                <div className="c-num strong"><span dir="ltr">⃁ {fmtMoney(Number(it.qty) * Number(it.unit_price))}</span></div>
+              </div>
+            ))}
 
-        {/* التذييل */}
-        <div className="inv2-footer">
-          <div className="inv2-fitem">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17A2A6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
-            <span>{company?.city ? `${company.city}، المملكة العربية السعودية` : 'المملكة العربية السعودية، الرياض'}</span>
+            <div className="inv2-row inv2-total-row">
+              <div className="inv2-total-lbl">الإجمالي الفرعي</div>
+              <div className="c-num"><span dir="ltr">⃁ {fmtMoney(invoice.subtotal)}</span></div>
+            </div>
+            <div className="inv2-row inv2-total-row">
+              <div className="inv2-total-lbl">الخصم</div>
+              <div className="c-num"><span dir="ltr">⃁ {fmtMoney(0)}</span></div>
+            </div>
+            <div className="inv2-row inv2-total-row">
+              <div className="inv2-total-lbl">{invoice.vat_applicable ? `ضريبة القيمة المضافة (${fmtNum(invoice.vat_rate)}٪)` : 'ضريبة القيمة المضافة (معفاة)'}</div>
+              <div className="c-num"><span dir="ltr">⃁ {fmtMoney(invoice.vat_amount)}</span></div>
+            </div>
+            <div className="inv2-row inv2-grand">
+              <div className="inv2-total-lbl">الإجمالي</div>
+              <div className="c-num"><span dir="ltr">⃁ {fmtMoney(invoice.total)}</span></div>
+            </div>
           </div>
-          <div className="inv2-fitem">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17A2A6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
-            <span dir="ltr">{company?.website || 'tarteebandmore.com'}</span>
+
+          {/* ملاحظة */}
+          <div className="inv2-note">
+            حرصًا على سلامة مقتنياتكم، نأمل حفظ الأغراض الثمينة وإبلاغ المشرفة عن القطع الحساسة، والتأكد من اكتمال الخدمة قبل مغادرة الفريق. وبعد اعتماد الخدمة ومغادرة الفريق، لا تتحمل «ترتيب» مسؤولية أي فقدان أو ملاحظات يتم الإبلاغ عنها لاحقًا.
           </div>
-          {company?.phone && (
+
+          {/* التذييل — سطر واحد: الموقع والرابط فقط */}
+          <div className="inv2-footer">
             <div className="inv2-fitem">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17A2A6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
-              <span dir="ltr">{company.phone}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17A2A6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" /></svg>
+              <span>المملكة العربية السعودية، الرياض</span>
             </div>
-          )}
+            <div className="inv2-fitem">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#17A2A6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+              <span dir="ltr">tarteebandmore.com</span>
+            </div>
+          </div>
         </div>
       </div>
 

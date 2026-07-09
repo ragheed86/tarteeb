@@ -8,9 +8,17 @@ const AR_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'ما
 const STATUS = {
   draft: ['qg-b-draft', 'مسودة'],
   sent: ['qg-b-sent', 'مُرسل'],
+  negotiation: ['qg-b-nego', 'تفاوض'],
   accepted: ['qg-b-accepted', 'مقبول'],
   rejected: ['qg-b-rejected', 'مرفوض'],
+  expired: ['qg-b-expired', 'منتهي الصلاحية'],
 };
+// أعمدة لوحة المتابعة بالترتيب المنطقي لدورة حياة العرض
+const BOARD_COLUMNS = ['draft', 'sent', 'negotiation', 'accepted', 'rejected', 'expired'];
+const REJECTION_REASONS = { price: 'السعر', timing: 'التوقيت', competitor: 'منافس', no_response: 'بلا رد', other: 'أخرى' };
+const DAY = 86400000;
+const FOLLOWUP_DAYS = 3; // عرض مُرسل بلا رد بعد هذه المدة يحتاج متابعة
+const EXPIRY_WARN_DAYS = 2; // تنبيه قرب انتهاء الصلاحية
 
 function loadAll() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; } }
 function saveAll(a) { localStorage.setItem(STORE_KEY, JSON.stringify(a)); }
@@ -33,9 +41,36 @@ function defaults() {
     note: 'السعر لا يشمل الأدوات والمستلزمات التنظيمية، والتي سيتم شراؤها وفوترتها بشكل منفصل.',
     toolsShow: true, toolsMin: 400, toolsMax: 600,
     validity: 'هذا المقترح صالح لمدة أسبوع واحد من تاريخ الإرسال.',
+    // حقول المتابعة
+    validityDays: 7, sent_at: null, decided_at: null, rejection_reason: '',
+    status_history: [{ status: 'draft', at: Date.now() }],
   };
 }
 const lineTotal = (it) => (Number(it.cost) || 0) * (Number(it.days) || 0) - (Number(it.discount) || 0);
+const quoteAmount = (rec) => (rec.items || []).reduce((s, it) => s + lineTotal(it), 0);
+// تاريخ انتهاء الصلاحية مُشتق من التاريخ + مدة الصلاحية (لا يُخزَّن، يُحسب دائماً)
+function validUntil(rec) {
+  const base = rec.date;
+  if (!base) return null;
+  return new Date(new Date(base + 'T00:00:00').getTime() + (Number(rec.validityDays) || 7) * DAY).toISOString().slice(0, 10);
+}
+// الحالة الفعلية: «مُرسل» تجاوز صلاحيته يُعدّ «منتهياً» تلقائياً دون تعديل المخزّن
+function effectiveStatus(rec) {
+  if (rec.status === 'sent') {
+    const vu = validUntil(rec);
+    if (vu && Date.parse(vu) < Date.now()) return 'expired';
+  }
+  return rec.status || 'draft';
+}
+// هل يحتاج العرض متابعة؟ (مُرسل/تفاوض متأخر الرد أو قارب على الانتهاء)
+function needsFollowup(rec) {
+  const es = effectiveStatus(rec);
+  if (es !== 'sent' && es !== 'negotiation') return false;
+  const daysSinceSent = rec.sent_at ? (Date.now() - rec.sent_at) / DAY : 0;
+  const vu = validUntil(rec);
+  const nearExpiry = vu && (Date.parse(vu) - Date.now()) / DAY <= EXPIRY_WARN_DAYS;
+  return daysSinceSent >= FOLLOWUP_DAYS || nearExpiry;
+}
 function fmtQuoteDate(iso) {
   if (!iso) return '';
   const d = new Date(iso + 'T00:00:00');
@@ -49,6 +84,7 @@ function Money({ v }) {
 export default function QuotesPage() {
   const [q, setQ] = useState(defaults);
   const [list, setList] = useState([]);
+  const [view, setView] = useState('editor'); // 'editor' | 'board'
   const [drawer, setDrawer] = useState(false);
   const [toast, setToast] = useState('');
   const [scale, setScale] = useState(1);
@@ -86,6 +122,27 @@ export default function QuotesPage() {
   const addItem = () => setQ((s) => ({ ...s, items: [...s.items, blankItem()] }));
   const removeItem = (i) => setQ((s) => { const items = s.items.filter((_, j) => j !== i); return { ...s, items: items.length ? items : [blankItem()] }; });
 
+  // تغيير الحالة: يسجّل الانتقال في السجل ويضبط الطوابع الزمنية، ويحفظ فوراً إن كان العرض محفوظاً
+  const changeStatus = useCallback((ns) => {
+    setQ((s) => {
+      if (ns === s.status) return s;
+      const now = Date.now();
+      const patch = { ...s, status: ns, status_history: [...(s.status_history || []), { status: ns, at: now }] };
+      if (ns === 'sent' && !s.sent_at) patch.sent_at = now;
+      if (ns === 'accepted' || ns === 'rejected') patch.decided_at = now;
+      if (ns !== 'rejected') patch.rejection_reason = '';
+      if (s.id) { // مزامنة فورية مع المخزن حتى تنعكس على لوحة المتابعة
+        const all = loadAll();
+        const idx = all.findIndex((x) => x.id === s.id);
+        const rec = { ...patch, updatedAt: now };
+        if (idx >= 0) all[idx] = rec; else all.push(rec);
+        saveAll(all);
+        setList(loadAll().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+      }
+      return patch;
+    });
+  }, []);
+
   function save() {
     const all = loadAll();
     const rec = { ...q, updatedAt: Date.now() };
@@ -106,14 +163,37 @@ export default function QuotesPage() {
 
   const grand = q.items.reduce((s, it) => s + lineTotal(it), 0);
 
+  function openFromBoard(id) { openQuote(id); setView('editor'); }
+
+  // مؤشرات لوحة المتابعة
+  const followupList = list.filter(needsFollowup);
+  const closedN = list.filter((r) => ['accepted', 'rejected', 'expired'].includes(effectiveStatus(r))).length;
+  const acceptedN = list.filter((r) => effectiveStatus(r) === 'accepted').length;
+  const winRate = closedN ? Math.round((acceptedN / closedN) * 100) : 0;
+  const pipeline = list.filter((r) => ['sent', 'negotiation'].includes(effectiveStatus(r))).reduce((s, r) => s + quoteAmount(r), 0);
+  const byColumn = Object.fromEntries(BOARD_COLUMNS.map((c) => [c, list.filter((r) => effectiveStatus(r) === c)]));
+
   return (
     <div className="qg-root">
       <style>{CSS}</style>
 
+      <div className="qg-tabs">
+        <button className={view === 'editor' ? 'active' : ''} onClick={() => setView('editor')}>✎ مُنشئ العرض</button>
+        <button className={view === 'board' ? 'active' : ''} onClick={() => { refreshList(); setView('board'); }}>
+          📊 لوحة المتابعة{followupList.length > 0 && <span className="qg-tabbadge">{followupList.length}</span>}
+        </button>
+      </div>
+
+      {view === 'board' ? (
+        <Board byColumn={byColumn} stats={{ followup: followupList.length, winRate, pipeline, total: list.length }}
+          onOpen={openFromBoard} activeId={q.id} />
+      ) : (
+      <>
       <div className="qg-bar">
         <span className="qg-qnum">رقم العرض: <b>{q.number}</b></span>
-        <select className="qg-status" value={q.status} onChange={(e) => set('status', e.target.value)}>
+        <select className="qg-status" value={q.status} onChange={(e) => changeStatus(e.target.value)}>
           <option value="draft">مسودة</option><option value="sent">مُرسل</option>
+          <option value="negotiation">تفاوض</option>
           <option value="accepted">مقبول</option><option value="rejected">مرفوض</option>
         </select>
         <div className="qg-spacer" />
@@ -161,6 +241,26 @@ export default function QuotesPage() {
 
           <h3>الصلاحية</h3>
           <label className="qg-f"><textarea value={q.validity} onChange={(e) => set('validity', e.target.value)} /></label>
+
+          <h3>المتابعة</h3>
+          <label className="qg-f"><span>مدة صلاحية العرض (أيام)</span><input type="number" value={q.validityDays} onChange={(e) => set('validityDays', e.target.value)} /></label>
+          {validUntil(q) && <div className="qg-hint">ينتهي في: <b>{fmtQuoteDate(validUntil(q))}</b></div>}
+          {q.status === 'rejected' && (
+            <label className="qg-f"><span>سبب الرفض</span>
+              <select className="qg-fselect" value={q.rejection_reason} onChange={(e) => set('rejection_reason', e.target.value)}>
+                <option value="">— اختر —</option>
+                {Object.entries(REJECTION_REASONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </label>
+          )}
+          {q.status_history && q.status_history.length > 0 && (
+            <div className="qg-timeline">
+              {[...q.status_history].reverse().map((h, i) => {
+                const bd = STATUS[h.status] || ['', h.status];
+                return <div className="qg-tl" key={i}><span className={`qg-badge ${bd[0]}`}>{bd[1]}</span><span className="qg-tlt">{fmtQuoteDate(new Date(h.at).toISOString().slice(0, 10))}</span></div>;
+              })}
+            </div>
+          )}
         </div>
 
         {/* preview */}
@@ -225,6 +325,8 @@ export default function QuotesPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* history drawer */}
       {drawer && <div className="qg-scrim" onClick={() => setDrawer(false)} />}
@@ -233,12 +335,12 @@ export default function QuotesPage() {
         <div className="qg-dlist">
           {list.length === 0 && <div className="qg-empty">لا توجد عروض محفوظة بعد.<br />أنشئ عرضاً واضغط «حفظ».</div>}
           {list.map((rec) => {
-            const g = rec.items.reduce((s, it) => s + lineTotal(it), 0);
-            const bd = STATUS[rec.status || 'draft'];
+            const g = quoteAmount(rec);
+            const bd = STATUS[effectiveStatus(rec)];
             return (
               <div key={rec.id} className={`qg-qcard${rec.id === q.id ? ' active' : ''}`} onClick={() => openQuote(rec.id)}>
                 <div className="qg-qtop"><span className="qg-qn">{rec.number}</span><span className={`qg-badge ${bd[0]}`}>{bd[1]}</span></div>
-                <div className="qg-qclient">{rec.client || '[ بدون اسم ]'}</div>
+                <div className="qg-qclient">{rec.client || '[ بدون اسم ]'}{needsFollowup(rec) && <span className="qg-fu">⚠ متابعة</span>}</div>
                 <div className="qg-qmeta"><span>{fmtQuoteDate(rec.date)}</span><span dir="ltr">{RIYAL} {fmtNum(g)}</span></div>
                 <div className="qg-qact"><button onClick={(e) => duplicate(rec.id, e)}>تكرار</button><button onClick={(e) => remove(rec.id, e)}>حذف</button></div>
               </div>
@@ -257,6 +359,51 @@ function Section({ n, title, children }) {
     <div className="qg-sec">
       <div className="qg-sh"><div className="qg-snum">{n}</div><div className="qg-stitle">{title}</div></div>
       {children}
+    </div>
+  );
+}
+
+function Kpi({ label, value, tone }) {
+  return <div className={`qg-kpi ${tone}`}><div className="qg-kpil">{label}</div><div className="qg-kpiv">{value}</div></div>;
+}
+
+function Board({ byColumn, stats, onOpen, activeId }) {
+  return (
+    <div className="qg-board">
+      <div className="qg-kpis">
+        <Kpi label="تحتاج متابعة" value={stats.followup} tone="warn" />
+        <Kpi label="معدل النجاح" value={`${stats.winRate}%`} tone="ok" />
+        <Kpi label="القيمة المعلّقة" value={<span dir="ltr"><span className="qg-riyal">{RIYAL}</span> {fmtNum(stats.pipeline)}</span>} tone="teal" />
+        <Kpi label="إجمالي العروض" value={stats.total} tone="ink" />
+      </div>
+      <div className="qg-cols">
+        {BOARD_COLUMNS.map((col) => {
+          const items = byColumn[col] || [];
+          const bd = STATUS[col];
+          const sum = items.reduce((s, r) => s + quoteAmount(r), 0);
+          return (
+            <div className="qg-col" key={col}>
+              <div className="qg-colhead"><span className={`qg-badge ${bd[0]}`}>{bd[1]}</span><span className="qg-colcount">{items.length}</span></div>
+              <div className="qg-colbody">
+                {items.length === 0 && <div className="qg-colempty">—</div>}
+                {items.map((rec) => {
+                  const fu = needsFollowup(rec);
+                  const vu = validUntil(rec);
+                  return (
+                    <div key={rec.id} className={`qg-bcard${rec.id === activeId ? ' active' : ''}${fu ? ' fu' : ''}`} onClick={() => onOpen(rec.id)}>
+                      <div className="qg-btop"><span className="qg-qn">{rec.number}</span>{fu && <span className="qg-futag">⚠ متابعة</span>}</div>
+                      <div className="qg-bclient">{rec.client || '[ بدون اسم ]'}</div>
+                      <div className="qg-bmeta"><span dir="ltr"><span className="qg-riyal">{RIYAL}</span> {fmtNum(quoteAmount(rec))}</span><span>{fmtQuoteDate(rec.date)}</span></div>
+                      {(col === 'sent' || col === 'negotiation') && vu && <div className="qg-bexp">ينتهي: {fmtQuoteDate(vu)}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+              {items.length > 0 && <div className="qg-colfoot"><span dir="ltr"><span className="qg-riyal">{RIYAL}</span> {fmtNum(sum)}</span></div>}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -335,7 +482,45 @@ const CSS = `
 .qg-qn{font-size:12px;font-weight:700;color:var(--tl)}
 .qg-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
 .qg-b-draft{background:#EEF2F3;color:#67787F}.qg-b-sent{background:#E5F3FF;color:#1E7FC2}
+.qg-b-nego{background:#FFF3E0;color:#C77A18}.qg-b-expired{background:#F3EDF7;color:#8257A8}
 .qg-b-accepted{background:#E4F7EC;color:#1B9E54}.qg-b-rejected{background:#FDEBE8;color:#D0503C}
+.qg-fu{margin-inline-start:8px;font-size:10px;font-weight:700;color:#C77A18}
+.qg-fselect{width:100%;font-family:inherit;font-size:13px;color:var(--tink);border:1px solid var(--tbd);border-radius:8px;padding:9px 11px;background:#fff;cursor:pointer}
+.qg-hint{font-size:12px;color:var(--tmut);margin:-4px 0 10px}.qg-hint b{color:var(--tl)}
+.qg-timeline{display:flex;flex-direction:column;gap:6px;margin-top:6px;border-top:1px dashed var(--tbd);padding-top:10px}
+.qg-tl{display:flex;align-items:center;justify-content:space-between;font-size:11px}.qg-tlt{color:var(--tmut)}
+/* التبويبات */
+.qg-tabs{display:flex;gap:8px;margin-bottom:12px}
+.qg-tabs button{position:relative;font-family:inherit;font-size:14px;font-weight:600;padding:9px 18px;border-radius:10px;border:1px solid var(--tbd);background:#fff;color:var(--tmut);cursor:pointer}
+.qg-tabs button.active{background:var(--tl);color:#fff;border-color:var(--tl)}
+.qg-tabbadge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-inline-start:6px;border-radius:20px;background:#E2705F;color:#fff;font-size:11px;font-weight:700}
+/* لوحة المتابعة */
+.qg-board{display:flex;flex-direction:column;gap:16px}
+.qg-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:760px){.qg-kpis{grid-template-columns:repeat(2,1fr)}}
+.qg-kpi{background:#fff;border:1px solid var(--tbd);border-radius:14px;padding:14px 16px;border-inline-start:4px solid var(--tl)}
+.qg-kpi.warn{border-inline-start-color:#E2705F}.qg-kpi.ok{border-inline-start-color:#1B9E54}
+.qg-kpi.teal{border-inline-start-color:var(--tl)}.qg-kpi.ink{border-inline-start-color:#67787F}
+.qg-kpil{font-size:12px;color:var(--tmut);font-weight:600;margin-bottom:6px}
+.qg-kpiv{font-size:24px;font-weight:700;color:var(--tink)}
+.qg-cols{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px}
+@media(max-width:1100px){.qg-cols{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:minmax(180px,1fr)}}
+.qg-col{background:#F6FAFA;border:1px solid var(--tbd);border-radius:12px;padding:8px;display:flex;flex-direction:column;min-height:120px}
+.qg-colhead{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 8px}
+.qg-colcount{font-size:12px;font-weight:700;color:var(--tmut)}
+.qg-colbody{display:flex;flex-direction:column;gap:8px;flex:1}
+.qg-colempty{text-align:center;color:#B7C4C9;font-size:16px;padding:10px}
+.qg-bcard{background:#fff;border:1px solid var(--tbd);border-radius:10px;padding:10px;cursor:pointer;transition:.15s}
+.qg-bcard:hover{border-color:var(--tl);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.qg-bcard.active{border-color:var(--tl);background:#FAFEFE}
+.qg-bcard.fu{border-inline-start:3px solid #E2705F}
+.qg-btop{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.qg-btop .qg-qn{font-size:12px;font-weight:700;color:var(--tl)}
+.qg-futag{font-size:10px;font-weight:700;color:#E2705F}
+.qg-bclient{font-size:13px;font-weight:600;color:var(--tink)}
+.qg-bmeta{display:flex;justify-content:space-between;font-size:11px;color:var(--tmut);margin-top:4px}
+.qg-bexp{font-size:10px;color:#C77A18;margin-top:4px}
+.qg-colfoot{padding:8px 4px 2px;font-size:12px;font-weight:700;color:var(--tink);text-align:center;border-top:1px dashed var(--tbd);margin-top:6px}
 .qg-qclient{font-size:14px;font-weight:600}
 .qg-qmeta{font-size:11px;color:var(--tmut);margin-top:3px;display:flex;justify-content:space-between}
 .qg-qact{display:flex;gap:6px;margin-top:8px}

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { fmtNum } from '@/lib/format';
+import { getClients, createClient } from '@/lib/data';
 
 const STORE_KEY = 'tarteeb-quotes-v1';
 const RIYAL = '⃁';
@@ -42,7 +43,7 @@ function defaults() {
     toolsShow: true, toolsMin: 400, toolsMax: 600,
     validity: 'هذا المقترح صالح لمدة أسبوع واحد من تاريخ الإرسال.',
     // حقول المتابعة
-    validityDays: 7, sent_at: null, decided_at: null, rejection_reason: '',
+    validityDays: 7, sent_at: null, decided_at: null, rejection_reason: '', linked_client_id: null,
     status_history: [{ status: 'draft', at: Date.now() }],
   };
 }
@@ -86,6 +87,8 @@ export default function QuotesPage() {
   const [list, setList] = useState([]);
   const [view, setView] = useState('editor'); // 'editor' | 'board'
   const [drawer, setDrawer] = useState(false);
+  const [clientPrompt, setClientPrompt] = useState(false); // نافذة «إضافة العميل» عند القبول
+  const [addingClient, setAddingClient] = useState(false);
   const [toast, setToast] = useState('');
   const [scale, setScale] = useState(1);
   const [contentScale, setContentScale] = useState(1);
@@ -142,6 +145,48 @@ export default function QuotesPage() {
       return patch;
     });
   }, []);
+
+  // عند تغيير الحالة إلى «مقبول»: اقترح إضافة العميل لقائمة العملاء (مرة واحدة)
+  function onStatusChange(ns) {
+    changeStatus(ns);
+    if (ns === 'accepted' && (q.client || '').trim() && !q.linked_client_id) setClientPrompt(true);
+  }
+  // ربط العرض بمعرّف عميل + حفظ فوري إن كان محفوظاً
+  function linkClient(clientId) {
+    setQ((s) => {
+      const patch = { ...s, linked_client_id: clientId };
+      if (s.id) {
+        const all = loadAll();
+        const idx = all.findIndex((x) => x.id === s.id);
+        const rec = { ...patch, updatedAt: Date.now() };
+        if (idx >= 0) all[idx] = rec; else all.push(rec);
+        saveAll(all);
+        setList(loadAll().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+      }
+      return patch;
+    });
+  }
+  // إضافة العميل إلى Supabase (بنقرة واحدة) مع فحص التكرار بالاسم
+  async function addClientFromQuote() {
+    const name = (q.client || '').trim();
+    if (!name) return;
+    setAddingClient(true);
+    try {
+      const existing = (await getClients()).find((c) => (c.name || '').trim() === name);
+      if (existing) {
+        linkClient(existing.id);
+        ping('العميل موجود مسبقاً — تم الربط ✓');
+      } else {
+        const created = await createClient({ name, notes: `أُضيف من عرض سعر ${q.number}` });
+        linkClient(created.id);
+        ping('تمت إضافة العميل ✓');
+      }
+      setClientPrompt(false);
+    } catch (e) {
+      ping('تعذّرت الإضافة، حاول لاحقاً');
+    }
+    setAddingClient(false);
+  }
 
   function save() {
     const all = loadAll();
@@ -201,7 +246,7 @@ export default function QuotesPage() {
       <>
       <div className="qg-bar">
         <span className="qg-qnum">رقم العرض: <b>{q.number}</b></span>
-        <select className="qg-status" value={q.status} onChange={(e) => changeStatus(e.target.value)}>
+        <select className="qg-status" value={q.status} onChange={(e) => onStatusChange(e.target.value)}>
           <option value="draft">مسودة</option><option value="sent">مُرسل</option>
           <option value="negotiation">تفاوض</option>
           <option value="accepted">مقبول</option><option value="rejected">مرفوض</option>
@@ -346,6 +391,20 @@ export default function QuotesPage() {
           })}
         </div>
       </div>
+
+      {clientPrompt && (
+        <div className="qg-modal-bg" onClick={() => !addingClient && setClientPrompt(false)}>
+          <div className="qg-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="qg-modal-ic">✓</div>
+            <h3>تم قبول العرض 🎉</h3>
+            <p>هل تريد إضافة <b>{q.client || 'هذا العميل'}</b> إلى قائمة العملاء؟</p>
+            <div className="qg-modal-act">
+              <button className="qg-btn qg-primary" disabled={addingClient} onClick={addClientFromQuote}>{addingClient ? 'جارٍ الإضافة…' : 'نعم، أضِفه'}</button>
+              <button className="qg-btn" disabled={addingClient} onClick={() => setClientPrompt(false)}>لا، شكراً</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <div className="qg-toast">{toast}</div>}
     </div>
@@ -527,6 +586,13 @@ const CSS = `
 .qg-qact button:hover{border-color:var(--cor);color:var(--cor)}
 .qg-empty{text-align:center;color:var(--tmut);font-size:13px;padding:40px 20px}
 .qg-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--tink);color:#fff;font-size:13px;font-weight:600;padding:11px 20px;border-radius:10px;z-index:70}
+.qg-modal-bg{position:fixed;inset:0;background:rgba(20,40,45,.4);z-index:80;display:flex;align-items:center;justify-content:center;padding:20px}
+.qg-modal{background:#fff;border-radius:16px;padding:26px 24px;width:340px;max-width:90vw;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.qg-modal-ic{width:52px;height:52px;border-radius:50%;background:#E4F7EC;color:#1B9E54;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;margin:0 auto 14px}
+.qg-modal h3{font-size:17px;font-weight:700;color:var(--tink);margin-bottom:8px}
+.qg-modal p{font-size:14px;color:var(--tmut);line-height:1.8;margin-bottom:18px}.qg-modal p b{color:var(--tl)}
+.qg-modal-act{display:flex;gap:10px;justify-content:center}
+.qg-modal-act .qg-btn{flex:1}
 @media print{
   @page{size:A4;margin:0}
   body{background:#fff !important}

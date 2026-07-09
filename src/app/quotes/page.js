@@ -156,6 +156,16 @@ export default function QuotesPage() {
     }
     saveAll(all); refreshList(); ping('تم حفظ العرض ✓');
   }
+  // تصدير PDF باسم «عرض سعر - اسم العميل» (المتصفح يشتق اسم الملف من document.title)
+  function exportPdf() {
+    const prev = document.title;
+    const safe = (q.client || '').trim().replace(/[\\/:*?"<>|]/g, ' ').trim();
+    document.title = safe ? `عرض سعر - ${safe}` : `عرض سعر ${q.number}`;
+    const restore = () => { document.title = prev; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    window.print();
+    setTimeout(restore, 1500); // احتياطي إن لم يُطلق afterprint
+  }
   function newQuote() { setQ(defaults()); ping('عرض جديد'); }
   function openQuote(id) { const rec = loadAll().find((x) => x.id === id); if (rec) { setQ(structuredClone(rec)); setDrawer(false); ping('تم فتح ' + rec.number); } }
   function duplicate(id, e) { e.stopPropagation(); const rec = loadAll().find((x) => x.id === id); if (!rec) return; const copy = structuredClone(rec); copy.id = null; copy.number = nextNumber(); copy.status = 'draft'; setQ(copy); setDrawer(false); ping('نسخة جديدة ' + copy.number); }
@@ -200,7 +210,7 @@ export default function QuotesPage() {
         <button className="qg-btn" onClick={() => { refreshList(); setDrawer(true); }}>🗂️ السجل</button>
         <button className="qg-btn" onClick={newQuote}>＋ عرض جديد</button>
         <button className="qg-btn" onClick={save}>💾 حفظ</button>
-        <button className="qg-btn qg-primary" onClick={() => window.print()}>⤓ تصدير PDF</button>
+        <button className="qg-btn qg-primary" onClick={exportPdf}>⤓ تصدير PDF</button>
       </div>
 
       <div className="qg-workspace">

@@ -223,11 +223,6 @@ export default function QuotesPage() {
           <h3>وصف المشروع</h3>
           <label className="qg-f"><textarea value={q.desc} onChange={(e) => set('desc', e.target.value)} /></label>
 
-          <h3>موجز المشروع</h3>
-          <label className="qg-f"><span>مدة التنفيذ</span><input value={q.duration} onChange={(e) => set('duration', e.target.value)} /></label>
-          <label className="qg-f"><span>التحدي</span><textarea value={q.challenge} onChange={(e) => set('challenge', e.target.value)} /></label>
-          <label className="qg-f"><span>الحل</span><textarea value={q.solution} onChange={(e) => set('solution', e.target.value)} /></label>
-
           <h3>الباقة — البنود</h3>
           <div className="qg-ihead"><span>الخدمة</span><span>التكلفة/يوم</span><span>أيام</span><span>الخصم</span><span /></div>
           {q.items.map((it, i) => (
@@ -290,15 +285,7 @@ export default function QuotesPage() {
 
               <Section n="01" title="وصف المشروع"><div className="qg-desc">{q.desc}</div></Section>
 
-              <Section n="02" title="موجز المشروع">
-                <div className="qg-brief">سيتم إنجاز أعمال التنظيم والترتيب خلال <strong>{q.duration}</strong>.</div>
-                <div className="qg-cs">
-                  <div className="qg-card"><div className="qg-t chal">التحدي</div><div className="qg-b">{q.challenge}</div></div>
-                  <div className="qg-card"><div className="qg-t sol">الحل</div><div className="qg-b">{q.solution}</div></div>
-                </div>
-              </Section>
-
-              <Section n="03" title="عرضنا — الباقة">
+              <Section n="02" title="عرضنا — الباقة">
                 <div className="qg-thead"><div className="r">الخدمة</div><div>التكلفة/اليوم</div><div>عدد الأيام</div><div>الخصم</div><div>المجموع</div></div>
                 {q.items.map((it, i) => (
                   <div className="qg-trow" key={i}>
@@ -314,7 +301,7 @@ export default function QuotesPage() {
               </Section>
 
               {q.toolsShow && (
-                <Section n="04" title="ميزانية الأدوات والمستلزمات">
+                <Section n="03" title="ميزانية الأدوات والمستلزمات">
                   <div className="qg-budget">
                     <div>بناءً على متطلبات غرفة التخزين، تتراوح التكلفة التقديرية للأدوات والمستلزمات التنظيمية بين <strong>{fmtNum(q.toolsMin)}</strong> و<strong>{fmtNum(q.toolsMax)}</strong> ريال سعودي، عند الحاجة.</div>
                     <div>ستتم مشاركة قائمة تفصيلية بالمواد المطلوبة وأسعارها مع العميل قبل الشراء، للحصول على الموافقة النهائية.</div>

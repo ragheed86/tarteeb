@@ -52,17 +52,25 @@ export default function QuotesPage() {
   const [drawer, setDrawer] = useState(false);
   const [toast, setToast] = useState('');
   const [scale, setScale] = useState(1);
+  const [contentScale, setContentScale] = useState(1);
   const paneRef = useRef(null);
   const pageRef = useRef(null);
+  const innerRef = useRef(null);
 
   const refreshList = useCallback(() => setList(loadAll().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))), []);
   useEffect(() => { setQ(defaults()); refreshList(); }, [refreshList]);
 
   const fit = useCallback(() => {
-    const pane = paneRef.current, page = pageRef.current;
+    const pane = paneRef.current, page = pageRef.current, inner = innerRef.current;
     if (!pane || !page) return;
     const avail = pane.clientWidth - 48;
     setScale(Math.min(1, avail / page.offsetWidth));
+    // تصغير المحتوى ليتّسع في صفحة A4 واحدة (297mm) عند تجاوزه
+    if (inner) {
+      const target = page.clientHeight; // ارتفاع A4 الثابت
+      const natural = inner.scrollHeight; // ارتفاع المحتوى الفعلي (قبل التحويل)
+      setContentScale(natural > target ? target / natural : 1);
+    }
   }, []);
   useEffect(() => {
     fit();
@@ -159,6 +167,7 @@ export default function QuotesPage() {
         <div className="qg-preview" ref={paneRef}>
           <div className="qg-scaler" style={{ transform: `scale(${scale})`, height: pageRef.current ? pageRef.current.offsetHeight * scale : 'auto' }}>
             <div className="qg-a4" ref={pageRef}>
+              <div className="qg-a4-page" ref={innerRef} style={{ transform: contentScale < 1 ? `scale(${contentScale})` : undefined }}>
               <div className="qg-ph">
                 <div className="qg-htxt"><div className="qg-title">عرض سعر</div><div className="qg-sub">تنظيم وترتيب</div></div>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -210,6 +219,7 @@ export default function QuotesPage() {
                 <span>tarteebandmore.com</span>
                 <span dir="ltr">He@tarteebandmore.com</span>
                 <span dir="ltr">+966 55 600 6361</span>
+              </div>
               </div>
             </div>
           </div>
@@ -280,19 +290,20 @@ const CSS = `
 .qg-switch input{width:auto}
 .qg-preview{overflow:auto;border-radius:16px}
 .qg-scaler{transform-origin:top center;margin:0 auto}
-.qg-a4{width:210mm;min-height:297mm;background:#fff;box-shadow:0 6px 30px rgba(0,0,0,.10);display:flex;flex-direction:column;color:var(--tink)}
+.qg-a4{width:210mm;height:297mm;overflow:hidden;background:#fff;box-shadow:0 6px 30px rgba(0,0,0,.10);position:relative}
+.qg-a4-page{width:210mm;min-height:297mm;display:flex;flex-direction:column;color:var(--tink);transform-origin:top center;background:#fff}
 .qg-riyal{font-family:'Saudi Riyal','IBM Plex Sans Arabic',sans-serif}
-.qg-ph{display:flex;justify-content:space-between;align-items:center;padding:40px 48px 0 48px}
+.qg-ph{display:flex;justify-content:space-between;align-items:center;padding:32px 48px 0 48px}
 .qg-title{font-size:46px;font-weight:700;color:var(--tl);line-height:1.2}
 .qg-sub{font-size:14px;color:var(--sal);font-weight:600;letter-spacing:.5px}
 .qg-ph img{width:240px;height:auto}
-.qg-meta{display:flex;justify-content:space-between;gap:24px;margin:32px 48px 0 48px;padding:18px 24px;background:var(--lbg);border-radius:12px;align-items:center}
+.qg-meta{display:flex;justify-content:space-between;gap:24px;margin:22px 48px 0 48px;padding:14px 24px;background:var(--lbg);border-radius:12px;align-items:center}
 .qg-lbl{font-size:12px;color:var(--tl);font-weight:700}.qg-val{font-size:14px;font-weight:500}
-.qg-sec{margin:24px 48px 0 48px}
-.qg-sh{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.qg-sec{margin:18px 48px 0 48px}
+.qg-sh{display:flex;align-items:center;gap:12px;margin-bottom:10px}
 .qg-snum{width:34px;height:34px;border-radius:50%;background:var(--tl);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
 .qg-stitle{font-size:18px;font-weight:700;color:var(--tl)}
-.qg-desc{background:var(--pink);border-radius:10px;padding:18px 22px;font-size:14px;line-height:2;text-align:right;white-space:pre-wrap}
+.qg-desc{background:var(--pink);border-radius:10px;padding:16px 22px;font-size:14px;line-height:1.85;text-align:right;white-space:pre-wrap}
 .qg-brief{font-size:14px;color:var(--tmut);text-align:right;margin-bottom:14px}.qg-brief strong{color:var(--cor)}
 .qg-cs{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .qg-card{border:1px solid var(--tbd);border-radius:10px;padding:18px 22px;text-align:right}
@@ -309,8 +320,8 @@ const CSS = `
 .qg-note{font-size:12px;color:#7A8A92;text-align:right;margin-top:10px;line-height:1.8}
 .qg-budget{border:1px solid var(--tbd);border-radius:10px;padding:18px 22px;text-align:right;font-size:13px;line-height:1.9;color:var(--tmut);display:flex;flex-direction:column;gap:10px}
 .qg-budget strong{color:var(--tink)}
-.qg-validity{margin:24px 48px 0 48px;background:var(--lbg);border-radius:10px;padding:14px 22px;font-size:13px;color:var(--tld);text-align:center;font-weight:600}
-.qg-foot{margin-top:auto;display:flex;justify-content:space-between;gap:10px 12px;padding:20px 48px 28px 48px;border-top:1px solid var(--tbd);margin:24px 48px 0 48px;font-size:11px;color:var(--tmut);overflow:hidden}
+.qg-validity{margin:16px 48px 0 48px;background:var(--lbg);border-radius:10px;padding:12px 22px;font-size:13px;color:var(--tld);text-align:center;font-weight:600}
+.qg-foot{margin-top:auto;display:flex;justify-content:space-between;gap:10px 12px;padding:16px 48px 20px 48px;border-top:1px solid var(--tbd);margin:16px 48px 0 48px;font-size:11px;color:var(--tmut);overflow:hidden}
 .qg-foot span{white-space:nowrap}
 .qg-scrim{position:fixed;inset:0;background:rgba(20,40,45,.35);z-index:60}
 .qg-drawer{position:fixed;top:0;left:0;height:100%;width:360px;max-width:90vw;background:#fff;z-index:61;box-shadow:2px 0 24px rgba(0,0,0,.15);transform:translateX(-100%);transition:transform .22s;display:flex;flex-direction:column}
@@ -338,7 +349,7 @@ const CSS = `
   .app>*{visibility:hidden}
   .qg-a4,.qg-a4 *{visibility:visible}
   .qg-scaler{transform:none !important;height:auto !important}
-  .qg-a4{position:absolute;top:0;left:0;box-shadow:none;width:210mm}
+  .qg-a4{position:absolute;top:0;left:0;box-shadow:none;width:210mm;height:297mm;overflow:hidden;page-break-inside:avoid;break-inside:avoid}
   .qg-bar,.qg-form,.qg-drawer,.qg-scrim,.qg-toast{display:none !important}
 }
 `;

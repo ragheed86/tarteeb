@@ -309,13 +309,14 @@ export default function QuotesPage() {
                 </Section>
               )}
 
-              {q.validity && <div className="qg-validity">{q.validity}</div>}
-
-              <div className="qg-foot">
-                <span>المملكة العربية السعودية، الرياض</span>
-                <span>tarteebandmore.com</span>
-                <span dir="ltr">He@tarteebandmore.com</span>
-                <span dir="ltr">+966 55 600 6361</span>
+              <div className="qg-bottom">
+                {q.validity && <div className="qg-validity">{q.validity}</div>}
+                <div className="qg-foot">
+                  <span>المملكة العربية السعودية، الرياض</span>
+                  <span>tarteebandmore.com</span>
+                  <span dir="ltr">He@tarteebandmore.com</span>
+                  <span dir="ltr">+966 55 600 6361</span>
+                </div>
               </div>
               </div>
             </div>
@@ -464,8 +465,9 @@ const CSS = `
 .qg-note{font-size:12px;color:#7A8A92;text-align:right;margin-top:10px;line-height:1.8}
 .qg-budget{border:1px solid var(--tbd);border-radius:10px;padding:18px 22px;text-align:right;font-size:13px;line-height:1.9;color:var(--tmut);display:flex;flex-direction:column;gap:10px}
 .qg-budget strong{color:var(--tink)}
-.qg-validity{margin:16px 48px 0 48px;background:var(--lbg);border-radius:10px;padding:12px 22px;font-size:13px;color:var(--tld);text-align:center;font-weight:600}
-.qg-foot{margin-top:auto;display:flex;justify-content:space-between;gap:10px 12px;padding:16px 48px 20px 48px;border-top:1px solid var(--tbd);margin:16px 48px 0 48px;font-size:11px;color:var(--tmut);overflow:hidden}
+.qg-bottom{margin-top:auto;padding-top:16px}
+.qg-validity{margin:0 48px;background:var(--lbg);border-radius:10px;padding:12px 22px;font-size:13px;color:var(--tld);text-align:center;font-weight:600}
+.qg-foot{display:flex;justify-content:space-between;gap:10px 12px;padding:16px 48px 20px 48px;border-top:1px solid var(--tbd);margin:16px 48px 0 48px;font-size:11px;color:var(--tmut);overflow:hidden}
 .qg-foot span{white-space:nowrap}
 .qg-scrim{position:fixed;inset:0;background:rgba(20,40,45,.35);z-index:60}
 .qg-drawer{position:fixed;top:0;left:0;height:100%;width:360px;max-width:90vw;background:#fff;z-index:61;box-shadow:2px 0 24px rgba(0,0,0,.15);transform:translateX(-100%);transition:transform .22s;display:flex;flex-direction:column}

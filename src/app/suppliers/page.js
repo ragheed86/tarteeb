@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { getSuppliers, createSupplier, updateSupplier, removeSupplier } from '@/lib/data';
 import { fmtNum } from '@/lib/format';
-import { Loading, Empty, ErrorBar } from '../ui';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input } from '@/components';
 
 const EMPTY = { name: '', category: '', city: '', logo_url: '' };
 
@@ -89,64 +89,61 @@ export default function SuppliersPage() {
       </div>
 
       <div className="card" style={{ padding: '6px 0' }}>
-        {rows.length === 0 ? (
-          <Empty title="لا موردين" desc="أضف موردي المواد والمنظمات." />
-        ) : (
-          <table>
-            <thead><tr><th>المورّد</th><th>التصنيف</th><th>المدينة</th><th></th></tr></thead>
-            <tbody>
-              {rows.map((s) => (
-                <tr key={s.id}>
-                  <td><span className="nm">{s.name}</span></td>
-                  <td><span className="src">{s.category || '—'}</span></td>
-                  <td>{s.city || '—'}</td>
-                  <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                    <button className="btn ghost sm" onClick={() => openEdit(s)}>تعديل</button>
-                    <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(s)}>حذف</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          rows={rows}
+          empty={<Empty title="لا موردين" desc="أضف موردي المواد والمنظمات." />}
+          columns={[
+            { key: 'name', label: 'المورّد', primary: true, render: (s) => <span className="nm">{s.name}</span> },
+            { key: 'category', label: 'التصنيف', render: (s) => <span className="src">{s.category || '—'}</span> },
+            { key: 'city', label: 'المدينة', render: (s) => s.city || '—' },
+            {
+              key: 'actions', label: '', align: 'left', className: 'actions-cell',
+              render: (s) => (
+                <>
+                  <button className="btn ghost sm" onClick={() => openEdit(s)}>تعديل</button>
+                  <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(s)}>حذف</button>
+                </>
+              ),
+            },
+          ]}
+        />
       </div>
 
-      {open && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <form className="modal-card" onSubmit={submit}>
-            <div className="modal-head">
-              <div><h2>{editing ? 'تعديل مورّد' : 'مورّد جديد'}</h2><p>بيانات المورّد</p></div>
-              <button className="icon-close" type="button" onClick={close} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
+      <Modal
+        open={open}
+        onClose={close}
+        title={editing ? 'تعديل مورّد' : 'مورّد جديد'}
+        subtitle="بيانات المورّد"
+        as="form"
+        onSubmit={submit}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المورّد'}</button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
+        <div className="form-grid">
+          <Input className="span-2" label="اسم المورّد" value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus />
+          <Input label="التصنيف" value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="تخزين / منظمات / أدوات" />
+          <Input label="المدينة" value={form.city} onChange={(e) => set('city', e.target.value)} />
+          <div className="field span-2">
+            <label>شعار المورّد</label>
+            <div className="upload-row">
+              <label className="btn ghost sm" htmlFor="supplier-logo">رفع اللوجو</label>
+              <input id="supplier-logo" type="file" accept="image/*" hidden onChange={handleLogoFile} />
+              <input
+                value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} dir="ltr"
+                placeholder="أو الصق رابط الشعار المستضاف" style={{ flex: 1, minWidth: 200 }}
+              />
             </div>
-            {formErr && <div className="errbar">{formErr}</div>}
-            <div className="form-grid">
-              <div className="field span-2"><label>اسم المورّد</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
-              <div className="field"><label>التصنيف</label><input value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="تخزين / منظمات / أدوات" /></div>
-              <div className="field"><label>المدينة</label><input value={form.city} onChange={(e) => set('city', e.target.value)} /></div>
-              <div className="field span-2">
-                <label>شعار المورّد</label>
-                <div className="upload-row">
-                  <label className="btn ghost sm" htmlFor="supplier-logo">رفع اللوجو</label>
-                  <input id="supplier-logo" type="file" accept="image/*" hidden onChange={handleLogoFile} />
-                  <input
-                    value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} dir="ltr"
-                    placeholder="أو الصق رابط الشعار المستضاف" style={{ flex: 1, minWidth: 200 }}
-                  />
-                </div>
-                {(logoPreview || form.logo_url) && (
-                  <img className="upload-preview" src={logoPreview || form.logo_url} alt="شعار المورّد" style={{ maxWidth: 140, height: 90, objectFit: 'contain', background: '#fff' }} />
-                )}
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المورّد'}</button>
-            </div>
-          </form>
+            {(logoPreview || form.logo_url) && (
+              <img className="upload-preview" src={logoPreview || form.logo_url} alt="شعار المورّد" style={{ maxWidth: 140, height: 90, objectFit: 'contain', background: '#fff' }} />
+            )}
+          </div>
         </div>
-      )}
+      </Modal>
     </>
   );
 }

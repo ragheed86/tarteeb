@@ -60,6 +60,8 @@ body{font-family:var(--body);color:var(--ink);line-height:1.6;-webkit-font-smoot
 button,input,select,textarea{font:inherit}
 .app{display:flex;min-height:100vh}
 .amt{unicode-bidi:isolate;white-space:nowrap}
+/* محتوى LTR داخل نص عربي (جوال/بريد/كود) — يُستخدم عبر مكوّن <Ltr> */
+.ltr{unicode-bidi:isolate;direction:ltr;display:inline-block;max-width:100%}
 
 /* الأرقام دائماً لاتينية */
 .amt,.val,.nm,.uid,.price,td,th,.kpi .val,.stv{font-variant-numeric:tabular-nums}
@@ -803,6 +805,14 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   table:not(.inv-items) td:last-child{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-start;white-space:normal}
   tbody tr:hover{background:transparent}
   td .btn.sm{margin-top:4px;margin-inline-start:0!important}
+  /* عنونة خلايا الجوال: بما أن رأس الجدول مخفي هنا، تُعرض تسمية العمود فوق كل قيمة */
+  table:not(.inv-items) td[data-label]:not([data-label=""])::before{
+    content:attr(data-label);display:block;font-size:11px;font-weight:600;
+    color:var(--muted);margin-bottom:1px;line-height:1.4}
+  table:not(.inv-items) td[data-label]{padding-block:6px}
+  table:not(.inv-items) td[data-label]:empty,
+  table:not(.inv-items) td[data-label] .hide-mobile{display:none}
+  .hide-mobile{display:none!important}
 
   .modal-backdrop{align-items:end;place-items:end stretch;padding:0;background:rgba(8,63,68,.36);backdrop-filter:none;-webkit-backdrop-filter:none}
   .modal-card,.modal-card.modal-sm{width:100%!important;max-height:calc(100dvh - env(safe-area-inset-top));border-radius:18px 18px 0 0;border-inline:0;border-bottom:0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));background:#fff;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:0 -12px 34px rgba(8,63,68,.18)}

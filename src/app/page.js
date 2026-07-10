@@ -6,7 +6,7 @@ import {
   getAllInvoicePayments, getDashboardMedia, uploadDashboardMedia, removeDashboardMedia,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, displayProgress, OPEN_DELIVERY_STATUSES } from '@/lib/format';
-import { Loading, Empty, ErrorBar } from './ui';
+import { Loading, Empty, ErrorBar, DataTable, StatusPill } from '@/components';
 import AnimatedNumber from './AnimatedNumber';
 
 const ACTIVE = ['quote', 'preparing', 'in_progress'];
@@ -228,23 +228,17 @@ export default function Dashboard() {
         {data.projects.length === 0 ? (
           <Empty title="لا توجد مشاريع بعد" desc="ابدأ بإضافة أول مشروع لعميل." />
         ) : (
-          <table>
-            <thead><tr><th>المشروع</th><th>الخدمة</th><th>قيمة العقد</th><th>التقدّم</th><th>الحالة</th></tr></thead>
-            <tbody>
-              {data.projects.slice(0, 6).map((p) => {
-                const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
-                return (
-                  <tr key={p.id} className="clickable" onClick={() => router.push(`/projects/${p.id}`)}>
-                    <td><span className="nm">{p.title}</span></td>
-                    <td>{p.service_type || '—'}</td>
-                    <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
-                    <td><div className="prog" style={{ width: 90 }}><i style={{ width: `${displayProgress(p)}%` }} /></div></td>
-                    <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DataTable
+            rows={data.projects.slice(0, 6)}
+            onRowClick={(p) => router.push(`/projects/${p.id}`)}
+            columns={[
+              { key: 'title', label: 'المشروع', primary: true, render: (p) => <span className="nm">{p.title}</span> },
+              { key: 'service_type', label: 'الخدمة', render: (p) => p.service_type || '—' },
+              { key: 'sale_price', label: 'قيمة العقد', render: (p) => <span className="amt">{fmtMoney(p.sale_price)} ⃁</span> },
+              { key: 'progress', label: 'التقدّم', render: (p) => <div className="prog" style={{ width: 90 }}><i style={{ width: `${displayProgress(p)}%` }} /></div> },
+              { key: 'status', label: 'الحالة', render: (p) => <StatusPill status={p.status} map={PROJECT_STATUS} /> },
+            ]}
+          />
         )}
       </div>
 

@@ -7,7 +7,7 @@ import {
   updateInvoice, createInvoicePayment, removeInvoicePayment,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS } from '@/lib/format';
-import { Loading, Empty, ErrorBar } from '../../ui';
+import { Loading, Empty, ErrorBar, DataTable } from '@/components';
 
 const STATUS_OPTS = [
   { value: 'draft', label: 'مسودة' },
@@ -305,20 +305,16 @@ export default function InvoiceDetail() {
           {payments.length === 0 ? (
             <Empty title="لا توجد دفعات" desc="سجّل أول دفعة لهذه الفاتورة." />
           ) : (
-            <table>
-              <thead><tr><th>التاريخ</th><th>الطريقة</th><th>المبلغ</th><th>ملاحظة</th><th></th></tr></thead>
-              <tbody>
-                {payments.map((row) => (
-                  <tr key={row.id}>
-                    <td>{fmtDate(row.paid_at)}</td>
-                    <td>{PAYMENT_METHOD[row.method] || row.method}</td>
-                    <td className="amt">{fmtMoney(row.amount)} ⃁</td>
-                    <td>{row.note || '—'}</td>
-                    <td style={{ textAlign: 'left' }}><button className="x-btn" onClick={() => deletePayment(row)} disabled={savingPayment}>✕</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              rows={payments}
+              columns={[
+                { key: 'paid_at', label: 'التاريخ', primary: true, render: (row) => fmtDate(row.paid_at) },
+                { key: 'method', label: 'الطريقة', render: (row) => PAYMENT_METHOD[row.method] || row.method },
+                { key: 'amount', label: 'المبلغ', render: (row) => <span className="amt">{fmtMoney(row.amount)} ⃁</span> },
+                { key: 'note', label: 'ملاحظة', render: (row) => row.note || '—' },
+                { key: 'actions', label: '', align: 'left', render: (row) => <button className="x-btn" onClick={() => deletePayment(row)} disabled={savingPayment} aria-label="حذف الدفعة">✕</button> },
+              ]}
+            />
           )}
         </div>
       </div>

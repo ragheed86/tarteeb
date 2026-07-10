@@ -9,7 +9,7 @@ import {
   getProjectCosts, createProjectCost, removeProjectCost,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, displayProgress } from '@/lib/format';
-import { Loading, Empty, ErrorBar } from '../../ui';
+import { Loading, Empty, ErrorBar, DataTable } from '@/components';
 
 const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
 const MEDIA_KIND = { before: 'قبل', after: 'بعد', other: 'أخرى' };
@@ -212,19 +212,15 @@ function CostsCard({ projectId, costs, onChange }) {
     <div className="card" style={{ marginTop: 16 }}>
       <div className="sec-head"><h2>بنود التكلفة</h2><span className="more amt">الإجمالي {fmtMoney(total)} ⃁</span></div>
       {costs.length === 0 ? <Empty title="لا بنود تكلفة" desc="أضف بنود التكلفة لحساب الربح." /> : (
-        <table>
-          <thead><tr><th>النوع</th><th>الوصف</th><th>المبلغ</th><th></th></tr></thead>
-          <tbody>
-            {costs.map((c) => (
-              <tr key={c.id}>
-                <td>{COST_KIND[c.kind] || c.kind}</td>
-                <td>{costDescription(c)}</td>
-                <td className="amt">{fmtMoney(c.amount)} ⃁</td>
-                <td style={{ textAlign: 'left' }}><button className="x-btn" onClick={() => del(c)}>✕</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable
+          rows={costs}
+          columns={[
+            { key: 'kind', label: 'النوع', primary: true, render: (c) => COST_KIND[c.kind] || c.kind },
+            { key: 'desc', label: 'الوصف', render: (c) => costDescription(c) },
+            { key: 'amount', label: 'المبلغ', render: (c) => <span className="amt">{fmtMoney(c.amount)} ⃁</span> },
+            { key: 'actions', label: '', align: 'left', render: (c) => <button className="x-btn" onClick={() => del(c)} aria-label="حذف البند">✕</button> },
+          ]}
+        />
       )}
       <form onSubmit={add} className="inline-add" style={{ marginTop: 12 }}>
         <select value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))} style={{ maxWidth: 130 }}>

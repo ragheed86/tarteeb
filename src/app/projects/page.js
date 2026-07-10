@@ -6,7 +6,7 @@ import {
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, fmtRelative, PROJECT_STATUS, displayProgress, progressForStatus, DONE_STATUSES } from '@/lib/format';
 import { usePersistedState } from '@/lib/usePersistedState';
-import { Loading, Empty, ErrorBar } from '../ui';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select } from '@/components';
 
 const STATUS_OPTS = [
   { value: 'quote', label: 'عرض سعر' },
@@ -314,17 +314,19 @@ export default function ProjectsPage() {
       ) : view === 'table' ? (
         <>
           <div className="sec-head"><h2>آخر المشاريع تحديثاً</h2><span className="more">مرتّبة حسب آخر تحديث · اضغط أي صف للتفاصيل</span></div>
-          <div className="card" style={{ padding: '6px 0', overflowX: 'auto' }}>
-            <table>
-              <thead><tr><th>المشروع</th><th>المسؤول</th><th>الحالة</th><th>آخر تحديث</th><th>تاريخ التسليم</th><th>السعر المبدئي</th><th>سعر البيع النهائي</th><th>التقدّم</th></tr></thead>
-              <tbody>
-                {pageProjects.map((p) => {
-                  const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
-                  return (
-                    <tr className="clickable" key={p.id} onClick={() => router.push(`/projects/${p.id}`)}>
-                      <td className="nm">{p.title}<br /><span className="uid">{byId[p.client_id] || 'عميل غير معروف'}</span></td>
-                      <td>{supervisorName(p) || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
+          <div className="card" style={{ padding: '6px 0' }}>
+            <DataTable
+              rows={pageProjects}
+              onRowClick={(p) => router.push(`/projects/${p.id}`)}
+              columns={[
+                { key: 'title', label: 'المشروع', primary: true, render: (p) => <span className="nm">{p.title}<br /><span className="uid">{byId[p.client_id] || 'عميل غير معروف'}</span></span> },
+                { key: 'supervisor', label: 'المسؤول', render: (p) => supervisorName(p) || <span style={{ color: 'var(--muted)' }}>—</span> },
+                {
+                  key: 'status', label: 'الحالة',
+                  render: (p) => {
+                    const st = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
+                    return (
+                      <span onClick={(e) => e.stopPropagation()}>
                         <select
                           className={`status-select pill ${st.cls}`}
                           value={p.status || 'quote'}
@@ -335,17 +337,27 @@ export default function ProjectsPage() {
                             <option key={value} value={value}>{meta.label}</option>
                           ))}
                         </select>
-                      </td>
-                      <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }} title={fmtDate(p.updated_at)}>{fmtRelative(p.updated_at)}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}>{fmtDate(p.due_date)}</td>
-                      <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
-                      <td className="amt">{finalByProject?.[p.id] ? `${fmtMoney(finalByProject[p.id])} ⃁` : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                      <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ width: 70, height: 6, background: 'var(--surface-2)', borderRadius: 6, overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${displayProgress(p)}%`, background: 'var(--green)', borderRadius: 6 }} /></span>{fmtNum(displayProgress(p))}%</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </span>
+                    );
+                  },
+                },
+                { key: 'updated', label: 'آخر تحديث', hideMobile: true, render: (p) => <span style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }} title={fmtDate(p.updated_at)}>{fmtRelative(p.updated_at)}</span> },
+                { key: 'due', label: 'تاريخ التسليم', render: (p) => <span style={{ whiteSpace: 'nowrap' }}>{fmtDate(p.due_date)}</span> },
+                { key: 'sale_price', label: 'السعر المبدئي', render: (p) => <span className="amt">{fmtMoney(p.sale_price)} ⃁</span> },
+                { key: 'final', label: 'سعر البيع النهائي', render: (p) => (finalByProject?.[p.id] ? <span className="amt">{fmtMoney(finalByProject[p.id])} ⃁</span> : <span style={{ color: 'var(--muted)' }}>—</span>) },
+                {
+                  key: 'progress', label: 'التقدّم',
+                  render: (p) => (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 70, height: 6, background: 'var(--surface-2)', borderRadius: 6, overflow: 'hidden' }}>
+                        <span style={{ display: 'block', height: '100%', width: `${displayProgress(p)}%`, background: 'var(--green)', borderRadius: 6 }} />
+                      </span>
+                      <span className="amt" dir="ltr">{fmtNum(displayProgress(p))}%</span>
+                    </span>
+                  ),
+                },
+              ]}
+            />
           </div>
         </>
       ) : view === 'cards' ? (
@@ -505,88 +517,57 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {open && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <form className="modal-card project-modal" onSubmit={submit}>
-            <div className="modal-head">
-              <div><h2>{editing ? 'تعديل مشروع' : 'مشروع جديد'}</h2><p>ربط بعميل وتحديد حالة المشروع</p></div>
-              <button className="icon-close" type="button" onClick={close} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
+      <Modal
+        open={open}
+        onClose={close}
+        size="lg"
+        title={editing ? 'تعديل مشروع' : 'مشروع جديد'}
+        subtitle="ربط بعميل وتحديد حالة المشروع"
+        as="form"
+        onSubmit={submit}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المشروع'}</button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
+        <div className="project-form-stack">
+          <section className="project-section">
+            <div className="section-title">
+              <h3>بيانات المشروع</h3>
+              <span>العميل، الخدمة، الحالة، والتواريخ</span>
             </div>
-            {formErr && <div className="errbar">{formErr}</div>}
-            <div className="project-form-stack">
-              <section className="project-section">
-                <div className="section-title">
-                  <h3>بيانات المشروع</h3>
-                  <span>العميل، الخدمة، الحالة، والتواريخ</span>
-                </div>
-                <div className="form-grid project-info-grid">
-                  <div className="field span-2">
-                    <label>عنوان المشروع</label>
-                    <input value={form.title} onChange={(e) => set('title', e.target.value)} required autoFocus />
-                  </div>
-                  <div className="field">
-                    <label>العميل</label>
-                    <select value={form.client_id} onChange={(e) => set('client_id', e.target.value)} required>
-                      <option value="" disabled>اختر عميلاً…</option>
-                      {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label>نوع الخدمة</label>
-                    <input value={form.service_type} onChange={(e) => set('service_type', e.target.value)} placeholder="دواليب / مطبخ / نقل…" />
-                  </div>
-                  <div className="field">
-                    <label>قيمة العقد (⃁)</label>
-                    <input type="number" min="0" step="0.01" value={form.sale_price} onChange={(e) => set('sale_price', e.target.value)} dir="ltr" />
-                  </div>
-                  <div className="field">
-                    <label>الحالة</label>
-                    <select value={form.status} onChange={(e) => set('status', e.target.value)}>
-                      {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label>المسؤول</label>
-                    <select value={form.supervisor_id} onChange={(e) => set('supervisor_id', e.target.value)}>
-                      <option value="">— بدون —</option>
-                      {(state?.employees || []).map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="field">
-                    <label>نسبة التقدّم (%)</label>
-                    <input
-                      type="number" min="0" max="100"
-                      value={DONE_STATUSES.includes(form.status) ? 100 : form.progress}
-                      onChange={(e) => set('progress', e.target.value)}
-                      dir="ltr"
-                      disabled={DONE_STATUSES.includes(form.status)}
-                    />
-                    {DONE_STATUSES.includes(form.status) && (
-                      <small style={{ color: 'var(--muted)', fontSize: 12 }}>يُضبط تلقائياً على 100% عند التسليم أو الاكتمال</small>
-                    )}
-                  </div>
-                  <div className="date-pair">
-                    <div className="field">
-                      <label>تاريخ البدء</label>
-                      <input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} dir="ltr" />
-                    </div>
-                    <div className="field">
-                      <label>موعد التسليم</label>
-                      <input type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} dir="ltr" />
-                    </div>
-                  </div>
-                </div>
-              </section>
+            <div className="form-grid project-info-grid">
+              <Input className="span-2" label="عنوان المشروع" value={form.title} onChange={(e) => set('title', e.target.value)} required autoFocus />
+              <Select label="العميل" value={form.client_id} onChange={(e) => set('client_id', e.target.value)} required>
+                <option value="" disabled>اختر عميلاً…</option>
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+              <Input label="نوع الخدمة" value={form.service_type} onChange={(e) => set('service_type', e.target.value)} placeholder="دواليب / مطبخ / نقل…" />
+              <Input label="قيمة العقد (⃁)" ltr type="number" min="0" step="0.01" value={form.sale_price} onChange={(e) => set('sale_price', e.target.value)} />
+              <Select label="الحالة" value={form.status} onChange={(e) => set('status', e.target.value)} options={STATUS_OPTS} />
+              <Select label="المسؤول" value={form.supervisor_id} onChange={(e) => set('supervisor_id', e.target.value)}>
+                <option value="">— بدون —</option>
+                {(state?.employees || []).map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
+              </Select>
+              <Input
+                label="نسبة التقدّم (%)"
+                ltr type="number" min="0" max="100"
+                value={DONE_STATUSES.includes(form.status) ? 100 : form.progress}
+                onChange={(e) => set('progress', e.target.value)}
+                disabled={DONE_STATUSES.includes(form.status)}
+                hint={DONE_STATUSES.includes(form.status) ? 'يُضبط تلقائياً على 100% عند التسليم أو الاكتمال' : undefined}
+              />
+              <div className="date-pair">
+                <Input label="تاريخ البدء" ltr type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)} />
+                <Input label="موعد التسليم" ltr type="date" value={form.due_date} onChange={(e) => set('due_date', e.target.value)} />
+              </div>
             </div>
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المشروع'}</button>
-            </div>
-          </form>
+          </section>
         </div>
-      )}
+      </Modal>
     </>
   );
 }

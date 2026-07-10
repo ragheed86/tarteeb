@@ -79,6 +79,7 @@ export default function QuotesPage() {
   const [addingClient, setAddingClient] = useState(false);
   const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState('');
   const [saving, setSaving] = useState(false);
   const [scale, setScale] = useState(1);
   const [contentScale, setContentScale] = useState(1);
@@ -87,7 +88,8 @@ export default function QuotesPage() {
   const innerRef = useRef(null);
 
   const refreshList = useCallback(async () => {
-    try { setList(await getQuotes()); } catch (e) { /* تجاهل — يبقى آخر تحميل */ }
+    try { setList(await getQuotes()); setLoadErr(''); }
+    catch (e) { setLoadErr('تعذّر تحميل العروض — تحقّق من اتصالك بالإنترنت.'); }
   }, []);
   useEffect(() => {
     (async () => {
@@ -96,7 +98,8 @@ export default function QuotesPage() {
         const [num, quotes] = await Promise.all([nextQuoteNumber(), getQuotes()]);
         setList(quotes);
         setQ({ ...defaults(), number: num });
-      } catch (e) { setQ(defaults()); }
+        setLoadErr('');
+      } catch (e) { setQ(defaults()); setLoadErr('تعذّر الاتصال بالخادم — العروض تُحفظ على الإنترنت، تحقّق من اتصالك ثم أعد المحاولة.'); }
       setLoading(false);
     })();
   }, []);
@@ -251,6 +254,13 @@ export default function QuotesPage() {
         {loading && <span className="qg-loading">⏳ جارٍ التحميل…</span>}
       </div>
 
+      {loadErr && (
+        <div className="qg-errbar">
+          <span>⚠ {loadErr}</span>
+          <button className="qg-btn" onClick={refreshList}>إعادة المحاولة</button>
+        </div>
+      )}
+
       {view === 'board' ? (
         <Board byColumn={byColumn} stats={{ followup: followupList.length, winRate, pipeline, total: list.length }}
           onOpen={openFromBoard} activeId={q.id} />
@@ -285,10 +295,10 @@ export default function QuotesPage() {
           {q.items.map((it, i) => (
             <div className="qg-irow" key={i}>
               <input value={it.svc} onChange={(e) => setItem(i, 'svc', e.target.value)} placeholder="الخدمة" />
-              <input type="number" value={it.cost} onChange={(e) => setItem(i, 'cost', e.target.value)} />
-              <input type="number" value={it.days} onChange={(e) => setItem(i, 'days', e.target.value)} />
-              <input type="number" value={it.discount} onChange={(e) => setItem(i, 'discount', e.target.value)} />
-              <button className="qg-del" onClick={() => removeItem(i)}>×</button>
+              <input type="number" value={it.cost} onChange={(e) => setItem(i, 'cost', e.target.value)} placeholder="التكلفة/يوم" />
+              <input type="number" value={it.days} onChange={(e) => setItem(i, 'days', e.target.value)} placeholder="أيام" />
+              <input type="number" value={it.discount} onChange={(e) => setItem(i, 'discount', e.target.value)} placeholder="الخصم" />
+              <button className="qg-del" onClick={() => removeItem(i)} aria-label="حذف البند">×</button>
             </div>
           ))}
           <button className="qg-add" onClick={addItem}>＋ إضافة بند</button>
@@ -565,6 +575,15 @@ const CSS = `
 .qg-tabs button.active{background:var(--tl);color:#fff;border-color:var(--tl)}
 .qg-tabbadge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-inline-start:6px;border-radius:20px;background:#E2705F;color:#fff;font-size:11px;font-weight:700}
 .qg-loading{align-self:center;font-size:12px;font-weight:600;color:var(--tmut)}
+.qg-errbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:12px 14px;background:#FDEBE8;border:1px solid #F2C4BC;border-radius:12px;font-size:13px;color:#B3402C}
+/* صف البند على الشاشات الصغيرة: الخدمة سطر كامل ثم التكلفة/الأيام/الخصم + حذف بأهداف لمس أكبر */
+@media(max-width:560px){
+  .qg-ihead{display:none}
+  .qg-irow{grid-template-columns:repeat(3,1fr) 42px;gap:8px 8px;margin-bottom:12px}
+  .qg-irow>input:first-child{grid-column:1 / -1}
+  .qg-irow input{padding:11px 10px;font-size:14px}
+  .qg-del{width:42px;height:42px;font-size:18px}
+}
 /* لوحة المتابعة */
 .qg-board{display:flex;flex-direction:column;gap:16px}
 .qg-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}

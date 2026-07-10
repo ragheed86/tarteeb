@@ -32,7 +32,7 @@ const NAV = [
 ];
 
 const ALL = NAV.flatMap((g) => g.items);
-const MOBILE_NAV = ['/', '/clients', '/projects', '/warehouse', '/employees'];
+const MOBILE_NAV = ['/', '/clients', '/projects', '/quotes', '/warehouse'];
 
 export default function AppShell({ children }) {
   const pathname = usePathname();

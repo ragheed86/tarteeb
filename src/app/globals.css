@@ -70,7 +70,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 .amt,.val,.nm,.uid,.price,td,th,.kpi .val,.stv{font-variant-numeric:tabular-nums}
 
 .sidebar{width:248px;flex-shrink:0;background:rgba(255,255,255,.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:var(--ink);padding:24px 16px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;border-inline-end:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:12px;padding:0 8px 22px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.brand{display:flex;align-items:center;gap:12px;padding:0 8px 20px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.brand-logo{width:172px;max-width:100%;height:auto;display:block}
 .mark{width:34px;height:34px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:3px;flex-shrink:0}
 .mark span{background:var(--teal-600);border-radius:5px}
 .mark span:nth-child(1){background:var(--teal-400)}.mark span:nth-child(2){background:var(--teal-700)}.mark span:nth-child(3){background:var(--peach-300)}.mark span:nth-child(4){background:var(--gold)}

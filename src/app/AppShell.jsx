@@ -84,8 +84,8 @@ export default function AppShell({ children }) {
     <div className="app">
       <aside className={`sidebar${open ? ' open' : ''}`}>
         <div className="brand">
-          <div className="mark"><span /><span /><span /><span /></div>
-          <div><h1>ترتيب</h1><small>نظام إدارة الأعمال</small></div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/tarteeb-logo.png" alt="ترتيب" className="brand-logo" />
         </div>
         <nav className={`nav${glide ? ' has-glider' : ''}`} ref={navRef}>
           {glide && <span className="nav-glider" style={{ top: glide.top, height: glide.height }} aria-hidden="true" />}
@@ -195,16 +195,6 @@ function Splash() {
   );
 }
 
-// ---------- شعار ترتيب (نسخة متجهة من الشعار المرفق) ----------
-function TarteebLogo({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 560 168" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ترتيب">
-      <path d="M182 54 C 244 28, 322 28, 392 50" fill="none" stroke="#F0A896" strokeWidth="2.4" strokeLinecap="round" />
-      <text x="280" y="106" textAnchor="middle" fontFamily="'Julius Sans One', sans-serif" fontSize="76" letterSpacing="10" fill="#F0A896">TARTEEB</text>
-      <text x="280" y="144" textAnchor="middle" fontFamily="'Julius Sans One', sans-serif" fontSize="16.5" letterSpacing="11" fill="#83C0B4">ARRANGE &amp; ORGANIZE</text>
-    </svg>
-  );
-}
 
 // ---------- شاشة الدخول ----------
 function Login() {
@@ -228,7 +218,8 @@ function Login() {
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
         <div className="lhead">
-          <TarteebLogo className="login-logo" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/tarteeb-logo.png" alt="ترتيب" className="login-logo" />
           <small>سجّل الدخول للوصول إلى نظام إدارة الأعمال</small>
         </div>
         {!supabaseReady && <div className="errbar">إعدادات Supabase غير مكتملة في بيئة التشغيل</div>}

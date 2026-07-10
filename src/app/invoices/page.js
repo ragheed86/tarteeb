@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getInvoices, getClients, getProjects, createInvoice } from '@/lib/data';
+import { getInvoices, getClients, getProjects, createInvoice, getQuotes } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar } from '../ui';
 
@@ -25,10 +25,20 @@ export default function InvoicesPage() {
 
   async function load() {
     try {
-      const [invoices, clients, projects] = await Promise.all([getInvoices(), getClients(), getProjects()]);
+      const [invoices, clients, projects, quotes] = await Promise.all([getInvoices(), getClients(), getProjects(), getQuotes()]);
       const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
-      setState({ invoices, clients, projects, byId });
+      setState({ invoices, clients, projects, quotes, byId });
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
+  }
+  // يحوّل بنود عرض السعر إلى بنود فاتورة (svc→الوصف، days→الكمية، ويطوي الخصم في سعر الوحدة)
+  function importQuoteItems(quote) {
+    const rows = (quote.items || []).map((it) => {
+      const cost = Number(it.cost) || 0, days = Number(it.days) || 0, discount = Number(it.discount) || 0;
+      if (days > 0) return { description: it.svc || '', qty: days, unit_price: Math.round((cost - discount / days) * 100) / 100 };
+      return { description: it.svc || '', qty: 1, unit_price: cost - discount };
+    });
+    setItems(rows.length ? rows : [blankItem()]);
+    setFormErr('');
   }
   useEffect(() => { load(); }, []);
 
@@ -73,7 +83,9 @@ export default function InvoicesPage() {
   if (err) return <ErrorBar message={err} />;
   if (!state) return <Loading />;
 
-  const { invoices, clients, projects, byId } = state;
+  const { invoices, clients, projects, quotes, byId } = state;
+  // عرض سعر مقبول لهذا العميل (الأحدث) — لعرض «استيراد البنود»
+  const clientQuote = head.client_id ? (quotes || []).find((qt) => qt.linked_client_id === head.client_id && qt.status === 'accepted') : null;
   const totalPaid = invoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
   const totalAll = invoices.reduce((s, i) => s + Number(i.total || 0), 0);
   const totalRemaining = invoices.reduce((s, i) => s + Number(i.remaining_amount || 0), 0);
@@ -159,6 +171,14 @@ export default function InvoicesPage() {
                 </select>
               </div>
             </div>
+
+            {/* استيراد بنود عرض السعر المقبول لهذا العميل */}
+            {clientQuote && (
+              <div className="quote-import">
+                <span>لهذا العميل عرض سعر مقبول <b dir="ltr">{clientQuote.number}</b> بإجمالي {fmtMoney((clientQuote.items || []).reduce((s, it) => s + ((Number(it.cost) || 0) * (Number(it.days) || 0) - (Number(it.discount) || 0)), 0))} ⃁</span>
+                <button type="button" className="btn ghost sm" onClick={() => importQuoteItems(clientQuote)}>⬇ استيراد بنوده</button>
+              </div>
+            )}
 
             {/* البنود */}
             <div style={{ marginTop: 6 }}>

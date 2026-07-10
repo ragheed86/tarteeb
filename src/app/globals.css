@@ -557,6 +557,8 @@ tr.clickable{cursor:pointer}
 .timeline-body .meta{color:var(--muted);font-size:12px;margin-top:4px}
 
 /* ---------- تفاصيل المشروع: مهام/فريق/تكلفة/وسائط ---------- */
+.quote-import{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;background:#E9F8F8;border:1px solid #BEE9E9;border-radius:12px;font-size:13px;color:#0E7E82}
+.quote-import b{color:#0E7E82}
 .inline-add{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .inline-add input,.inline-add select{flex:1;min-width:120px;font-family:var(--body);font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none}
 .inline-add input:focus,.inline-add select:focus{border-color:var(--sage)}

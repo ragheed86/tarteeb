@@ -587,8 +587,14 @@ const CSS = `
 /* لوحة المتابعة */
 .qg-board{display:flex;flex-direction:column;gap:16px}
 .qg-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-@media(max-width:760px){.qg-kpis{grid-template-columns:repeat(2,1fr)}}
 .qg-kpi{background:#fff;border:1px solid var(--tbd);border-radius:14px;padding:14px 16px;border-inline-start:4px solid var(--tl)}
+/* على الجوال: 4 مؤشرات مربّعة أصغر في سطر واحد */
+@media(max-width:760px){
+  .qg-kpis{grid-template-columns:repeat(4,1fr);gap:8px}
+  .qg-kpi{aspect-ratio:1/1;padding:8px 4px;border-radius:12px;border-inline-start-width:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px}
+  .qg-kpil{font-size:9px;margin-bottom:0;line-height:1.25}
+  .qg-kpiv{font-size:15px}
+}
 .qg-kpi.warn{border-inline-start-color:#E2705F}.qg-kpi.ok{border-inline-start-color:#1B9E54}
 .qg-kpi.teal{border-inline-start-color:var(--tl)}.qg-kpi.ink{border-inline-start-color:#67787F}
 .qg-kpil{font-size:12px;color:var(--tmut);font-weight:600;margin-bottom:6px}

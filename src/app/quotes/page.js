@@ -168,11 +168,11 @@ export default function QuotesPage() {
       const existing = (await getClients()).find((c) => (c.name || '').trim() === name);
       if (existing) {
         await linkClient(existing.id);
-        ping('العميل موجود مسبقاً — تم الربط ✓');
+        ping('العميل موجود مسبقاً — تم الربط');
       } else {
         const created = await createClient({ name, notes: `أُضيف من عرض سعر ${q.number}` });
         await linkClient(created.id);
-        ping('تمت إضافة العميل ✓');
+        ping('تمت إضافة العميل');
       }
       setClientPrompt(false);
     } catch (e) {
@@ -187,7 +187,7 @@ export default function QuotesPage() {
       const saved = q.id ? await updateQuote(q.id, q) : await createQuote(q);
       setQ(saved);
       await refreshList();
-      ping('تم حفظ العرض ✓');
+      ping('تم حفظ العرض');
     } catch (e) { ping('تعذّر الحفظ، حاول لاحقاً'); }
     setSaving(false);
   }
@@ -247,16 +247,30 @@ export default function QuotesPage() {
       <style>{CSS}</style>
 
       <div className="qg-tabs">
-        <button className={view === 'editor' ? 'active' : ''} onClick={() => setView('editor')}>✎ مُنشئ العرض</button>
+        <button className={view === 'editor' ? 'active' : ''} onClick={() => setView('editor')}>مُنشئ العرض</button>
         <button className={view === 'board' ? 'active' : ''} onClick={() => { refreshList(); setView('board'); }}>
-          📊 لوحة المتابعة{followupList.length > 0 && <span className="qg-tabbadge">{followupList.length}</span>}
+          لوحة المتابعة{followupList.length > 0 && <span className="qg-tabbadge">{followupList.length}</span>}
         </button>
-        {loading && <span className="qg-loading">⏳ جارٍ التحميل…</span>}
+        {loading && <span className="qg-loading">جارٍ التحميل…</span>}
+        {view === 'editor' && (
+          <div className="qg-toolbar-actions">
+            <span className="qg-qnum">رقم العرض: <b>{q.number}</b></span>
+            <select className="qg-status" value={q.status} onChange={(e) => onStatusChange(e.target.value)}>
+              <option value="draft">مسودة</option><option value="sent">مُرسل</option>
+              <option value="negotiation">تفاوض</option>
+              <option value="accepted">مقبول</option><option value="rejected">مرفوض</option>
+            </select>
+            <button className="qg-btn" onClick={() => { refreshList(); setDrawer(true); }}>السجل</button>
+            <button className="qg-btn" onClick={newQuote} disabled={saving}>عرض جديد</button>
+            <button className="qg-btn" onClick={save} disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ'}</button>
+            <button className="qg-btn qg-primary" onClick={exportPdf}>تصدير PDF</button>
+          </div>
+        )}
       </div>
 
       {loadErr && (
         <div className="qg-errbar">
-          <span>⚠ {loadErr}</span>
+          <span>{loadErr}</span>
           <button className="qg-btn" onClick={refreshList}>إعادة المحاولة</button>
         </div>
       )}
@@ -266,20 +280,6 @@ export default function QuotesPage() {
           onOpen={openFromBoard} activeId={q.id} />
       ) : (
       <>
-      <div className="qg-bar">
-        <span className="qg-qnum">رقم العرض: <b>{q.number}</b></span>
-        <select className="qg-status" value={q.status} onChange={(e) => onStatusChange(e.target.value)}>
-          <option value="draft">مسودة</option><option value="sent">مُرسل</option>
-          <option value="negotiation">تفاوض</option>
-          <option value="accepted">مقبول</option><option value="rejected">مرفوض</option>
-        </select>
-        <div className="qg-spacer" />
-        <button className="qg-btn" onClick={() => { refreshList(); setDrawer(true); }}>🗂️ السجل</button>
-        <button className="qg-btn" onClick={newQuote} disabled={saving}>＋ عرض جديد</button>
-        <button className="qg-btn" onClick={save} disabled={saving}>{saving ? '⏳ جارٍ الحفظ…' : '💾 حفظ'}</button>
-        <button className="qg-btn qg-primary" onClick={exportPdf}>⤓ تصدير PDF</button>
-      </div>
-
       <div className="qg-workspace">
         {/* form */}
         <div className="qg-form">
@@ -301,7 +301,7 @@ export default function QuotesPage() {
               <button className="qg-del" onClick={() => removeItem(i)} aria-label="حذف البند">×</button>
             </div>
           ))}
-          <button className="qg-add" onClick={addItem}>＋ إضافة بند</button>
+          <button className="qg-add" onClick={addItem}>إضافة بند</button>
           <label className="qg-f" style={{ marginTop: 12 }}><span>ملاحظة أسفل الجدول</span><textarea value={q.note} onChange={(e) => set('note', e.target.value)} /></label>
 
           <h3>ميزانية الأدوات</h3>
@@ -396,7 +396,7 @@ export default function QuotesPage() {
       {/* history drawer */}
       {drawer && <div className="qg-scrim" onClick={() => setDrawer(false)} />}
       <div className={`qg-drawer${drawer ? ' open' : ''}`}>
-        <div className="qg-dhead"><h3>🗂️ العروض المحفوظة</h3><button className="qg-btn" onClick={() => setDrawer(false)}>✕</button></div>
+        <div className="qg-dhead"><h3>العروض المحفوظة</h3><button className="qg-btn" onClick={() => setDrawer(false)}>✕</button></div>
         <div className="qg-dlist">
           {loading && <div className="qg-empty" aria-busy="true">جارٍ تحميل العروض…</div>}
           {!loading && list.length === 0 && <div className="qg-empty">لا توجد عروض محفوظة بعد.<br />أنشئ عرضاً واضغط «حفظ».</div>}
@@ -406,7 +406,7 @@ export default function QuotesPage() {
             return (
               <div key={rec.id} className={`qg-qcard${rec.id === q.id ? ' active' : ''}`} onClick={() => openQuote(rec.id)}>
                 <div className="qg-qtop"><span className="qg-qn">{rec.number}</span><span className={`qg-badge ${bd[0]}`}>{bd[1]}</span></div>
-                <div className="qg-qclient">{rec.client || '[ بدون اسم ]'}{needsFollowup(rec) && <span className="qg-fu">⚠ متابعة</span>}</div>
+                <div className="qg-qclient">{rec.client || '[ بدون اسم ]'}{needsFollowup(rec) && <span className="qg-fu">متابعة</span>}</div>
                 <div className="qg-qmeta"><span>{fmtQuoteDate(rec.date)}</span><span dir="ltr">{RIYAL} {fmtNum(g)}</span></div>
                 <div className="qg-qact"><button onClick={(e) => duplicate(rec.id, e)}>تكرار</button><button onClick={(e) => remove(rec.id, e)}>حذف</button></div>
               </div>
@@ -419,7 +419,7 @@ export default function QuotesPage() {
         <div className="qg-modal-bg" onClick={() => !addingClient && setClientPrompt(false)}>
           <div className="qg-modal" onClick={(e) => e.stopPropagation()}>
             <div className="qg-modal-ic">✓</div>
-            <h3>تم قبول العرض 🎉</h3>
+            <h3>تم قبول العرض</h3>
             <p>هل تريد إضافة <b>{q.client || 'هذا العميل'}</b> إلى قائمة العملاء؟</p>
             <div className="qg-modal-act">
               <button className="qg-btn qg-primary" disabled={addingClient} onClick={addClientFromQuote}>{addingClient ? 'جارٍ الإضافة…' : 'نعم، أضِفه'}</button>
@@ -470,7 +470,7 @@ function Board({ byColumn, stats, onOpen, activeId }) {
                   const vu = validUntil(rec);
                   return (
                     <div key={rec.id} className={`qg-bcard${rec.id === activeId ? ' active' : ''}${fu ? ' fu' : ''}`} onClick={() => onOpen(rec.id)}>
-                      <div className="qg-btop"><span className="qg-qn">{rec.number}</span>{fu && <span className="qg-futag">⚠ متابعة</span>}</div>
+                      <div className="qg-btop"><span className="qg-qn">{rec.number}</span>{fu && <span className="qg-futag">متابعة</span>}</div>
                       <div className="qg-bclient">{rec.client || '[ بدون اسم ]'}</div>
                       <div className="qg-bmeta"><span dir="ltr"><span className="qg-riyal">{RIYAL}</span> {fmtNum(quoteAmount(rec))}</span><span>{fmtQuoteDate(rec.date)}</span></div>
                       {(col === 'sent' || col === 'negotiation') && vu && <div className="qg-bexp">ينتهي: {fmtQuoteDate(vu)}</div>}
@@ -489,7 +489,7 @@ function Board({ byColumn, stats, onOpen, activeId }) {
 
 const CSS = `
 .qg-root{--tl:var(--teal-600);--tld:var(--teal-700);--cor:var(--peach-600);--sal:var(--peach-500);--lbg:var(--teal-50);--pink:var(--peach-200);--pink2:var(--peach-100);--tink:#2B3A42;--tmut:#55666E;--tbd:#E4F2F2;font-family:var(--body);color:var(--tink)}
-.qg-bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 4px;flex-wrap:wrap;background:transparent;margin-bottom:6px}
+.qg-toolbar-actions{margin-inline-start:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .qg-qnum{font-size:12px;color:var(--tmut);font-weight:600}.qg-qnum b{color:var(--tl)}
 .qg-status{font-family:inherit;font-size:12px;font-weight:600;border:1px solid var(--tbd);border-radius:8px;padding:7px 10px;background:#fff;cursor:pointer;color:var(--tink)}
 .qg-spacer{flex:1}
@@ -570,9 +570,9 @@ const CSS = `
 .qg-timeline{display:flex;flex-direction:column;gap:6px;margin-top:6px;border-top:1px dashed var(--tbd);padding-top:10px}
 .qg-tl{display:flex;align-items:center;justify-content:space-between;font-size:11px}.qg-tlt{color:var(--tmut)}
 /* التبويبات */
-.qg-tabs{display:flex;gap:8px;margin-bottom:12px}
-.qg-tabs button{position:relative;font-family:inherit;font-size:14px;font-weight:600;padding:9px 18px;border-radius:10px;border:1px solid var(--tbd);background:#fff;color:var(--tmut);cursor:pointer}
-.qg-tabs button.active{background:var(--tl);color:#fff;border-color:var(--tl)}
+.qg-tabs{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+.qg-tabs>button{position:relative;font-family:inherit;font-size:14px;font-weight:600;padding:9px 18px;border-radius:10px;border:1px solid var(--tbd);background:#fff;color:var(--tmut);cursor:pointer}
+.qg-tabs>button.active{background:var(--tl);color:#fff;border-color:var(--tl)}
 .qg-tabbadge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-inline-start:6px;border-radius:20px;background:#E2705F;color:#fff;font-size:11px;font-weight:700}
 .qg-loading{align-self:center;font-size:12px;font-weight:600;color:var(--tmut)}
 .qg-errbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:12px 14px;background:#FDEBE8;border:1px solid #F2C4BC;border-radius:12px;font-size:13px;color:#B3402C}
@@ -638,6 +638,6 @@ const CSS = `
   .qg-a4,.qg-a4 *{visibility:visible}
   .qg-scaler{transform:none !important;height:auto !important}
   .qg-a4{position:absolute;top:0;left:0;box-shadow:none;width:210mm;height:297mm;overflow:hidden;page-break-inside:avoid;break-inside:avoid}
-  .qg-bar,.qg-form,.qg-drawer,.qg-scrim,.qg-toast{display:none !important}
+  .qg-tabs,.qg-form,.qg-drawer,.qg-scrim,.qg-toast{display:none !important}
 }
 `;

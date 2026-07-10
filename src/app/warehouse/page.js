@@ -246,7 +246,7 @@ export default function WarehousePage() {
       </div>
 
       {!canManageProducts && !canRunInventory && (
-        <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>
+        <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: 'var(--teal-200)', color: 'var(--teal-800)' }}>
           لديك صلاحية عرض المستودع فقط.
         </div>
       )}

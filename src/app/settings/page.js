@@ -615,7 +615,7 @@ function UserPermissions({ users, reload }) {
         </button>
       </PanelHead>
       <div className="set-body">
-      <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: '#bcd4c5', color: '#2c5347' }}>
+      <div className="notebar" style={{ background: 'var(--sage-bg)', borderColor: 'var(--teal-200)', color: 'var(--teal-800)' }}>
         رغيد هو الأدمن الأساسي دائماً، ولا يمكن تعطيل حسابه أو إزالة صلاحياته.
       </div>
       {msg && <div className="okbar">{msg}</div>}

@@ -4,8 +4,8 @@ import {
   getPartners, createPartner, updatePartner, removePartner,
   getPartnerTransactions, createPartnerTransaction, removePartnerTransaction, getEmployees,
 } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate } from '@/lib/format';
-import { Loading, Empty, ErrorBar } from '../ui';
+import { fmtMoney, fmtNum } from '@/lib/format';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText } from '@/components';
 
 // إشارة كل نوع حركة على الرصيد
 const TXN = {
@@ -98,29 +98,30 @@ export default function PartnersPage() {
       </div>
 
       <div className="card" style={{ padding: '6px 0', marginBottom: 16 }}>
-        {partners.length === 0 ? (
-          <Empty title="لا شركاء" desc="أضف الشركاء ونِسبهم." />
-        ) : (
-          <table>
-            <thead><tr><th>الشريك</th><th>النسبة</th><th>الرصيد</th><th></th></tr></thead>
-            <tbody>
-              {partners.map((p) => {
+        <DataTable
+          rows={partners}
+          empty={<Empty title="لا شركاء" desc="أضف الشركاء ونِسبهم." />}
+          columns={[
+            { key: 'name', label: 'الشريك', primary: true, render: (p) => <span className="nm">{p.name}</span> },
+            { key: 'share_percent', label: 'النسبة', render: (p) => <span className="amt" dir="ltr">{fmtNum(p.share_percent)}%</span> },
+            {
+              key: 'balance', label: 'الرصيد',
+              render: (p) => {
                 const bal = balance(p.id);
-                return (
-                  <tr key={p.id}>
-                    <td><span className="nm">{p.name}</span></td>
-                    <td className="amt">{fmtNum(p.share_percent)}%</td>
-                    <td className="amt" style={{ color: bal < 0 ? 'var(--neg)' : 'var(--pos)' }}>{fmtMoney(bal)} ⃁</td>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <button className="btn ghost sm" onClick={() => openEdit(p)}>تعديل</button>
-                      <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => delP(p)}>حذف</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+                return <span style={{ color: bal < 0 ? 'var(--neg)' : 'var(--pos)' }}><Money v={bal} /></span>;
+              },
+            },
+            {
+              key: 'actions', label: '', align: 'left',
+              render: (p) => (
+                <>
+                  <button className="btn ghost sm" onClick={() => openEdit(p)}>تعديل</button>
+                  <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => delP(p)}>حذف</button>
+                </>
+              ),
+            },
+          ]}
+        />
       </div>
 
       {/* الحركات */}
@@ -141,57 +142,60 @@ export default function PartnersPage() {
             <button className="btn sm" disabled={txBusy}>إضافة</button>
           </form>
         )}
-        {txns.length === 0 ? (
-          <Empty title="لا حركات" desc="سجّل توزيعات الأرباح والسحوبات." />
-        ) : (
-          <table>
-            <thead><tr><th>الشريك</th><th>النوع</th><th>المبلغ</th><th>الفترة</th><th>ملاحظة</th><th></th></tr></thead>
-            <tbody>
-              {txns.map((t) => {
+        <DataTable
+          rows={txns}
+          pageSize={50}
+          empty={<Empty title="لا حركات" desc="سجّل توزيعات الأرباح والسحوبات." />}
+          columns={[
+            { key: 'partner', label: 'الشريك', primary: true, render: (t) => nameById[t.partner_id] || '—' },
+            {
+              key: 'txn_type', label: 'النوع',
+              render: (t) => {
                 const meta = TXN[t.txn_type] || { label: t.txn_type, sign: 1 };
-                return (
-                  <tr key={t.id}>
-                    <td>{nameById[t.partner_id] || '—'}</td>
-                    <td><span className={`pill ${meta.sign < 0 ? 'p-cancel' : 'p-done'}`}>{meta.label}</span></td>
-                    <td className="amt">{meta.sign < 0 ? '−' : '+'}{fmtMoney(t.amount)} ⃁</td>
-                    <td>{fmtDate(t.period)}</td>
-                    <td>{t.note || '—'}</td>
-                    <td style={{ textAlign: 'left' }}><button className="x-btn" onClick={() => delTx(t)}>✕</button></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+                return <span className={`pill ${meta.sign < 0 ? 'p-cancel' : 'p-done'}`}>{meta.label}</span>;
+              },
+            },
+            {
+              key: 'amount', label: 'المبلغ',
+              render: (t) => {
+                const meta = TXN[t.txn_type] || { label: t.txn_type, sign: 1 };
+                return <span className="amt" dir="ltr">{meta.sign < 0 ? '−' : '+'}{fmtMoney(t.amount)} ⃁</span>;
+              },
+            },
+            { key: 'period', label: 'الفترة', render: (t) => <DateText v={t.period} /> },
+            { key: 'note', label: 'ملاحظة', render: (t) => t.note || '—' },
+            {
+              key: 'actions', label: '', align: 'left',
+              render: (t) => <button className="x-btn" onClick={() => delTx(t)} aria-label="حذف الحركة">✕</button>,
+            },
+          ]}
+        />
       </div>
 
-      {open && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <form className="modal-card modal-sm" onSubmit={submit}>
-            <div className="modal-head">
-              <div><h2>{editing ? 'تعديل شريك' : 'شريك جديد'}</h2><p>الاسم ونسبة الشراكة</p></div>
-              <button className="icon-close" type="button" onClick={close} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-            {formErr && <div className="errbar">{formErr}</div>}
-            <div className="field">
-              <label>الموظف الشريك</label>
-              <select value={form.employee_id} onChange={(e) => set('employee_id', e.target.value)} required autoFocus>
-                <option value="" disabled>اختر موظفاً…</option>
-                {d.employees
-                  .filter((em) => em.id === form.employee_id || !d.partners.some((p) => p.employee_id === em.id))
-                  .map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
-              </select>
-            </div>
-            <div className="field"><label>نسبة الشراكة (%)</label><input type="number" min="0" max="100" step="0.01" value={form.share_percent} onChange={(e) => set('share_percent', e.target.value)} dir="ltr" /></div>
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ'}</button>
-            </div>
-          </form>
-        </div>
-      )}
+      <Modal
+        open={open}
+        onClose={close}
+        size="sm"
+        title={editing ? 'تعديل شريك' : 'شريك جديد'}
+        subtitle="الاسم ونسبة الشراكة"
+        as="form"
+        onSubmit={submit}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ'}</button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
+        <Select label="الموظف الشريك" value={form.employee_id} onChange={(e) => set('employee_id', e.target.value)} required autoFocus>
+          <option value="" disabled>اختر موظفاً…</option>
+          {d.employees
+            .filter((em) => em.id === form.employee_id || !d.partners.some((p) => p.employee_id === em.id))
+            .map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
+        </Select>
+        <Input label="نسبة الشراكة (%)" ltr type="number" min="0" max="100" step="0.01" value={form.share_percent} onChange={(e) => set('share_percent', e.target.value)} />
+      </Modal>
     </>
   );
 }

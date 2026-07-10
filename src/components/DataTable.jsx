@@ -10,6 +10,7 @@ export default function DataTable({
                   // primary: العمود الرئيسي (الاسم عادة) — لا تُعرض له تسمية على الجوال
   rows,
   rowKey,         // (row, i) => key — الافتراضي row.id ثم i
+  rowClassName,   // (row) => صنف إضافي للصف (مثل row-low)
   onRowClick,
   empty,          // عنصر يُعرض عند غياب الصفوف (عادة <Empty/>)
   footer,         // <tr>…</tr> داخل tfoot
@@ -40,7 +41,7 @@ export default function DataTable({
           {visible.map((row, i) => (
             <tr
               key={keyOf(row, i)}
-              className={onRowClick ? 'clickable' : undefined}
+              className={[onRowClick ? 'clickable' : '', rowClassName ? rowClassName(row) : ''].join(' ').trim() || undefined}
               onClick={onRowClick ? () => onRowClick(row) : undefined}
             >
               {columns.map((c) => {

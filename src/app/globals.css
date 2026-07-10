@@ -666,6 +666,7 @@ tr.clickable{cursor:pointer}
 tr.row-low{background:rgba(224,86,107,.05)}
 tr.row-low:hover{background:rgba(224,86,107,.09)}
 .modal-card.modal-sm{width:min(440px,100%)}
+.modal-card.invoice-form-modal{width:min(820px,100%)}
 
 /* ---------- مجاميع + ورقة الفاتورة ---------- */
 .totals{margin-top:16px;margin-inline-start:auto;width:min(320px,100%)}

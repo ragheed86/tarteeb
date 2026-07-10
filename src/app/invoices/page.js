@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getInvoices, getClients, getProjects, createInvoice, getQuotes } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS } from '@/lib/format';
-import { Loading, Empty, ErrorBar } from '../ui';
+import { fmtMoney, fmtNum, INVOICE_STATUS } from '@/lib/format';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill } from '@/components';
 
 const VAT_RATE = 15;
 const blankItem = () => ({ description: '', qty: 1, unit_price: '' });
@@ -103,74 +103,59 @@ export default function InvoicesPage() {
         </span>
       </div>
       <div className="card" style={{ padding: '6px 0' }}>
-        {invoices.length === 0 ? (
-          <Empty title="لا توجد فواتير بعد" desc="أنشئ أول فاتورة لمشروع لتظهر هنا." />
-        ) : (
-          <table>
-            <thead><tr><th>رقم الفاتورة</th><th>العميل</th><th>الإصدار</th><th>الاستحقاق</th><th>الإجمالي</th><th>المحصّل</th><th>المتبقي</th><th>الحالة</th></tr></thead>
-            <tbody>
-              {invoices.map((inv) => {
-                const st = INVOICE_STATUS[inv.status] || { label: inv.status, cls: 'p-wait' };
-                return (
-                  <tr key={inv.id} className="clickable" onClick={() => router.push(`/invoices/${inv.id}`)}>
-                    <td><span className="nm amt">{inv.number || '—'}</span></td>
-                    <td>{byId[inv.client_id] || '—'}</td>
-                    <td>{fmtDate(inv.issue_at)}</td>
-                    <td>{fmtDate(inv.due_at)}</td>
-                    <td className="amt">{fmtMoney(inv.total)} ⃁</td>
-                    <td className="amt">{fmtMoney(inv.paid_amount)} ⃁</td>
-                    <td className="amt">{fmtMoney(inv.remaining_amount)} ⃁</td>
-                    <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr><td colSpan={4}><b>الإجمالي</b></td><td className="amt"><b>{fmtMoney(totalAll)} ⃁</b></td><td className="amt"><b>{fmtMoney(totalPaid)} ⃁</b></td><td className="amt"><b>{fmtMoney(totalRemaining)} ⃁</b></td><td /></tr>
-            </tfoot>
-          </table>
-        )}
+        <DataTable
+          rows={invoices}
+          onRowClick={(inv) => router.push(`/invoices/${inv.id}`)}
+          empty={<Empty title="لا توجد فواتير بعد" desc="أنشئ أول فاتورة لمشروع لتظهر هنا." />}
+          columns={[
+            { key: 'number', label: 'رقم الفاتورة', primary: true, render: (inv) => <span className="nm amt" dir="ltr">{inv.number || '—'}</span> },
+            { key: 'client', label: 'العميل', render: (inv) => byId[inv.client_id] || '—' },
+            { key: 'issue_at', label: 'الإصدار', render: (inv) => <DateText v={inv.issue_at} /> },
+            { key: 'due_at', label: 'الاستحقاق', render: (inv) => <DateText v={inv.due_at} /> },
+            { key: 'total', label: 'الإجمالي', render: (inv) => <Money v={inv.total} /> },
+            { key: 'paid_amount', label: 'المحصّل', render: (inv) => <Money v={inv.paid_amount} /> },
+            { key: 'remaining_amount', label: 'المتبقي', render: (inv) => <Money v={inv.remaining_amount} /> },
+            { key: 'status', label: 'الحالة', render: (inv) => <StatusPill status={inv.status} map={INVOICE_STATUS} /> },
+          ]}
+          footer={(
+            <tr><td colSpan={4}><b>الإجمالي</b></td><td className="amt"><b>{fmtMoney(totalAll)} ⃁</b></td><td className="amt"><b>{fmtMoney(totalPaid)} ⃁</b></td><td className="amt"><b>{fmtMoney(totalRemaining)} ⃁</b></td><td /></tr>
+          )}
+        />
       </div>
 
-      {open && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <form className="modal-card" onSubmit={submit} style={{ width: 'min(820px,100%)' }}>
-            <div className="modal-head">
-              <div><h2>فاتورة جديدة</h2><p>بنود الفاتورة واحتساب الضريبة تلقائياً</p></div>
-              <button className="icon-close" type="button" onClick={close} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-            {formErr && <div className="errbar">{formErr}</div>}
-            <div className="form-grid">
-              <div className="field"><label>العميل</label>
-                <select value={head.client_id} onChange={(e) => { setH('client_id', e.target.value); setH('project_id', ''); }} required>
-                  <option value="" disabled>اختر عميلاً…</option>
-                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="field"><label>المشروع (اختياري)</label>
-                <select value={head.project_id} onChange={(e) => setH('project_id', e.target.value)}>
-                  <option value="">— بدون —</option>
-                  {clientProjects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
-                </select>
-              </div>
-              <div className="field"><label>رقم الفاتورة (اختياري)</label><input value={head.number} onChange={(e) => setH('number', e.target.value)} placeholder="يولّد تلقائياً" dir="ltr" /></div>
-              <div className="field"><label>تاريخ الإصدار</label><input type="date" value={head.issue_at} onChange={(e) => { setH('issue_at', e.target.value); setH('due_at', addDaysISO(e.target.value, 14)); }} dir="ltr" /></div>
-              <div className="field"><label>تاريخ الاستحقاق</label><input type="date" value={head.due_at} onChange={(e) => setH('due_at', e.target.value)} dir="ltr" /></div>
-              <div className="field"><label>الحالة</label>
-                <select value={head.status} onChange={(e) => setH('status', e.target.value)}>
-                  <option value="draft">مسودة</option>
-                  <option value="unpaid">غير مدفوعة</option>
-                </select>
-              </div>
-              <div className="field"><label>الضريبة (15%)</label>
-                <select value={head.vat_applicable ? '1' : '0'} onChange={(e) => setH('vat_applicable', e.target.value === '1')}>
-                  <option value="1">خاضعة للضريبة</option>
-                  <option value="0">معفاة</option>
-                </select>
-              </div>
-            </div>
+      <Modal
+        open={open}
+        onClose={close}
+        title="فاتورة جديدة"
+        subtitle="بنود الفاتورة واحتساب الضريبة تلقائياً"
+        as="form"
+        onSubmit={submit}
+        className="invoice-form-modal"
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الإنشاء…' : 'إنشاء الفاتورة'}</button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
+        <div className="form-grid">
+          <Select label="العميل" value={head.client_id} onChange={(e) => { setH('client_id', e.target.value); setH('project_id', ''); }} required>
+            <option value="" disabled>اختر عميلاً…</option>
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+          <Select label="المشروع (اختياري)" value={head.project_id} onChange={(e) => setH('project_id', e.target.value)}>
+            <option value="">— بدون —</option>
+            {clientProjects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+          </Select>
+          <Input label="رقم الفاتورة (اختياري)" ltr value={head.number} onChange={(e) => setH('number', e.target.value)} placeholder="يولّد تلقائياً" />
+          <Input label="تاريخ الإصدار" ltr type="date" value={head.issue_at} onChange={(e) => { setH('issue_at', e.target.value); setH('due_at', addDaysISO(e.target.value, 14)); }} />
+          <Input label="تاريخ الاستحقاق" ltr type="date" value={head.due_at} onChange={(e) => setH('due_at', e.target.value)} />
+          <Select label="الحالة" value={head.status} onChange={(e) => setH('status', e.target.value)}
+            options={[{ value: 'draft', label: 'مسودة' }, { value: 'unpaid', label: 'غير مدفوعة' }]} />
+          <Select label="الضريبة (15%)" value={head.vat_applicable ? '1' : '0'} onChange={(e) => setH('vat_applicable', e.target.value === '1')}
+            options={[{ value: '1', label: 'خاضعة للضريبة' }, { value: '0', label: 'معفاة' }]} />
+        </div>
 
             {/* استيراد بنود عرض السعر المقبول لهذا العميل */}
             {clientQuote && (
@@ -196,19 +181,12 @@ export default function InvoicesPage() {
             </div>
 
             {/* المجاميع */}
-            <div className="totals">
-              <div className="trow"><span>المجموع الفرعي</span><span className="amt">{fmtMoney(subtotal)} ⃁</span></div>
-              <div className="trow"><span>الضريبة ({head.vat_applicable ? `${VAT_RATE}%` : 'معفاة'})</span><span className="amt">{fmtMoney(vatAmount)} ⃁</span></div>
-              <div className="trow grand"><span>الإجمالي</span><span className="amt">{fmtMoney(total)} ⃁</span></div>
-            </div>
-
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الإنشاء…' : 'إنشاء الفاتورة'}</button>
-            </div>
-          </form>
+        <div className="totals">
+          <div className="trow"><span>المجموع الفرعي</span><Money v={subtotal} /></div>
+          <div className="trow"><span>الضريبة ({head.vat_applicable ? `${VAT_RATE}%` : 'معفاة'})</span><Money v={vatAmount} /></div>
+          <div className="trow grand"><span>الإجمالي</span><Money v={total} /></div>
         </div>
-      )}
+      </Modal>
     </>
   );
 }

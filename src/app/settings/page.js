@@ -13,7 +13,7 @@ import { toast } from '../toast';
 import {
   ALL_PERMISSIONS, PERMISSION_GROUPS, ROLE_LABELS, ROLE_PRESETS, isPrimaryAdmin,
 } from '@/lib/permissions';
-import { Loading, ErrorBar, Empty } from '../ui';
+import { Loading, ErrorBar, Empty, Modal, DataTable, Input, Ltr } from '@/components';
 
 const FIELDS = [
   { k: 'name_ar', label: 'الاسم (عربي)', required: true },
@@ -237,65 +237,69 @@ function SuppliersPanel({ rows, setRows }) {
         {filtered.length === 0 ? (
           <Empty title={q ? 'لا نتائج' : 'لا موردين'} desc={q ? 'جرّب كلمة بحث أخرى.' : 'أضف موردي المواد والمنظمات.'} />
         ) : (
-          <table>
-            <thead><tr><th>المورّد</th><th>التصنيف</th><th>المدينة</th><th></th></tr></thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr key={s.id}>
-                  <td>
-                    <span className="sup-cell">
-                      {s.logo_url
-                        ? <img className="sup-logo" src={s.logo_url} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                        : <span className="sup-logo sup-logo-fallback">{(s.name || '؟').slice(0, 1)}</span>}
-                      <span className="nm">{s.name}</span>
-                    </span>
-                  </td>
-                  <td><span className="src">{s.category || '—'}</span></td>
-                  <td>{s.city || '—'}</td>
-                  <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+          <DataTable
+            rows={filtered}
+            columns={[
+              {
+                key: 'name', label: 'المورّد', primary: true,
+                render: (s) => (
+                  <span className="sup-cell">
+                    {s.logo_url
+                      ? <img className="sup-logo" src={s.logo_url} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      : <span className="sup-logo sup-logo-fallback">{(s.name || '؟').slice(0, 1)}</span>}
+                    <span className="nm">{s.name}</span>
+                  </span>
+                ),
+              },
+              { key: 'category', label: 'التصنيف', render: (s) => <span className="src">{s.category || '—'}</span> },
+              { key: 'city', label: 'المدينة', render: (s) => s.city || '—' },
+              {
+                key: 'actions', label: '', align: 'left',
+                render: (s) => (
+                  <>
                     <button className="btn ghost sm" onClick={() => openEdit(s)}>تعديل</button>
                     <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(s)}>حذف</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </>
+                ),
+              },
+            ]}
+          />
         )}
       </div>
 
-      {open && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <form className="modal-card modal-sm" onSubmit={submit}>
-            <div className="modal-head">
-              <div><h2>{editing ? 'تعديل مورّد' : 'مورّد جديد'}</h2><p>بيانات المورّد</p></div>
-              <button className="icon-close" type="button" onClick={close} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
+      <Modal
+        open={open}
+        onClose={close}
+        size="sm"
+        title={editing ? 'تعديل مورّد' : 'مورّد جديد'}
+        subtitle="بيانات المورّد"
+        as="form"
+        onSubmit={submit}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المورّد'}</button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
+        <div className="form-grid">
+          <Input className="span-2" label="اسم المورّد" value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus />
+          <Input label="التصنيف" value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="تخزين / منظمات / أدوات" />
+          <Input label="المدينة" value={form.city} onChange={(e) => set('city', e.target.value)} />
+          <div className="field span-2">
+            <label>شعار المورّد</label>
+            <div className="upload-row">
+              <label className="btn ghost sm" htmlFor="supplier-logo">رفع اللوجو</label>
+              <input id="supplier-logo" type="file" accept="image/*" hidden onChange={handleLogoFile} />
+              <input value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} dir="ltr" placeholder="أو الصق رابط الشعار المستضاف" style={{ flex: 1, minWidth: 200 }} />
             </div>
-            {formErr && <div className="errbar">{formErr}</div>}
-            <div className="form-grid">
-              <div className="field span-2"><label>اسم المورّد</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
-              <div className="field"><label>التصنيف</label><input value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="تخزين / منظمات / أدوات" /></div>
-              <div className="field"><label>المدينة</label><input value={form.city} onChange={(e) => set('city', e.target.value)} /></div>
-              <div className="field span-2">
-                <label>شعار المورّد</label>
-                <div className="upload-row">
-                  <label className="btn ghost sm" htmlFor="supplier-logo">رفع اللوجو</label>
-                  <input id="supplier-logo" type="file" accept="image/*" hidden onChange={handleLogoFile} />
-                  <input value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} dir="ltr" placeholder="أو الصق رابط الشعار المستضاف" style={{ flex: 1, minWidth: 200 }} />
-                </div>
-                {(logoPreview || form.logo_url) && (
-                  <img className="upload-preview" src={logoPreview || form.logo_url} alt="شعار المورّد" style={{ maxWidth: 140, height: 90, objectFit: 'contain', background: '#fff' }} />
-                )}
-              </div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المورّد'}</button>
-            </div>
-          </form>
+            {(logoPreview || form.logo_url) && (
+              <img className="upload-preview" src={logoPreview || form.logo_url} alt="شعار المورّد" style={{ maxWidth: 140, height: 90, objectFit: 'contain', background: '#fff' }} />
+            )}
+          </div>
         </div>
-      )}
+      </Modal>
       </div>
     </>
   );
@@ -426,50 +430,48 @@ function GovPanel({ rows, setRows }) {
       <div className="set-body">
       {err && <div className="errbar">{err}</div>}
       <div className="card" style={{ padding: '6px 0' }}>
-        <table>
-          <thead>
-            <tr><th>#</th><th>الجهة</th><th>الدخول</th><th>اسم المستخدم</th><th>كلمة المرور</th><th>التواصل</th><th>المستندات</th><th>الانتهاء</th><th>الحالة</th></tr>
-          </thead>
-          <tbody>
-            {sorted.map((g, i) => {
-              const st = GOV_STATUS[g.status] || { label: g.status, cls: 'p-wait' };
-              return (
-                <tr key={g.id}>
-                  <td>{fmtNum(i + 1)}</td>
-                  <td>
-                    <span className="sup-cell">
-                      <label className="gov-logo-pick" htmlFor={`gov-logo-${g.id}`} title="اضغط لتغيير شعار الجهة">
-                        {g.logo_url
-                          ? <img className="sup-logo" src={g.logo_url} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                          : <span className="sup-logo sup-logo-fallback">{logoBusyId === g.id ? '…' : (g.entity_name || '؟').slice(0, 1)}</span>}
-                        <input id={`gov-logo-${g.id}`} type="file" accept="image/*" hidden disabled={logoBusyId === g.id} onChange={(e) => setLogo(g, e)} />
-                      </label>
-                      <span className="nm">{g.entity_name}</span>
-                    </span>
-                  </td>
-                  <td>{g.login_url ? <a className="link" href={g.login_url} target="_blank" rel="noreferrer">فتح ↗</a> : '—'}</td>
-                  <td dir="ltr" style={{ textAlign: 'start' }}>{g.username || '—'}</td>
-                  <td dir="ltr" style={{ textAlign: 'start' }}>{g.secret_ref || '—'}</td>
-                  <td>{g.contact || '—'}</td>
-                  <td>
-                    {g.doc_url ? (
-                      <a className="link" href={g.doc_url} target="_blank" rel="noreferrer">📎 عرض</a>
-                    ) : (
-                      <>
-                        <label className="link" htmlFor={`gov-doc-${g.id}`} style={{ cursor: 'pointer' }}>
-                          {busyId === g.id ? 'جارٍ الرفع…' : '📎 إرفاق'}
-                        </label>
-                        <input id={`gov-doc-${g.id}`} type="file" hidden disabled={busyId === g.id} onChange={(e) => attach(g, e)} />
-                      </>
-                    )}
-                  </td>
-                  <td>{g.expiry_date ? fmtDate(g.expiry_date) : '—'}</td>
-                  <td><span className={`pill ${st.cls}`}>{st.label}</span></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <DataTable
+          rows={sorted}
+          columns={[
+            { key: 'idx', label: '#', hideMobile: true, render: (g, i) => fmtNum(i + 1) },
+            {
+              key: 'entity_name', label: 'الجهة', primary: true,
+              render: (g) => (
+                <span className="sup-cell">
+                  <label className="gov-logo-pick" htmlFor={`gov-logo-${g.id}`} title="اضغط لتغيير شعار الجهة">
+                    {g.logo_url
+                      ? <img className="sup-logo" src={g.logo_url} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      : <span className="sup-logo sup-logo-fallback">{logoBusyId === g.id ? '…' : (g.entity_name || '؟').slice(0, 1)}</span>}
+                    <input id={`gov-logo-${g.id}`} type="file" accept="image/*" hidden disabled={logoBusyId === g.id} onChange={(e) => setLogo(g, e)} />
+                  </label>
+                  <span className="nm">{g.entity_name}</span>
+                </span>
+              ),
+            },
+            { key: 'login', label: 'الدخول', render: (g) => (g.login_url ? <a className="link" href={g.login_url} target="_blank" rel="noreferrer">فتح ↗</a> : '—') },
+            { key: 'username', label: 'اسم المستخدم', render: (g) => <Ltr>{g.username || '—'}</Ltr> },
+            { key: 'secret_ref', label: 'مرجع السر', render: (g) => <Ltr>{g.secret_ref || '—'}</Ltr> },
+            { key: 'contact', label: 'التواصل', render: (g) => g.contact || '—' },
+            {
+              key: 'docs', label: 'المستندات',
+              render: (g) => (g.doc_url ? (
+                <a className="link" href={g.doc_url} target="_blank" rel="noreferrer">📎 عرض</a>
+              ) : (
+                <>
+                  <label className="link" htmlFor={`gov-doc-${g.id}`} style={{ cursor: 'pointer' }}>
+                    {busyId === g.id ? 'جارٍ الرفع…' : '📎 إرفاق'}
+                  </label>
+                  <input id={`gov-doc-${g.id}`} type="file" hidden disabled={busyId === g.id} onChange={(e) => attach(g, e)} />
+                </>
+              )),
+            },
+            { key: 'expiry_date', label: 'الانتهاء', render: (g) => (g.expiry_date ? fmtDate(g.expiry_date) : '—') },
+            {
+              key: 'status', label: 'الحالة',
+              render: (g) => { const st = GOV_STATUS[g.status] || { label: g.status, cls: 'p-wait' }; return <span className={`pill ${st.cls}`}>{st.label}</span>; },
+            },
+          ]}
+        />
       </div>
       </div>
     </>
@@ -631,38 +633,44 @@ function UserPermissions({ users, reload }) {
         {!filtered ? <Loading /> : filtered.length === 0 ? (
           <Empty title="لا مستخدمين" desc="أضف حسابات الفريق وحدّد صلاحياتها." />
         ) : (
-          <table>
-            <thead><tr><th>المستخدم</th><th>الدور</th><th>الصلاحيات</th><th>الحالة</th><th></th></tr></thead>
-            <tbody>
-              {filtered.map((user) => {
-                const primary = isPrimaryAdmin(user.email);
-                return (
-                  <tr key={user.user_id}>
-                    <td>
-                      <div className="user-cell">
-                        <span className="uavatar">{initials(user)}</span>
-                        <div>
-                          <span className="nm">{user.display_name || user.email}</span>
-                          <span className="uid" dir="ltr">{user.email}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      {primary
-                        ? <span className="pill p-quote">أدمن أساسي</span>
-                        : <span className="src">{ROLE_LABELS[user.role] || user.role}</span>}
-                    </td>
-                    <td>{primary ? 'الكل' : `${fmtNum(user.permissions?.length || 0)} صلاحية`}</td>
-                    <td><span className={`pill ${user.active !== false ? 'p-done' : 'p-cancel'}`}>{user.active !== false ? 'مفعّل' : 'معطّل'}</span></td>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+          <DataTable
+            rows={filtered}
+            rowKey={(user) => user.user_id}
+            columns={[
+              {
+                key: 'user', label: 'المستخدم', primary: true,
+                render: (user) => (
+                  <div className="user-cell">
+                    <span className="uavatar">{initials(user)}</span>
+                    <div>
+                      <span className="nm">{user.display_name || user.email}</span>
+                      <span className="uid" dir="ltr">{user.email}</span>
+                    </div>
+                  </div>
+                ),
+              },
+              {
+                key: 'role', label: 'الدور',
+                render: (user) => (isPrimaryAdmin(user.email)
+                  ? <span className="pill p-quote">أدمن أساسي</span>
+                  : <span className="src">{ROLE_LABELS[user.role] || user.role}</span>),
+              },
+              { key: 'permissions', label: 'الصلاحيات', render: (user) => (isPrimaryAdmin(user.email) ? 'الكل' : `${fmtNum(user.permissions?.length || 0)} صلاحية`) },
+              { key: 'active', label: 'الحالة', render: (user) => <span className={`pill ${user.active !== false ? 'p-done' : 'p-cancel'}`}>{user.active !== false ? 'مفعّل' : 'معطّل'}</span> },
+              {
+                key: 'actions', label: '', align: 'left',
+                render: (user) => {
+                  const primary = isPrimaryAdmin(user.email);
+                  return (
+                    <>
                       <button className="btn ghost sm" onClick={() => openEdit(user)}>تعديل</button>
                       <button className="btn ghost sm" style={{ marginInlineStart: 8 }} disabled={primary} onClick={() => disable(user)}>تعطيل</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </>
+                  );
+                },
+              },
+            ]}
+          />
         )}
       </div>
 
@@ -679,16 +687,21 @@ function UserPermissions({ users, reload }) {
         ))}
       </div>
 
-      {editorOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && closeEditor()}>
-          <form className="modal-card" onSubmit={submit}>
-            <div className="modal-head">
-              <div><h2>{editing ? 'تعديل صلاحيات مستخدم' : 'إضافة مستخدم وصلاحيات'}</h2><p>{editing ? form.email : 'حساب جديد للفريق'}</p></div>
-              <button className="icon-close" type="button" onClick={closeEditor} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-            {err && <div className="errbar">{err}</div>}
+      <Modal
+        open={editorOpen}
+        onClose={closeEditor}
+        title={editing ? 'تعديل صلاحيات مستخدم' : 'إضافة مستخدم وصلاحيات'}
+        subtitle={editing ? form.email : 'حساب جديد للفريق'}
+        as="form"
+        onSubmit={submit}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={closeEditor} disabled={busy}>إلغاء</button>
+            <button className="btn" type="submit" disabled={busy}>{busy ? 'جارٍ الحفظ…' : 'حفظ الصلاحيات'}</button>
+          </>
+        )}
+      >
+        {err && <div className="errbar">{err}</div>}
             <div className="form-grid">
               <div className="field"><label>البريد الإلكتروني</label><input value={form.email} onChange={(e) => setField('email', e.target.value)} dir="ltr" type="email" required disabled={Boolean(editing)} /></div>
               <div className="field"><label>الاسم</label><input value={form.display_name} onChange={(e) => setField('display_name', e.target.value)} /></div>
@@ -733,13 +746,7 @@ function UserPermissions({ users, reload }) {
                 );
               })}
             </div>
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={closeEditor} disabled={busy}>إلغاء</button>
-              <button className="btn" type="submit" disabled={busy}>{busy ? 'جارٍ الحفظ…' : 'حفظ الصلاحيات'}</button>
-            </div>
-          </form>
-        </div>
-      )}
+      </Modal>
       </div>
     </>
   );

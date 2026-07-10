@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { fmtNum } from '@/lib/format';
 import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber } from '@/lib/data';
+import { toast } from '../toast';
 
 const RIYAL = '⃁';
 const AR_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -77,7 +78,6 @@ export default function QuotesPage() {
   const [drawer, setDrawer] = useState(false);
   const [clientPrompt, setClientPrompt] = useState(false); // نافذة «إضافة العميل» عند القبول
   const [addingClient, setAddingClient] = useState(false);
-  const [toast, setToast] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
   const [saving, setSaving] = useState(false);
@@ -124,7 +124,7 @@ export default function QuotesPage() {
     return () => { ro.disconnect(); window.removeEventListener('resize', fit); };
   }, [fit, q]);
 
-  const ping = (m) => { setToast(m); setTimeout(() => setToast(''), 1800); };
+  const ping = (m) => { toast(m); };
   const set = (k, v) => setQ((s) => ({ ...s, [k]: v }));
   const setItem = (i, k, v) => setQ((s) => { const items = s.items.map((it, j) => j === i ? { ...it, [k]: v } : it); return { ...s, items }; });
   const addItem = () => setQ((s) => ({ ...s, items: [...s.items, blankItem()] }));
@@ -398,7 +398,8 @@ export default function QuotesPage() {
       <div className={`qg-drawer${drawer ? ' open' : ''}`}>
         <div className="qg-dhead"><h3>🗂️ العروض المحفوظة</h3><button className="qg-btn" onClick={() => setDrawer(false)}>✕</button></div>
         <div className="qg-dlist">
-          {list.length === 0 && <div className="qg-empty">لا توجد عروض محفوظة بعد.<br />أنشئ عرضاً واضغط «حفظ».</div>}
+          {loading && <div className="qg-empty" aria-busy="true">جارٍ تحميل العروض…</div>}
+          {!loading && list.length === 0 && <div className="qg-empty">لا توجد عروض محفوظة بعد.<br />أنشئ عرضاً واضغط «حفظ».</div>}
           {list.map((rec) => {
             const g = quoteAmount(rec);
             const bd = STATUS[effectiveStatus(rec)];
@@ -428,7 +429,6 @@ export default function QuotesPage() {
         </div>
       )}
 
-      {toast && <div className="qg-toast">{toast}</div>}
     </div>
   );
 }
@@ -488,7 +488,7 @@ function Board({ byColumn, stats, onOpen, activeId }) {
 }
 
 const CSS = `
-.qg-root{--tl:#17A2A6;--tld:#0E7E82;--cor:#E2705F;--sal:#F2988C;--lbg:#E9F8F8;--pink:#FCDAD5;--pink2:#FDEEEB;--tink:#2B3A42;--tmut:#55666E;--tbd:#E4F2F2;font-family:'IBM Plex Sans Arabic','Saudi Riyal',sans-serif;color:var(--tink)}
+.qg-root{--tl:var(--teal-600);--tld:var(--teal-700);--cor:var(--peach-600);--sal:var(--peach-500);--lbg:var(--teal-50);--pink:var(--peach-200);--pink2:var(--peach-100);--tink:#2B3A42;--tmut:#55666E;--tbd:#E4F2F2;font-family:var(--body);color:var(--tink)}
 .qg-bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 4px;flex-wrap:wrap;background:transparent;margin-bottom:6px}
 .qg-qnum{font-size:12px;color:var(--tmut);font-weight:600}.qg-qnum b{color:var(--tl)}
 .qg-status{font-family:inherit;font-size:12px;font-weight:600;border:1px solid var(--tbd);border-radius:8px;padding:7px 10px;background:#fff;cursor:pointer;color:var(--tink)}

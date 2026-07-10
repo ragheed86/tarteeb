@@ -749,10 +749,14 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .chip button{display:inline-flex;align-items:center;justify-content:center;min-width:32px;min-height:32px}
   .back-link{min-height:44px}
 
-  .kpis,.grid2,.pgrid,.countdowns,.costwrap,.hmwrap,.hmgrid,.inbox,.ptgrid,.kanban,.warehouse-stats{grid-template-columns:1fr!important;gap:12px}
-  .kpis[style],.grid2[style],.pgrid[style],.ptgrid[style]{grid-template-columns:1fr!important}
-  .kpi{padding:15px;border-radius:14px;box-shadow:none}
-  .kpi .val{font-size:23px;margin-top:6px}
+  .grid2,.pgrid,.countdowns,.costwrap,.hmwrap,.hmgrid,.inbox,.ptgrid,.kanban,.warehouse-stats{grid-template-columns:1fr!important;gap:12px}
+  .grid2[style],.pgrid[style],.ptgrid[style]{grid-template-columns:1fr!important}
+  /* مؤشرات لوحة المعلومات: مربّعات، اثنان في السطر على الجوال */
+  .kpis,.kpis[style]{grid-template-columns:repeat(2,1fr)!important;gap:10px}
+  .kpi{aspect-ratio:1/1;display:flex;flex-direction:column;justify-content:center;padding:14px 13px;border-radius:16px;box-shadow:none}
+  .kpi .lbl{font-size:12px}
+  .kpi .val{font-size:22px;margin-top:8px}
+  .kpi .trend{font-size:11px;margin-top:6px}
   .bars{height:120px;gap:9px}
   .pgrid{display:flex;max-width:100%;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:2px;margin-inline:0;padding-inline:0}
   .pcard{min-width:min(82vw,320px);scroll-snap-align:start}

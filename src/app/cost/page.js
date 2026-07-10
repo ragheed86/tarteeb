@@ -434,20 +434,22 @@ export default function CostPage() {
                   >
                     {day.laborRows.map((row) => (
                       <div className="daily-table-row labor-row" key={row.id}>
-                        <input type="number" min="0" step="1" value={row.workerCount} onChange={(e) => updateLabor(day.date, row.id, 'workerCount', e.target.value)} dir="ltr" />
-                        <select value={row.worker || ''} onChange={(e) => updateLabor(day.date, row.id, 'worker', e.target.value)}>
-                          <option value="">— بدون —</option>
-                          {(state.employees || []).map((em) => <option key={em.id} value={em.name}>{em.name}</option>)}
-                          {row.worker && row.worker !== 'فريلانسر' && !(state.employees || []).some((em) => em.name === row.worker) && (
-                            <option value={row.worker}>{row.worker}</option>
-                          )}
-                          <option value="فريلانسر">فريلانسر (مستقل)</option>
-                        </select>
-                        <input type="number" min="0" step="0.5" value={row.hours} onChange={(e) => updateLabor(day.date, row.id, 'hours', e.target.value)} dir="ltr" />
-                        <div className="row-total amt">{fmtNum(num(row.workerCount) * num(row.hours))}</div>
-                        <input type="number" min="0" step="0.01" value={row.rate} onChange={(e) => updateLabor(day.date, row.id, 'rate', e.target.value)} dir="ltr" />
-                        <div className="row-total amt">{fmtMoney(num(row.workerCount) * num(row.hours) * num(row.rate))} ⃁</div>
-                        <button className="x-btn" type="button" onClick={() => removeRow(day.date, 'laborRows', row.id)}>✕</button>
+                        <span className="dcell" data-label="عدد العمال"><input type="number" min="0" step="1" value={row.workerCount} onChange={(e) => updateLabor(day.date, row.id, 'workerCount', e.target.value)} dir="ltr" aria-label="عدد العمال" /></span>
+                        <span className="dcell" data-label="الموظف (اختياري)">
+                          <select value={row.worker || ''} onChange={(e) => updateLabor(day.date, row.id, 'worker', e.target.value)} aria-label="الموظف">
+                            <option value="">— بدون —</option>
+                            {(state.employees || []).map((em) => <option key={em.id} value={em.name}>{em.name}</option>)}
+                            {row.worker && row.worker !== 'فريلانسر' && !(state.employees || []).some((em) => em.name === row.worker) && (
+                              <option value={row.worker}>{row.worker}</option>
+                            )}
+                            <option value="فريلانسر">فريلانسر (مستقل)</option>
+                          </select>
+                        </span>
+                        <span className="dcell" data-label="ساعات العامل"><input type="number" min="0" step="0.5" value={row.hours} onChange={(e) => updateLabor(day.date, row.id, 'hours', e.target.value)} dir="ltr" aria-label="ساعات العامل" /></span>
+                        <span className="dcell" data-label="إجمالي الساعات"><span className="row-total amt">{fmtNum(num(row.workerCount) * num(row.hours))}</span></span>
+                        <span className="dcell" data-label="سعر الساعة"><input type="number" min="0" step="0.01" value={row.rate} onChange={(e) => updateLabor(day.date, row.id, 'rate', e.target.value)} dir="ltr" aria-label="سعر الساعة" /></span>
+                        <span className="dcell" data-label="الإجمالي"><span className="row-total amt">{fmtMoney(num(row.workerCount) * num(row.hours) * num(row.rate))} ⃁</span></span>
+                        <span className="dcell dcell-action"><button className="x-btn" type="button" onClick={() => removeRow(day.date, 'laborRows', row.id)} aria-label="حذف البند">✕</button></span>
                       </div>
                     ))}
                   </DailyTable>
@@ -462,15 +464,17 @@ export default function CostPage() {
                   >
                     {day.productRows.map((row) => (
                       <div className="daily-table-row product-row" key={row.id}>
-                        <input value={row.product} onChange={(e) => updateProduct(day.date, row.id, 'product', e.target.value)} placeholder="اسم المنتج" />
-                        <select value={row.supplierId} onChange={(e) => updateProduct(day.date, row.id, 'supplierId', e.target.value)}>
-                          <option value="">اختر مورداً…</option>
-                          {state.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                        <input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(e) => updateProduct(day.date, row.id, 'purchasePrice', e.target.value)} dir="ltr" />
-                        <input type="number" min="0" step="0.01" value={row.markupPercent} onChange={(e) => updateProduct(day.date, row.id, 'markupPercent', e.target.value)} dir="ltr" />
-                        <div className="row-total amt">{fmtMoney(row.salePrice)} ⃁</div>
-                        <button className="x-btn" type="button" onClick={() => removeRow(day.date, 'productRows', row.id)}>✕</button>
+                        <span className="dcell" data-label="المنتج"><input value={row.product} onChange={(e) => updateProduct(day.date, row.id, 'product', e.target.value)} placeholder="اسم المنتج" aria-label="المنتج" /></span>
+                        <span className="dcell" data-label="المورد">
+                          <select value={row.supplierId} onChange={(e) => updateProduct(day.date, row.id, 'supplierId', e.target.value)} aria-label="المورد">
+                            <option value="">اختر مورداً…</option>
+                            {state.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </span>
+                        <span className="dcell" data-label="سعر الشراء"><input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(e) => updateProduct(day.date, row.id, 'purchasePrice', e.target.value)} dir="ltr" aria-label="سعر الشراء" /></span>
+                        <span className="dcell" data-label="نسبة البيع %"><input type="number" min="0" step="0.01" value={row.markupPercent} onChange={(e) => updateProduct(day.date, row.id, 'markupPercent', e.target.value)} dir="ltr" aria-label="نسبة البيع" /></span>
+                        <span className="dcell" data-label="الإجمالي"><span className="row-total amt">{fmtMoney(row.salePrice)} ⃁</span></span>
+                        <span className="dcell dcell-action"><button className="x-btn" type="button" onClick={() => removeRow(day.date, 'productRows', row.id)} aria-label="حذف المنتج">✕</button></span>
                       </div>
                     ))}
                   </DailyTable>

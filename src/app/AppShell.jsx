@@ -33,6 +33,14 @@ const NAV = [
 
 const ALL = NAV.flatMap((g) => g.items);
 const MOBILE_NAV = ['/', '/clients', '/projects', '/quotes', '/warehouse'];
+// عناوين المسارات غير الظاهرة في القائمة (تفاصيل وصفحات فرعية) — كي لا يظهر عنوان خاطئ في الشريط العلوي
+const EXTRA_TITLES = [
+  { prefix: '/clients/', label: 'ملف العميل', sub: 'بيانات العميل وسجله' },
+  { prefix: '/projects/', label: 'تفاصيل المشروع', sub: 'المهام والفريق والتكاليف' },
+  { prefix: '/invoices/', label: 'الفاتورة', sub: 'تفاصيل الفاتورة والدفعات' },
+  { prefix: '/suppliers', label: 'الموردون', sub: 'موردو المواد والمنظمات' },
+  { prefix: '/government', label: 'الحسابات الحكومية', sub: 'الرخص والاشتراكات' },
+];
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
@@ -63,7 +71,10 @@ export default function AppShell({ children }) {
     .map((group) => ({ ...group, items: group.items.filter((item) => canAccess(access, permissionForPath(item.href))) }))
     .filter((group) => group.items.length > 0);
   const visibleAll = visibleNav.flatMap((g) => g.items);
-  const active = ALL.find((i) => i.href === pathname) || visibleAll[0] || ALL[0];
+  const active = ALL.find((i) => i.href === pathname)
+    || EXTRA_TITLES.find((t) => pathname.startsWith(t.prefix))
+    || ALL.find((i) => i.href !== '/' && pathname.startsWith(i.href))
+    || visibleAll[0] || ALL[0];
   const email = session.user?.email || '';
   const initial = (email[0] || 'ر').toUpperCase();
   const currentPermission = permissionForPath(pathname);
@@ -83,7 +94,7 @@ export default function AppShell({ children }) {
               {g.group && <div className="nav-label">{g.group}</div>}
               {g.items.map((it) => {
                 const Icon = it.icon;
-                const isActive = it.href === pathname;
+                const isActive = it.href === pathname || (it.href !== '/' && pathname.startsWith(it.href + '/'));
                 return (
                   <Link key={it.href} href={it.href} className={isActive ? 'active' : ''}>
                     <Icon /> {it.label}
@@ -113,7 +124,7 @@ export default function AppShell({ children }) {
       <nav className="bottom-nav" aria-label="التنقل الرئيسي">
         {visibleAll.filter((it) => MOBILE_NAV.includes(it.href)).map((it) => {
           const Icon = it.icon;
-          const isActive = it.href === pathname;
+          const isActive = it.href === pathname || (it.href !== '/' && pathname.startsWith(it.href + '/'));
           return (
             <Link key={it.href} href={it.href} className={isActive ? 'active' : ''}>
               <Icon />

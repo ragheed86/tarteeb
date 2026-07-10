@@ -9,7 +9,7 @@ import { canAccess } from '@/lib/permissions';
 import { useAccess } from '@/lib/useAccess';
 import { fmtMoney, fmtNum } from '@/lib/format';
 import { decodeBarcodeFromFile, startBarcodeScanner } from '@/lib/barcode';
-import { Loading, Empty, ErrorBar } from '../ui';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select } from '@/components';
 
 const EMPTY = {
   name: '', barcode: '', category_id: '', unit: 'قطعة', quantity: '', reorder_level: '',
@@ -285,70 +285,87 @@ export default function WarehousePage() {
         {filtered.length === 0 ? (
           <Empty title="لا أصناف" desc={canManageProducts ? 'أضف أصناف المخزون لإدارتها هنا.' : 'لا توجد أصناف مطابقة للفلاتر الحالية.'} />
         ) : (
-          <table className="wh-table">
-            <thead><tr><th>الصنف</th><th>التصنيف</th><th>المستودع</th><th>الكمية</th><th>حد التنبيه</th><th>تكلفة الوحدة</th><th>قيمة المخزون</th><th>المورّد</th><th></th></tr></thead>
-            <tbody>
-              {filtered.map((it) => {
-                const low = Number(it.quantity) < Number(it.reorder_level);
-                return (
-                  <tr key={it.id} className={low ? 'row-low' : ''}>
-                    <td>
-                      <span className="prod-cell">
-                        <ProductThumb item={it} />
-                        <span className="prod-info">
-                          <span className="nm">{it.name}</span>
-                          {it.barcode && <span className="uid amt bc-code"><BarcodeIcon size={13} />{it.barcode}</span>}
-                        </span>
-                      </span>
-                    </td>
-                    <td>{catName[it.category_id] || '—'}</td>
-                    <td>{whName[it.warehouse_id] || '—'}</td>
-                    <td className="amt">
+          <DataTable
+            className="wh-table"
+            rows={filtered}
+            pageSize={50}
+            rowClassName={(it) => (Number(it.quantity) < Number(it.reorder_level) ? 'row-low' : '')}
+            columns={[
+              {
+                key: 'name', label: 'الصنف', primary: true,
+                render: (it) => (
+                  <span className="prod-cell">
+                    <ProductThumb item={it} />
+                    <span className="prod-info">
+                      <span className="nm">{it.name}</span>
+                      {it.barcode && <span className="uid amt bc-code"><BarcodeIcon size={13} />{it.barcode}</span>}
+                    </span>
+                  </span>
+                ),
+              },
+              { key: 'category', label: 'التصنيف', render: (it) => catName[it.category_id] || '—' },
+              { key: 'warehouse', label: 'المستودع', render: (it) => whName[it.warehouse_id] || '—' },
+              {
+                key: 'quantity', label: 'الكمية',
+                render: (it) => {
+                  const low = Number(it.quantity) < Number(it.reorder_level);
+                  return (
+                    <span className="amt">
                       {fmtNum(it.quantity)} {it.unit}
                       {low && <span className="pill p-cancel" style={{ marginInlineStart: 6 }}>ناقص</span>}
-                    </td>
-                    <td className="amt">{fmtNum(it.reorder_level)}</td>
-                    <td className="amt">{fmtMoney(it.unit_cost)} ⃁</td>
-                    <td className="amt"><b>{fmtMoney(itemValue(it))}</b> ⃁</td>
-                    <td><SupplierCell supplier={supById[it.supplier_id]} /></td>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      {canRunInventory && (
-                        <button className="btn ghost sm act-ico" title="جرد" aria-label="جرد" onClick={() => openInventory(it)}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12l2 2 4-4" /></svg>
-                        </button>
-                      )}
-                      {canManageProducts && (
-                        <button className="btn ghost sm act-ico" title="تعديل" aria-label="تعديل" style={{ marginInlineStart: canRunInventory ? 6 : 0 }} onClick={() => openEdit(it)}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
-                        </button>
-                      )}
-                      {canManageProducts && (
-                        <button className="btn ghost sm act-ico" title="حذف" aria-label="حذف" style={{ marginInlineStart: 6, color: 'var(--neg)' }} onClick={() => del(it)}>
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" /></svg>
-                        </button>
-                      )}
-                      {!canRunInventory && !canManageProducts && <span className="uid">—</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </span>
+                  );
+                },
+              },
+              { key: 'reorder_level', label: 'حد التنبيه', hideMobile: true, render: (it) => <span className="amt">{fmtNum(it.reorder_level)}</span> },
+              { key: 'unit_cost', label: 'تكلفة الوحدة', render: (it) => <span className="amt">{fmtMoney(it.unit_cost)} ⃁</span> },
+              { key: 'value', label: 'قيمة المخزون', render: (it) => <span className="amt"><b>{fmtMoney(itemValue(it))}</b> ⃁</span> },
+              { key: 'supplier', label: 'المورّد', render: (it) => <SupplierCell supplier={supById[it.supplier_id]} /> },
+              {
+                key: 'actions', label: '', align: 'left',
+                render: (it) => (
+                  <>
+                    {canRunInventory && (
+                      <button className="btn ghost sm act-ico" title="جرد" aria-label="جرد" onClick={() => openInventory(it)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12l2 2 4-4" /></svg>
+                      </button>
+                    )}
+                    {canManageProducts && (
+                      <button className="btn ghost sm act-ico" title="تعديل" aria-label="تعديل" style={{ marginInlineStart: canRunInventory ? 6 : 0 }} onClick={() => openEdit(it)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+                      </button>
+                    )}
+                    {canManageProducts && (
+                      <button className="btn ghost sm act-ico" title="حذف" aria-label="حذف" style={{ marginInlineStart: 6, color: 'var(--neg)' }} onClick={() => del(it)}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" /></svg>
+                      </button>
+                    )}
+                    {!canRunInventory && !canManageProducts && <span className="uid">—</span>}
+                  </>
+                ),
+              },
+            ]}
+          />
         )}
       </div>
 
-      {open && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-          <form className="modal-card" onSubmit={submit}>
-            <div className="modal-head">
-              <div><h2>{editing ? 'تعديل صنف' : 'صنف جديد'}</h2><p>إضافة صنف إلى المخزون</p></div>
-              <button className="icon-close" type="button" onClick={close} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-            {formErr && <div className="errbar">{formErr}</div>}
-            <div className="form-grid">
-              <div className="field span-2"><label>اسم الصنف</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required /></div>
+      <Modal
+        open={open}
+        onClose={close}
+        title={editing ? 'تعديل صنف' : 'صنف جديد'}
+        subtitle="إضافة صنف إلى المخزون"
+        as="form"
+        onSubmit={submit}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الصنف'}</button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
+        <div className="form-grid">
+          <Input className="span-2" label="اسم الصنف" value={form.name} onChange={(e) => set('name', e.target.value)} required />
 
               <div className="field span-2">
                 <label><span className="lbl-ico"><BarcodeIcon /></span> الباركود</label>
@@ -373,74 +390,62 @@ export default function WarehousePage() {
                 {scanErr && <span className="scan-err">{scanErr}</span>}
               </div>
 
-              <div className="field"><label>التصنيف</label>
-                <select value={form.category_id} onChange={(e) => set('category_id', e.target.value)}>
-                  <option value="">— بدون —</option>
-                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="field"><label>المستودع</label>
-                <select value={form.warehouse_id} onChange={(e) => set('warehouse_id', e.target.value)}>
-                  <option value="">— بدون —</option>
-                  {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
+          <Select label="التصنيف" value={form.category_id} onChange={(e) => set('category_id', e.target.value)}>
+            <option value="">— بدون —</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+          <Select label="المستودع" value={form.warehouse_id} onChange={(e) => set('warehouse_id', e.target.value)}>
+            <option value="">— بدون —</option>
+            {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </Select>
 
-              <div className="field"><label>الكمية</label><input type="number" min="0" step="0.01" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} dir="ltr" /></div>
-              <div className="field"><label>الوحدة</label><input value={form.unit} onChange={(e) => set('unit', e.target.value)} /></div>
+          <Input label="الكمية" ltr type="number" min="0" step="0.01" value={form.quantity} onChange={(e) => set('quantity', e.target.value)} />
+          <Input label="الوحدة" value={form.unit} onChange={(e) => set('unit', e.target.value)} />
 
-              <div className="field"><label>تكلفة الوحدة (⃁)</label><input type="number" min="0" step="0.01" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} dir="ltr" /></div>
-              <div className="field"><label>حد التنبيه</label><input type="number" min="0" step="0.01" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} dir="ltr" /></div>
+          <Input label="تكلفة الوحدة (⃁)" ltr type="number" min="0" step="0.01" value={form.unit_cost} onChange={(e) => set('unit_cost', e.target.value)} />
+          <Input label="حد التنبيه" ltr type="number" min="0" step="0.01" value={form.reorder_level} onChange={(e) => set('reorder_level', e.target.value)} />
 
-              <div className="field"><label>المورّد</label>
-                <select value={form.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
-                  <option value="">— بدون —</option>
-                  {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-              <div className="field"><label>إجمالي قيمة المخزون (⃁)</label>
-                <div className="stock-value amt">{fmtMoney(formValue)} ⃁</div>
-              </div>
+          <Select label="المورّد" value={form.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
+            <option value="">— بدون —</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </Select>
+          <div className="field"><label>إجمالي قيمة المخزون (⃁)</label>
+            <div className="stock-value amt">{fmtMoney(formValue)} ⃁</div>
+          </div>
 
-              <div className="field span-2">
-                <label>صورة المنتج</label>
-                <div className="upload-row">
-                  <label className="btn ghost sm" htmlFor="product-image">رفع صورة المنتج</label>
-                  <input id="product-image" type="file" accept="image/*" hidden onChange={handleProductImage} />
-                  {productImage.name && <span>{productImage.name}</span>}
-                </div>
-                {productImage.preview && <img className="upload-preview" src={productImage.preview} alt="صورة المنتج" />}
-              </div>
+          <div className="field span-2">
+            <label>صورة المنتج</label>
+            <div className="upload-row">
+              <label className="btn ghost sm" htmlFor="product-image">رفع صورة المنتج</label>
+              <input id="product-image" type="file" accept="image/*" hidden onChange={handleProductImage} />
+              {productImage.name && <span>{productImage.name}</span>}
             </div>
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الصنف'}</button>
-            </div>
-          </form>
+            {productImage.preview && <img className="upload-preview" src={productImage.preview} alt="صورة المنتج" />}
+          </div>
         </div>
-      )}
+      </Modal>
 
-      {inventorying && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && closeInventory()}>
-          <form className="modal-card modal-sm" onSubmit={submitInventory}>
-            <div className="modal-head">
-              <div><h2>جرد الصنف</h2><p>{inventorying.name}</p></div>
-              <button className="icon-close" type="button" onClick={closeInventory} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
-            {formErr && <div className="errbar">{formErr}</div>}
-            <div className="form-grid">
-              <div className="field"><label>الكمية الحالية</label><input type="number" min="0" step="0.01" value={inventoryForm.quantity} onChange={(e) => setInventory('quantity', e.target.value)} dir="ltr" autoFocus /></div>
-              <div className="field"><label>حد التنبيه</label><input type="number" min="0" step="0.01" value={inventoryForm.reorder_level} onChange={(e) => setInventory('reorder_level', e.target.value)} dir="ltr" /></div>
-            </div>
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={closeInventory} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الجرد'}</button>
-            </div>
-          </form>
+      <Modal
+        open={Boolean(inventorying)}
+        onClose={closeInventory}
+        size="sm"
+        title="جرد الصنف"
+        subtitle={inventorying?.name}
+        as="form"
+        onSubmit={submitInventory}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={closeInventory} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الجرد'}</button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
+        <div className="form-grid">
+          <Input label="الكمية الحالية" ltr type="number" min="0" step="0.01" value={inventoryForm.quantity} onChange={(e) => setInventory('quantity', e.target.value)} autoFocus />
+          <Input label="حد التنبيه" ltr type="number" min="0" step="0.01" value={inventoryForm.reorder_level} onChange={(e) => setInventory('reorder_level', e.target.value)} />
         </div>
-      )}
+      </Modal>
     </>
   );
 }

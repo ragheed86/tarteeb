@@ -7,7 +7,7 @@ import {
 import {
   fmtMoney, fmtNum, fmtDate, CLIENT_STATUS, PROJECT_STATUS, INVOICE_STATUS, SOURCE_LABEL,
 } from '@/lib/format';
-import { Loading, Empty, ErrorBar } from '../../ui';
+import { Loading, Empty, ErrorBar, DataTable, Money, DateText, Ltr, StatusPill } from '@/components';
 
 const CHANNEL = { whatsapp: 'واتساب', telegram: 'تيليجرام', email: 'بريد', phone: 'هاتف', system: 'النظام' };
 const DIRECTION = { in: 'وارد', out: 'صادر', system: 'النظام' };
@@ -147,23 +147,17 @@ export default function ClientProfile() {
         {projects.length === 0 ? (
           <Empty title="لا مشاريع" desc="لا توجد مشاريع لهذا العميل بعد." />
         ) : (
-          <table>
-            <thead><tr><th>المشروع</th><th>الخدمة</th><th>قيمة العقد</th><th>الحالة</th><th>التسليم</th></tr></thead>
-            <tbody>
-              {projects.map((p) => {
-                const ps = PROJECT_STATUS[p.status] || { label: p.status, cls: 'p-wait' };
-                return (
-                  <tr key={p.id} className="clickable" onClick={() => router.push(`/projects/${p.id}`)}>
-                    <td><span className="nm">{p.title}</span></td>
-                    <td>{p.service_type || '—'}</td>
-                    <td className="amt">{fmtMoney(p.sale_price)} ⃁</td>
-                    <td><span className={`pill ${ps.cls}`}>{ps.label}</span></td>
-                    <td>{fmtDate(p.due_date)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DataTable
+            rows={projects}
+            onRowClick={(p) => router.push(`/projects/${p.id}`)}
+            columns={[
+              { key: 'title', label: 'المشروع', primary: true, render: (p) => <span className="nm">{p.title}</span> },
+              { key: 'service_type', label: 'الخدمة', render: (p) => p.service_type || '—' },
+              { key: 'sale_price', label: 'قيمة العقد', render: (p) => <Money v={p.sale_price} /> },
+              { key: 'status', label: 'الحالة', render: (p) => <StatusPill status={p.status} map={PROJECT_STATUS} /> },
+              { key: 'due_date', label: 'التسليم', render: (p) => <DateText v={p.due_date} /> },
+            ]}
+          />
         )}
       </div>
 
@@ -173,25 +167,19 @@ export default function ClientProfile() {
         {invoices.length === 0 ? (
           <Empty title="لا فواتير" desc="لا توجد فواتير لهذا العميل بعد." />
         ) : (
-          <table>
-            <thead><tr><th>رقم</th><th>الإصدار</th><th>الاستحقاق</th><th>الإجمالي</th><th>المحصّل</th><th>المتبقي</th><th>الحالة</th></tr></thead>
-            <tbody>
-              {invoices.map((i) => {
-                const is = INVOICE_STATUS[i.status] || { label: i.status, cls: 'p-wait' };
-                return (
-                  <tr key={i.id} className="clickable" onClick={() => router.push(`/invoices/${i.id}`)}>
-                    <td className="amt" dir="ltr" style={{ textAlign: 'start' }}>{i.number || '—'}</td>
-                    <td>{fmtDate(i.issue_at)}</td>
-                    <td>{fmtDate(i.due_at)}</td>
-                    <td className="amt">{fmtMoney(i.total)} ⃁</td>
-                    <td className="amt">{fmtMoney(i.paid_amount)} ⃁</td>
-                    <td className="amt">{fmtMoney(i.remaining_amount)} ⃁</td>
-                    <td><span className={`pill ${is.cls}`}>{is.label}</span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DataTable
+            rows={invoices}
+            onRowClick={(i) => router.push(`/invoices/${i.id}`)}
+            columns={[
+              { key: 'number', label: 'رقم', primary: true, render: (i) => <Ltr className="amt">{i.number || '—'}</Ltr> },
+              { key: 'issue_at', label: 'الإصدار', render: (i) => <DateText v={i.issue_at} /> },
+              { key: 'due_at', label: 'الاستحقاق', render: (i) => <DateText v={i.due_at} /> },
+              { key: 'total', label: 'الإجمالي', render: (i) => <Money v={i.total} /> },
+              { key: 'paid_amount', label: 'المحصّل', render: (i) => <Money v={i.paid_amount} /> },
+              { key: 'remaining_amount', label: 'المتبقي', render: (i) => <Money v={i.remaining_amount} /> },
+              { key: 'status', label: 'الحالة', render: (i) => <StatusPill status={i.status} map={INVOICE_STATUS} /> },
+            ]}
+          />
         )}
       </div>
     </>

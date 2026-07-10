@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createClient, updateClient, removeClient, getClients, getEmployees } from '@/lib/data';
 import { fmtNum, CLIENT_STATUS, SOURCE_LABEL } from '@/lib/format';
-import { Loading, Empty, ErrorBar } from '../ui';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Ltr } from '@/components';
 import { toast } from '../toast';
 
 // القائمة الكاملة لأحياء الرياض (ويكيبيديا: https://ar.wikipedia.org/wiki/أحياء_الرياض)
@@ -216,133 +216,108 @@ function ClientsPageInner() {
             <Empty title="لا نتائج" desc={`لا يوجد عميل يطابق «${q}».`} />
           )
         ) : (
-          <table>
-            <thead><tr><th>العميل</th><th style={{ textAlign: 'center' }}>الجوال</th><th>المصدر</th><th>الحي</th><th>الحالة</th><th></th></tr></thead>
-            <tbody>
-              {filtered.map((c) => {
-                const st = CLIENT_STATUS[c.status] || { label: c.status || '—', cls: 'p-wait' };
-                return (
-                  <tr key={c.id}>
-                    <td>
-                      <Link href={`/clients/${c.id}`} className="nm" style={{ color: 'var(--green)' }}>{c.name}</Link>
-                      <br /><span className="uid">{c.code || '—'}</span>
-                    </td>
-                    <td className="amt" dir="ltr" style={{ textAlign: 'center' }}>{c.phone || '—'}</td>
-                    <td><span className="src">{SOURCE_LABEL[c.source] || c.source || '—'}</span></td>
-                    <td>{c.district || '—'}</td>
-                    <td>
-                      <select
-                        key={c.status}
-                        className={`status-select pill ${popped === c.id ? 'pop ' : ''}${st.cls}`}
-                        value={c.status || 'active'}
-                        onChange={(e) => changeStatus(c, e.target.value)}
-                        aria-label={`حالة العميل ${c.name}`}
-                      >
-                        <option value="lead">عميل محتمل</option>
-                        <option value="active">عميل نشط</option>
-                        <option value="waiting">بانتظار رد</option>
-                        <option value="completed">مكتمل</option>
-                      </select>
-                    </td>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <button className="btn ghost sm" onClick={() => openEdit(c)}>تعديل</button>
-                      <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(c)}>حذف</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DataTable
+            rows={filtered}
+            pageSize={50}
+            columns={[
+              {
+                key: 'name', label: 'العميل', primary: true,
+                render: (c) => (
+                  <>
+                    <Link href={`/clients/${c.id}`} className="nm" style={{ color: 'var(--green)' }}>{c.name}</Link>
+                    <br /><span className="uid">{c.code || '—'}</span>
+                  </>
+                ),
+              },
+              { key: 'phone', label: 'الجوال', align: 'center', render: (c) => <Ltr className="amt">{c.phone || '—'}</Ltr> },
+              { key: 'source', label: 'المصدر', render: (c) => <span className="src">{SOURCE_LABEL[c.source] || c.source || '—'}</span> },
+              { key: 'district', label: 'الحي', render: (c) => c.district || '—' },
+              {
+                key: 'status', label: 'الحالة',
+                render: (c) => {
+                  const st = CLIENT_STATUS[c.status] || { label: c.status || '—', cls: 'p-wait' };
+                  return (
+                    <select
+                      key={c.status}
+                      className={`status-select pill ${popped === c.id ? 'pop ' : ''}${st.cls}`}
+                      value={c.status || 'active'}
+                      onChange={(e) => changeStatus(c, e.target.value)}
+                      aria-label={`حالة العميل ${c.name}`}
+                    >
+                      <option value="lead">عميل محتمل</option>
+                      <option value="active">عميل نشط</option>
+                      <option value="waiting">بانتظار رد</option>
+                      <option value="completed">مكتمل</option>
+                    </select>
+                  );
+                },
+              },
+              {
+                key: 'actions', label: '', align: 'left',
+                render: (c) => (
+                  <>
+                    <button className="btn ghost sm" onClick={() => openEdit(c)}>تعديل</button>
+                    <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(c)}>حذف</button>
+                  </>
+                ),
+              },
+            ]}
+          />
         )}
       </div>
 
-      {formOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && closeForm()}>
-          <form className="modal-card client-form" onSubmit={submit}>
-            <div className="modal-head">
-              <div>
-                <h2>{editing ? 'تعديل عميل' : 'عميل جديد'}</h2>
-                <p>{editing ? 'تحديث بيانات العميل' : 'إضافة عميل إلى قاعدة عملاء ترتيب'}</p>
-              </div>
-              <button className="icon-close" type="button" onClick={closeForm} aria-label="إغلاق">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
-              </button>
-            </div>
+      <Modal
+        open={formOpen}
+        onClose={closeForm}
+        className="client-form"
+        title={editing ? 'تعديل عميل' : 'عميل جديد'}
+        subtitle={editing ? 'تحديث بيانات العميل' : 'إضافة عميل إلى قاعدة عملاء ترتيب'}
+        as="form"
+        onSubmit={submit}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={closeForm} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>
+              {saving ? 'جارٍ الحفظ…' : editing ? 'حفظ التعديل' : 'حفظ العميل'}
+            </button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
 
-            {formErr && <div className="errbar">{formErr}</div>}
-
-            <div className="form-grid">
-              <div className="field">
-                <label>اسم العميل</label>
-                <input value={form.name} onChange={(e) => updateField('name', e.target.value)} required autoFocus />
-              </div>
-              <div className="field">
-                <label>رقم الجوال</label>
-                <input value={form.phone} onChange={(e) => updateField('phone', e.target.value)} dir="ltr" inputMode="tel" />
-              </div>
-              <div className="field">
-                <label>المصدر</label>
-                <select value={form.source} onChange={(e) => updateField('source', e.target.value)}>
-                  {SOURCE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-              {form.source === 'client_referral' && (
-                <div className="field">
-                  <label>اسم العميل المحيل</label>
-                  <select value={form.source_ref} onChange={(e) => updateField('source_ref', e.target.value)}>
-                    <option value="">اختر عميلاً…</option>
-                    {sourceClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {form.source === 'employee_referral' && (
-                <div className="field">
-                  <label>اسم الموظف</label>
-                  <select value={form.source_ref} onChange={(e) => updateField('source_ref', e.target.value)}>
-                    <option value="">اختر موظفاً…</option>
-                    {employees.map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
-                  </select>
-                </div>
-              )}
-              <div className="field">
-                <label>الحالة</label>
-                <select value={form.status} onChange={(e) => updateField('status', e.target.value)}>
-                  <option value="lead">عميل محتمل</option>
-                  <option value="active">عميل نشط</option>
-                  <option value="waiting">بانتظار رد</option>
-                  <option value="completed">مكتمل</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>الحي</label>
-                <select value={form.district} onChange={(e) => updateField('district', e.target.value)}>
-                  <option value="">اختر حي الرياض…</option>
-                  {RIYADH_DISTRICTS.map((district) => (
-                    <option key={district} value={district}>{district}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="field">
-                <label>تاريخ أول تواصل</label>
-                <input type="date" value={form.first_contact_at} onChange={(e) => updateField('first_contact_at', e.target.value)} dir="ltr" />
-              </div>
-              <div className="field span-2">
-                <label>ملاحظات</label>
-                <textarea value={form.notes} onChange={(e) => updateField('notes', e.target.value)} rows={3} />
-              </div>
-            </div>
-
-            <div className="modal-actions">
-              <button className="btn ghost" type="button" onClick={closeForm} disabled={saving}>إلغاء</button>
-              <button className="btn" type="submit" disabled={saving}>
-                {saving ? 'جارٍ الحفظ…' : editing ? 'حفظ التعديل' : 'حفظ العميل'}
-              </button>
-            </div>
-          </form>
+        <div className="form-grid">
+          <Input label="اسم العميل" value={form.name} onChange={(e) => updateField('name', e.target.value)} required autoFocus />
+          <Input label="رقم الجوال" ltr inputMode="tel" value={form.phone} onChange={(e) => updateField('phone', e.target.value)} />
+          <Select label="المصدر" value={form.source} onChange={(e) => updateField('source', e.target.value)} options={SOURCE_OPTIONS} />
+          {form.source === 'client_referral' && (
+            <Select label="اسم العميل المحيل" value={form.source_ref} onChange={(e) => updateField('source_ref', e.target.value)}>
+              <option value="">اختر عميلاً…</option>
+              {sourceClients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          )}
+          {form.source === 'employee_referral' && (
+            <Select label="اسم الموظف" value={form.source_ref} onChange={(e) => updateField('source_ref', e.target.value)}>
+              <option value="">اختر موظفاً…</option>
+              {employees.map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
+            </Select>
+          )}
+          <Select label="الحالة" value={form.status} onChange={(e) => updateField('status', e.target.value)}
+            options={[
+              { value: 'lead', label: 'عميل محتمل' },
+              { value: 'active', label: 'عميل نشط' },
+              { value: 'waiting', label: 'بانتظار رد' },
+              { value: 'completed', label: 'مكتمل' },
+            ]} />
+          <Select label="الحي" value={form.district} onChange={(e) => updateField('district', e.target.value)}>
+            <option value="">اختر حي الرياض…</option>
+            {RIYADH_DISTRICTS.map((district) => (
+              <option key={district} value={district}>{district}</option>
+            ))}
+          </Select>
+          <Input label="تاريخ أول تواصل" ltr type="date" value={form.first_contact_at} onChange={(e) => updateField('first_contact_at', e.target.value)} />
+          <TextArea className="span-2" label="ملاحظات" value={form.notes} onChange={(e) => updateField('notes', e.target.value)} rows={3} />
         </div>
-      )}
+      </Modal>
     </>
   );
 }

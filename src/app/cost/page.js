@@ -628,7 +628,7 @@ function MoneyRows({ title, rows, total, onAdd, onChange, onRemove }) {
         <div className="money-row" key={row.id}>
           <input value={row.note} onChange={(e) => onChange(row.id, 'note', e.target.value)} placeholder="وصف" />
           <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => onChange(row.id, 'amount', e.target.value)} dir="ltr" placeholder="المبلغ" />
-          <button className="x-btn" type="button" onClick={() => onRemove(row.id)}>✕</button>
+          <button className="x-btn" type="button" onClick={() => onRemove(row.id)} aria-label="حذف السطر">✕</button>
         </div>
       ))}
       <button className="add-row-btn" type="button" onClick={onAdd}>+ إضافة</button>

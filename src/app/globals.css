@@ -15,13 +15,13 @@
   --brand:var(--teal-400);--brand-soft:var(--teal-100);
   --primary:var(--teal-700);--primary-hover:var(--teal-800);
   --accent:var(--peach-300);--accent-strong:var(--peach-600);
-  --ink:#24363C;--muted:#5C7076;--faint:#94A7AB;--line:#E3EDED;
+  --ink:#24363C;--muted:#5C7076;--faint:#758A8F;--line:#E3EDED;
   --pos:#22A06B;--pos-bg:#DCF3E8;--neg:#E0566B;--neg-bg:#FBE3E8;
   --gold:#F0913E;--gold-bg:#FCEBD8;
   /* ── تدرجات وظلال موحّدة ── */
-  --grad-brand:linear-gradient(135deg,var(--teal-500),var(--teal-700));
+  --grad-brand:linear-gradient(135deg,var(--teal-600),var(--teal-800));
   --grad-brand-deep:linear-gradient(135deg,var(--teal-600),var(--teal-800));
-  --grad-accent:linear-gradient(135deg,var(--peach-500),var(--peach-700));
+  --grad-accent:linear-gradient(135deg,var(--peach-600),var(--peach-700));
   --grad-pos:linear-gradient(135deg,#41CE88,#27AE74);
   --grad-warn:linear-gradient(135deg,#F8AC44,#F0852E);
   --grad-neg:linear-gradient(135deg,#F2738C,#E0566B);
@@ -33,7 +33,7 @@
   --r-sm:10px;--r-md:12px;--r:16px;--r-lg:20px;--r-pill:999px;
   --fs-xs:11.5px;--fs-sm:12.5px;--fs-base:14px;--fs-md:15.5px;--fs-lg:17px;--fs-xl:22px;--fs-2xl:28px;
   /* ── أسماء قديمة (توافق مؤقت — تُحذف بعد خلوّ grep) ── */
-  --pine:var(--teal-700);--pine-2:var(--teal-800);--green:var(--teal-600);
+  --pine:var(--teal-700);--pine-2:var(--teal-800);--green:var(--teal-700);
   --sage:var(--teal-300);--sage-bg:var(--teal-100);
   --display:"Readex Pro","Saudi Riyal",sans-serif;--body:"IBM Plex Sans Arabic","Saudi Riyal",sans-serif;
 }
@@ -58,6 +58,9 @@ body{font-family:var(--body);color:var(--ink);line-height:1.6;-webkit-font-smoot
   background:radial-gradient(1100px 560px at 100% -5%, var(--teal-100) 0%, transparent 58%),radial-gradient(950px 520px at -5% 105%, var(--peach-100) 0%, transparent 55%),var(--canvas);
   background-attachment:fixed;}
 button,input,select,textarea{font:inherit}
+/* حالة تركيز موحّدة للوحة المفاتيح على كل العناصر التفاعلية */
+:focus-visible{outline:2px solid var(--teal-600);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 .app{display:flex;min-height:100vh}
 .amt{unicode-bidi:isolate;white-space:nowrap}
 /* محتوى LTR داخل نص عربي (جوال/بريد/كود) — يُستخدم عبر مكوّن <Ltr> */

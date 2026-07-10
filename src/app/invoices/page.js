@@ -174,7 +174,7 @@ export default function InvoicesPage() {
                   <input type="number" min="0" step="1" placeholder="الكمية" dir="ltr" style={{ maxWidth: 90 }} value={it.qty} onChange={(e) => setItem(idx, 'qty', e.target.value)} />
                   <input type="number" min="0" step="0.01" placeholder="سعر الوحدة" dir="ltr" style={{ maxWidth: 120 }} value={it.unit_price} onChange={(e) => setItem(idx, 'unit_price', e.target.value)} />
                   <span className="amt" style={{ minWidth: 90, alignSelf: 'center', color: 'var(--muted)' }}>{fmtMoney((Number(it.qty) || 0) * (Number(it.unit_price) || 0))} ⃁</span>
-                  <button type="button" className="x-btn" onClick={() => rmItem(idx)}>✕</button>
+                  <button type="button" className="x-btn" onClick={() => rmItem(idx)} aria-label="حذف البند">✕</button>
                 </div>
               ))}
               <button type="button" className="btn ghost sm" style={{ marginTop: 10 }} onClick={addItem}>+ بند</button>

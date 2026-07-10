@@ -261,7 +261,7 @@ function MediaCard({ projectId, media, onChange }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={m.file_url} alt={MEDIA_KIND[m.kind] || m.kind} />
               <figcaption><span className={`pill ${m.kind === 'after' ? 'p-done' : 'p-quote'}`}>{MEDIA_KIND[m.kind] || m.kind}</span>
-                <button className="x-btn" onClick={() => del(m)}>✕</button></figcaption>
+                <button className="x-btn" onClick={() => del(m)} aria-label="حذف الصورة">✕</button></figcaption>
             </figure>
           ))}
         </div>

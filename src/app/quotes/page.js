@@ -1,9 +1,8 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { fmtNum } from '@/lib/format';
-import { getClients, createClient } from '@/lib/data';
+import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber } from '@/lib/data';
 
-const STORE_KEY = 'tarteeb-quotes-v1';
 const RIYAL = '⃁';
 const AR_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const STATUS = {
@@ -21,29 +20,18 @@ const DAY = 86400000;
 const FOLLOWUP_DAYS = 3; // عرض مُرسل بلا رد بعد هذه المدة يحتاج متابعة
 const EXPIRY_WARN_DAYS = 2; // تنبيه قرب انتهاء الصلاحية
 
-function loadAll() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; } }
-function saveAll(a) { localStorage.setItem(STORE_KEY, JSON.stringify(a)); }
-function nextNumber() {
-  const yr = new Date().getFullYear();
-  const seqs = loadAll().map((q) => { const m = (q.number || '').match(/-(\d+)$/); return m ? parseInt(m[1], 10) : 0; });
-  const n = (seqs.length ? Math.max(...seqs) : 0) + 1;
-  return `Q-${yr}-${String(n).padStart(3, '0')}`;
-}
 function blankItem() { return { svc: '', cost: 0, days: 1, discount: 0 }; }
 function defaults() {
   return {
-    id: null, number: nextNumber(), status: 'draft', client: '',
+    id: null, number: '', status: 'draft', client: '', linked_client_id: null,
     date: new Date().toISOString().slice(0, 10),
     desc: 'تنظيم وترتيب غرفة مخزن الشركة بطريقة عملية واحترافية لتحسين الوصول إلى الأدوات والمواد، مع تعظيم الاستفادة من مساحة التخزين المتاحة.',
-    duration: 'يومين',
-    challenge: 'تفتقر غرفة المخزن إلى تنظيم واضح، مما يصعّب الوصول ويسبب هدرًا في الوقت وتكرارًا في المشتريات واستخدامًا غير فعّال للمساحة.',
-    solution: 'ستتم إعادة تنظيم غرفة المخزن إلى مناطق واضحة وعملية لتحسين إمكانية الوصول وسير العمل وكفاءة استخدام المساحة.',
     items: [{ svc: 'تنظيم وترتيب غرفة مخزن الشركة لمدة يومين', cost: 500, days: 2, discount: 100 }],
     note: 'السعر لا يشمل الأدوات والمستلزمات التنظيمية، والتي سيتم شراؤها وفوترتها بشكل منفصل.',
     toolsShow: true, toolsMin: 400, toolsMax: 600,
     validity: 'هذا المقترح صالح لمدة أسبوع واحد من تاريخ الإرسال.',
     // حقول المتابعة
-    validityDays: 7, sent_at: null, decided_at: null, rejection_reason: '', linked_client_id: null,
+    validityDays: 7, sent_at: null, decided_at: null, rejection_reason: '',
     status_history: [{ status: 'draft', at: Date.now() }],
   };
 }
@@ -90,14 +78,28 @@ export default function QuotesPage() {
   const [clientPrompt, setClientPrompt] = useState(false); // نافذة «إضافة العميل» عند القبول
   const [addingClient, setAddingClient] = useState(false);
   const [toast, setToast] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [scale, setScale] = useState(1);
   const [contentScale, setContentScale] = useState(1);
   const paneRef = useRef(null);
   const pageRef = useRef(null);
   const innerRef = useRef(null);
 
-  const refreshList = useCallback(() => setList(loadAll().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))), []);
-  useEffect(() => { setQ(defaults()); refreshList(); }, [refreshList]);
+  const refreshList = useCallback(async () => {
+    try { setList(await getQuotes()); } catch (e) { /* تجاهل — يبقى آخر تحميل */ }
+  }, []);
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const [num, quotes] = await Promise.all([nextQuoteNumber(), getQuotes()]);
+        setList(quotes);
+        setQ({ ...defaults(), number: num });
+      } catch (e) { setQ(defaults()); }
+      setLoading(false);
+    })();
+  }, []);
 
   const fit = useCallback(() => {
     const pane = paneRef.current, page = pageRef.current, inner = innerRef.current;
@@ -125,46 +127,34 @@ export default function QuotesPage() {
   const addItem = () => setQ((s) => ({ ...s, items: [...s.items, blankItem()] }));
   const removeItem = (i) => setQ((s) => { const items = s.items.filter((_, j) => j !== i); return { ...s, items: items.length ? items : [blankItem()] }; });
 
-  // تغيير الحالة: يسجّل الانتقال في السجل ويضبط الطوابع الزمنية، ويحفظ فوراً إن كان العرض محفوظاً
-  const changeStatus = useCallback((ns) => {
-    setQ((s) => {
-      if (ns === s.status) return s;
-      const now = Date.now();
-      const patch = { ...s, status: ns, status_history: [...(s.status_history || []), { status: ns, at: now }] };
-      if (ns === 'sent' && !s.sent_at) patch.sent_at = now;
-      if (ns === 'accepted' || ns === 'rejected') patch.decided_at = now;
-      if (ns !== 'rejected') patch.rejection_reason = '';
-      if (s.id) { // مزامنة فورية مع المخزن حتى تنعكس على لوحة المتابعة
-        const all = loadAll();
-        const idx = all.findIndex((x) => x.id === s.id);
-        const rec = { ...patch, updatedAt: now };
-        if (idx >= 0) all[idx] = rec; else all.push(rec);
-        saveAll(all);
-        setList(loadAll().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
-      }
-      return patch;
-    });
-  }, []);
-
+  // بناء نسخة محدّثة الحالة مع تسجيل الانتقال والطوابع الزمنية
+  function withStatus(s, ns) {
+    const now = Date.now();
+    const patch = { ...s, status: ns, status_history: [...(s.status_history || []), { status: ns, at: now }] };
+    if (ns === 'sent' && !s.sent_at) patch.sent_at = now;
+    if (ns === 'accepted' || ns === 'rejected') patch.decided_at = now;
+    if (ns !== 'rejected') patch.rejection_reason = '';
+    return patch;
+  }
+  // تغيير الحالة: يحدّث الواجهة ويحفظ في Supabase فوراً إن كان العرض محفوظاً
+  async function changeStatus(ns) {
+    if (ns === q.status) return;
+    const patch = withStatus(q, ns);
+    setQ(patch);
+    if (patch.id) {
+      try { await updateQuote(patch.id, patch); await refreshList(); } catch (e) { ping('تعذّر تحديث الحالة'); }
+    }
+  }
   // عند تغيير الحالة إلى «مقبول»: اقترح إضافة العميل لقائمة العملاء (مرة واحدة)
   function onStatusChange(ns) {
     changeStatus(ns);
     if (ns === 'accepted' && (q.client || '').trim() && !q.linked_client_id) setClientPrompt(true);
   }
   // ربط العرض بمعرّف عميل + حفظ فوري إن كان محفوظاً
-  function linkClient(clientId) {
-    setQ((s) => {
-      const patch = { ...s, linked_client_id: clientId };
-      if (s.id) {
-        const all = loadAll();
-        const idx = all.findIndex((x) => x.id === s.id);
-        const rec = { ...patch, updatedAt: Date.now() };
-        if (idx >= 0) all[idx] = rec; else all.push(rec);
-        saveAll(all);
-        setList(loadAll().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
-      }
-      return patch;
-    });
+  async function linkClient(clientId) {
+    const patch = { ...q, linked_client_id: clientId };
+    setQ(patch);
+    if (patch.id) { try { await updateQuote(patch.id, patch); await refreshList(); } catch (e) { /* يُحفظ لاحقاً */ } }
   }
   // إضافة العميل إلى Supabase (بنقرة واحدة) مع فحص التكرار بالاسم
   async function addClientFromQuote() {
@@ -174,11 +164,11 @@ export default function QuotesPage() {
     try {
       const existing = (await getClients()).find((c) => (c.name || '').trim() === name);
       if (existing) {
-        linkClient(existing.id);
+        await linkClient(existing.id);
         ping('العميل موجود مسبقاً — تم الربط ✓');
       } else {
         const created = await createClient({ name, notes: `أُضيف من عرض سعر ${q.number}` });
-        linkClient(created.id);
+        await linkClient(created.id);
         ping('تمت إضافة العميل ✓');
       }
       setClientPrompt(false);
@@ -188,18 +178,15 @@ export default function QuotesPage() {
     setAddingClient(false);
   }
 
-  function save() {
-    const all = loadAll();
-    const rec = { ...q, updatedAt: Date.now() };
-    if (rec.id) {
-      const idx = all.findIndex((x) => x.id === rec.id);
-      if (idx >= 0) all[idx] = rec; else all.push(rec);
-    } else {
-      rec.id = 'q_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      all.push(rec);
-      setQ(rec);
-    }
-    saveAll(all); refreshList(); ping('تم حفظ العرض ✓');
+  async function save() {
+    setSaving(true);
+    try {
+      const saved = q.id ? await updateQuote(q.id, q) : await createQuote(q);
+      setQ(saved);
+      await refreshList();
+      ping('تم حفظ العرض ✓');
+    } catch (e) { ping('تعذّر الحفظ، حاول لاحقاً'); }
+    setSaving(false);
   }
   // تصدير PDF باسم «عرض سعر - اسم العميل» (المتصفح يشتق اسم الملف من document.title)
   function exportPdf() {
@@ -211,10 +198,34 @@ export default function QuotesPage() {
     window.print();
     setTimeout(restore, 1500); // احتياطي إن لم يُطلق afterprint
   }
-  function newQuote() { setQ(defaults()); ping('عرض جديد'); }
-  function openQuote(id) { const rec = loadAll().find((x) => x.id === id); if (rec) { setQ(structuredClone(rec)); setDrawer(false); ping('تم فتح ' + rec.number); } }
-  function duplicate(id, e) { e.stopPropagation(); const rec = loadAll().find((x) => x.id === id); if (!rec) return; const copy = structuredClone(rec); copy.id = null; copy.number = nextNumber(); copy.status = 'draft'; setQ(copy); setDrawer(false); ping('نسخة جديدة ' + copy.number); }
-  function remove(id, e) { e.stopPropagation(); if (!confirm('حذف هذا العرض نهائياً؟')) return; saveAll(loadAll().filter((x) => x.id !== id)); if (q.id === id) setQ((s) => ({ ...s, id: null })); refreshList(); ping('تم الحذف'); }
+  async function newQuote() {
+    let num = '';
+    try { num = await nextQuoteNumber(); } catch (e) { /* بلا رقم مؤقتاً */ }
+    setQ({ ...defaults(), number: num });
+    ping('عرض جديد');
+  }
+  async function openQuote(id) {
+    try { const rec = await getQuote(id); setQ(rec); setDrawer(false); ping('تم فتح ' + rec.number); }
+    catch (e) { ping('تعذّر فتح العرض'); }
+  }
+  async function duplicate(id, e) {
+    e.stopPropagation();
+    try {
+      const [rec, num] = await Promise.all([getQuote(id), nextQuoteNumber()]);
+      setQ({ ...rec, id: null, number: num, status: 'draft', linked_client_id: null, sent_at: null, decided_at: null, rejection_reason: '', status_history: [{ status: 'draft', at: Date.now() }] });
+      setDrawer(false); ping('نسخة جديدة ' + num);
+    } catch (err) { ping('تعذّر التكرار'); }
+  }
+  async function remove(id, e) {
+    e.stopPropagation();
+    if (!confirm('حذف هذا العرض نهائياً؟')) return;
+    try {
+      await removeQuote(id);
+      if (q.id === id) await newQuote();
+      await refreshList();
+      ping('تم الحذف');
+    } catch (err) { ping('تعذّر الحذف'); }
+  }
 
   const grand = q.items.reduce((s, it) => s + lineTotal(it), 0);
 
@@ -237,6 +248,7 @@ export default function QuotesPage() {
         <button className={view === 'board' ? 'active' : ''} onClick={() => { refreshList(); setView('board'); }}>
           📊 لوحة المتابعة{followupList.length > 0 && <span className="qg-tabbadge">{followupList.length}</span>}
         </button>
+        {loading && <span className="qg-loading">⏳ جارٍ التحميل…</span>}
       </div>
 
       {view === 'board' ? (
@@ -253,8 +265,8 @@ export default function QuotesPage() {
         </select>
         <div className="qg-spacer" />
         <button className="qg-btn" onClick={() => { refreshList(); setDrawer(true); }}>🗂️ السجل</button>
-        <button className="qg-btn" onClick={newQuote}>＋ عرض جديد</button>
-        <button className="qg-btn" onClick={save}>💾 حفظ</button>
+        <button className="qg-btn" onClick={newQuote} disabled={saving}>＋ عرض جديد</button>
+        <button className="qg-btn" onClick={save} disabled={saving}>{saving ? '⏳ جارٍ الحفظ…' : '💾 حفظ'}</button>
         <button className="qg-btn qg-primary" onClick={exportPdf}>⤓ تصدير PDF</button>
       </div>
 
@@ -552,6 +564,7 @@ const CSS = `
 .qg-tabs button{position:relative;font-family:inherit;font-size:14px;font-weight:600;padding:9px 18px;border-radius:10px;border:1px solid var(--tbd);background:#fff;color:var(--tmut);cursor:pointer}
 .qg-tabs button.active{background:var(--tl);color:#fff;border-color:var(--tl)}
 .qg-tabbadge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;margin-inline-start:6px;border-radius:20px;background:#E2705F;color:#fff;font-size:11px;font-weight:700}
+.qg-loading{align-self:center;font-size:12px;font-weight:600;color:var(--tmut)}
 /* لوحة المتابعة */
 .qg-board{display:flex;flex-direction:column;gap:16px}
 .qg-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}

@@ -19,6 +19,19 @@ const ROLE_GROUPS = [
   { group: 'التسويق والإسناد', items: [['مسؤول تسويق', 'Marketing Officer'], ['صانع محتوى', 'Content Creator'], ['مصور', 'Photographer'], ['سائق', 'Driver'], ['مشرف جودة', 'Quality Supervisor']] },
 ];
 const KNOWN_ROLES = ROLE_GROUPS.flatMap((g) => g.items.map(([ar]) => ar));
+// ترتيب الأقدمية: القيادة أولاً ثم الإشراف ثم بقية الأدوار المعروفة ثم غير المعروفة.
+// يعتمد على كلمات مفتاحية حتى يشمل الأدوار المكتوبة يدوياً (مثل CEO أو سوبر فايزر) لا القائمة فقط.
+const ROLE_RANK = Object.fromEntries(KNOWN_ROLES.map((r, i) => [r, i]));
+const LEAD_KW = ['مدير', 'رئيس', 'مؤسس', 'مالك', 'صاحب', 'ceo', 'coo', 'cfo', 'director', 'owner', 'founder', 'general manager'];
+const SUP_KW = ['مشرف', 'سوبر', 'قائد', 'supervisor', 'lead', 'عمليات', 'operations'];
+function roleRank(role) {
+  if (!role) return 900;
+  const r = role.toLowerCase();
+  if (LEAD_KW.some((k) => r.includes(k))) return 0;
+  if (SUP_KW.some((k) => r.includes(k))) return 100;
+  if (role in ROLE_RANK) return 200 + ROLE_RANK[role];
+  return 800;
+}
 
 const EMPTY = { name: '', role: '', phone: '', national_id: '', nationality: '', wage: 'fixed', status: 'active', photo_url: '' };
 
@@ -127,8 +140,9 @@ export default function EmployeesPage() {
         <div className="card"><Empty title="لا موظفين" desc="أضف أعضاء الفريق ومستنداتهم." /></div>
       ) : (
         <div className="pgrid">
-          {emps.map((em) => {
+          {[...emps].sort((a, b) => roleRank(a.role) - roleRank(b.role)).map((em) => {
             const st = STATUS[em.status] || { label: em.status, cls: 'p-wait' };
+            const country = countryByCode(em.nationality);
             return (
               <div className="pcard employee-card" key={em.id}>
                 <div className="employee-photo">
@@ -139,18 +153,21 @@ export default function EmployeesPage() {
                   )}
                 </div>
                 <div className="pb">
-                  <h3>{em.name}</h3>
-                  <div className="cl">{em.role || 'بدون دور'}{em.national_id ? ` · هوية/إقامة ${em.national_id}` : ''}</div>
-                  {(() => { const c = countryByCode(em.nationality); return c ? <div className="cl" style={{ marginTop: 2 }}>{c.flag} {c.ar}</div> : null; })()}
-                  <div className="row">
-                    <span className={`pill ${st.cls}`}>{st.label}</span>
-                    <span>{WAGE[em.wage] || em.wage || '—'}</span>
+                  <div className="emp-head">
+                    <h3>{em.name}</h3>
+                    <span className="emp-role">{em.role || 'بدون دور'}</span>
+                    {country && <div className="emp-nat">{country.flag} {country.ar}</div>}
                   </div>
-                  {em.phone && <div className="row" style={{ color: 'var(--muted)', fontSize: 12 }} dir="ltr"><span>{em.phone}</span></div>}
-                  <div className="row" style={{ marginTop: 10, gap: 8 }}>
+                  <div className="emp-details">
+                    <div className="emp-drow"><span>الحالة</span><span className={`pill ${st.cls}`}>{st.label}</span></div>
+                    <div className="emp-drow"><span>الأجر</span><b>{WAGE[em.wage] || em.wage || '—'}</b></div>
+                    {em.phone && <div className="emp-drow"><span>الجوال</span><b dir="ltr">{em.phone}</b></div>}
+                    {em.national_id && <div className="emp-drow"><span>الهوية/الإقامة</span><b dir="ltr">{em.national_id}</b></div>}
+                  </div>
+                  <div className="emp-actions">
                     <button className="btn ghost sm" onClick={() => setDocFor(em)}>المستندات</button>
                     <button className="btn ghost sm" onClick={() => openEdit(em)}>تعديل</button>
-                    <button className="btn ghost sm" style={{ color: 'var(--neg)' }} onClick={() => del(em)}>حذف</button>
+                    <button className="btn ghost sm danger" onClick={() => del(em)}>حذف</button>
                   </div>
                 </div>
               </div>

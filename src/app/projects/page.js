@@ -468,7 +468,12 @@ export default function ProjectsPage() {
               const [ay, am] = calAnchor.split('-').map(Number);
               const isOther = calMode === 'month' && (dt.getFullYear() !== ay || dt.getMonth() + 1 !== am);
               const isToday = iso === isoLocal(new Date());
-              const events = boardProjects.filter((p) => p.due_date === iso);
+              const events = boardProjects.filter((p) => {
+                const start = p.start_date || p.due_date;
+                const end = p.due_date || p.start_date;
+                if (!start || !end) return false;
+                return iso >= start && iso <= end;
+              });
               return (
                 <div
                   className={`cell${isOther ? ' other-month' : ''}${isToday ? ' today' : ''}${dragCol === iso ? ' drag-over' : ''}`}

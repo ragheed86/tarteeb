@@ -5,6 +5,8 @@
 // ============================================================
 import { supabase } from './supabase';
 
+const isRefundedInvoice = (invoice) => invoice?.status === 'refunded';
+
 // ---------- العملاء ----------
 export async function getClients() {
   const { data, error } = await supabase
@@ -407,13 +409,18 @@ async function attachInvoiceSummaries(invoices) {
     .in('invoice_id', ids);
   if (error) throw error;
   const byInvoice = Object.fromEntries((data || []).map((summary) => [summary.invoice_id, summary]));
-  return rows.map((invoice) => ({
-    ...invoice,
-    paid_amount: Number(byInvoice[invoice.id]?.paid_amount || 0),
-    remaining_amount: Number(byInvoice[invoice.id]?.remaining_amount ?? invoice.total ?? 0),
-    last_payment_at: byInvoice[invoice.id]?.last_payment_at || null,
-    payment_count: Number(byInvoice[invoice.id]?.payment_count || 0),
-  }));
+  return rows.map((invoice) => {
+    if (isRefundedInvoice(invoice)) {
+      return { ...invoice, paid_amount: 0, remaining_amount: 0, last_payment_at: null, payment_count: 0 };
+    }
+    return {
+      ...invoice,
+      paid_amount: Number(byInvoice[invoice.id]?.paid_amount || 0),
+      remaining_amount: Number(byInvoice[invoice.id]?.remaining_amount ?? invoice.total ?? 0),
+      last_payment_at: byInvoice[invoice.id]?.last_payment_at || null,
+      payment_count: Number(byInvoice[invoice.id]?.payment_count || 0),
+    };
+  });
 }
 export async function getPartners() {
   const { data, error } = await supabase.from('partners').select('*');
@@ -759,15 +766,14 @@ export async function removeInvoice(id) {
 }
 // تعديل الفاتورة مع استبدال بنودها. items=[{description,qty,unit_price}]
 export async function updateInvoiceWithItems(id, invoice, items) {
-  const { error } = await supabase.from('invoices').update(invoice).eq('id', id);
+  const { data, error } = await supabase.rpc('update_invoice_with_items', {
+    p_invoice_id: id,
+    p_invoice: invoice,
+    p_items: items || [],
+  });
   if (error) throw error;
-  await supabase.from('invoice_items').delete().eq('invoice_id', id);
-  const rows = (items || []).map((it) => ({ invoice_id: id, description: it.description, qty: Number(it.qty) || 1, unit_price: Number(it.unit_price) || 0 }));
-  if (rows.length) {
-    const { error: e2 } = await supabase.from('invoice_items').insert(rows);
-    if (e2) throw e2;
-  }
-  return getInvoice(id);
+  const [updated] = await attachInvoiceSummaries([data]);
+  return updated;
 }
 export async function getInvoicePayments(invoiceId) {
   const { data, error } = await supabase.from('invoice_payments')
@@ -778,9 +784,11 @@ export async function getInvoicePayments(invoiceId) {
 }
 export async function getAllInvoicePayments() {
   const { data, error } = await supabase.from('invoice_payments')
-    .select('id,invoice_id,amount,paid_at,method,created_at')
+    .select('id,invoice_id,amount,paid_at,method,created_at,invoices!inner(status)')
+    .neq('invoices.status', 'refunded')
     .order('paid_at', { ascending: false });
-  if (error) throw error; return data;
+  if (error) throw error;
+  return (data || []).map(({ invoices: _invoice, ...payment }) => payment);
 }
 export async function createInvoicePayment(p) {
   const payload = {

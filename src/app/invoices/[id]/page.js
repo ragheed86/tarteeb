@@ -15,6 +15,7 @@ const STATUS_OPTS = [
   { value: 'partial', label: 'مدفوعة جزئياً' },
   { value: 'paid', label: 'مدفوعة' },
   { value: 'overdue', label: 'متأخرة' },
+  { value: 'refunded', label: 'مرتجعة' },
 ];
 const PAYMENT_METHOD = {
   cash: 'نقداً',
@@ -101,6 +102,7 @@ export default function InvoiceDetail() {
   }
   async function addPayment(e) {
     e.preventDefault();
+    if (d?.invoice?.status === 'refunded') { setPaymentErr('لا يمكن تسجيل دفعة على فاتورة مرتجعة'); return; }
     const amount = Number(payment.amount) || 0;
     if (amount <= 0) { setPaymentErr('أدخل مبلغ دفعة صحيح'); return; }
     setSavingPayment(true); setPaymentErr('');
@@ -143,6 +145,7 @@ export default function InvoiceDetail() {
   if (!invoice) return <Empty title="غير موجودة" desc="لم يُعثر على هذه الفاتورة." />;
   const st = INVOICE_STATUS[invoice.status] || { label: invoice.status, cls: 'p-wait' };
   const wa = waLink(client?.phone, `فاتورة ${invoice.number} من ${company?.name_ar || 'ترتيب'} بقيمة ${fmtMoney(invoice.total)} ⃁`);
+  const isRefunded = invoice.status === 'refunded';
   const paidAmount = Number(invoice.paid_amount || 0);
   const remainingAmount = Number(invoice.remaining_amount || 0);
 
@@ -285,6 +288,7 @@ export default function InvoiceDetail() {
         <div className="card">
           <div className="sec-head"><h2>تسجيل دفعة</h2><span className={`pill ${st.cls}`}>{st.label}</span></div>
           {paymentErr && <div className="errbar">{paymentErr}</div>}
+          {isRefunded && <div className="errbar">هذه الفاتورة مرتجعة؛ تم إيقاف تسجيل الدفعات عليها.</div>}
           <form onSubmit={addPayment} className="form-grid">
             <div className="field"><label>المبلغ</label><input type="number" min="0" step="0.01" value={payment.amount} onChange={(e) => setPayment((p) => ({ ...p, amount: e.target.value }))} dir="ltr" /></div>
             <div className="field"><label>تاريخ الدفع</label><input type="date" value={payment.paid_at} onChange={(e) => setPayment((p) => ({ ...p, paid_at: e.target.value }))} dir="ltr" /></div>
@@ -295,7 +299,7 @@ export default function InvoiceDetail() {
             </div>
             <div className="field"><label>ملاحظة</label><input value={payment.note} onChange={(e) => setPayment((p) => ({ ...p, note: e.target.value }))} /></div>
             <div className="modal-actions" style={{ gridColumn: '1 / -1' }}>
-              <button className="btn" disabled={savingPayment || remainingAmount <= 0}>{savingPayment ? 'جارٍ الحفظ…' : 'إضافة دفعة'}</button>
+              <button className="btn" disabled={savingPayment || remainingAmount <= 0 || isRefunded}>{savingPayment ? 'جارٍ الحفظ…' : 'إضافة دفعة'}</button>
             </div>
           </form>
         </div>

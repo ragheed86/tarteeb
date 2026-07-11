@@ -8,6 +8,7 @@ dist/
 *.log
 .vercel
 .env*
+.tmp-*
 
 # Playwright
 /test-results/

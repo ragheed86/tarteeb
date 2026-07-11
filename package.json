@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots"
   },
@@ -17,12 +17,17 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "maplibre-gl": "^5.24.0",
-    "next": "^14.2.0",
+    "next": "^16.2.10",
     "qrcode": "^1.5.4",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1"
+    "@playwright/test": "^1.61.1",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.10"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
   }
 }

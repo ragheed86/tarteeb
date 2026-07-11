@@ -127,10 +127,10 @@ export default function ProjectsPage() {
       ]);
       const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
       const employeesById = Object.fromEntries((employees || []).map((em) => [em.id, em]));
-      // السعر النهائي = مجموع فواتير المشروع الصادرة (غير المسودّة)
+      // السعر النهائي = مجموع فواتير المشروع الصادرة النشطة (غير المسودّة وغير المرتجعة)
       const finalByProject = {};
       for (const inv of invoices || []) {
-        if (inv.project_id && inv.status && inv.status !== 'draft') {
+        if (inv.project_id && inv.status && inv.status !== 'draft' && inv.status !== 'refunded') {
           finalByProject[inv.project_id] = (finalByProject[inv.project_id] || 0) + Number(inv.total || 0);
         }
       }

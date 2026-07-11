@@ -11,6 +11,7 @@ import { Loading, Empty, ErrorBar, DataTable, Money, DateText, Ltr, StatusPill }
 
 const CHANNEL = { whatsapp: 'واتساب', telegram: 'تيليجرام', email: 'بريد', phone: 'هاتف', system: 'النظام' };
 const DIRECTION = { in: 'وارد', out: 'صادر', system: 'النظام' };
+const isRefundedInvoice = (invoice) => invoice.status === 'refunded';
 
 function CommForm({ clientId, onAdded }) {
   const [form, setForm] = useState({ channel: 'whatsapp', direction: 'out', body: '' });
@@ -80,9 +81,11 @@ export default function ClientProfile() {
   if (!client) return <Empty title="غير موجود" desc="لم يُعثر على هذا العميل." />;
 
   const st = CLIENT_STATUS[client.status] || { label: client.status, cls: 'p-wait' };
-  const invoiced = invoices.reduce((s, i) => s + Number(i.total || 0), 0);
-  const paid = invoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
-  const outstanding = invoices.reduce((s, i) => s + Number(i.remaining_amount || 0), 0);
+  const activeInvoices = invoices.filter((invoice) => !isRefundedInvoice(invoice));
+  const refundedCount = invoices.length - activeInvoices.length;
+  const invoiced = activeInvoices.reduce((s, i) => s + Number(i.total || 0), 0);
+  const paid = activeInvoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
+  const outstanding = activeInvoices.reduce((s, i) => s + Number(i.remaining_amount || 0), 0);
 
   return (
     <>
@@ -95,7 +98,7 @@ export default function ClientProfile() {
         <div className="kpi"><div className="lbl">إجمالي المفوتر</div><div className="val amt">{fmtMoney(invoiced)} ⃁</div></div>
         <div className="kpi"><div className="lbl">المحصّل</div><div className="val amt">{fmtMoney(paid)} ⃁</div></div>
         <div className="kpi"><div className="lbl">المتبقّي</div><div className="val amt">{fmtMoney(outstanding)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">عدد الفواتير</div><div className="val amt">{fmtNum(invoices.length)}</div></div>
+        <div className="kpi"><div className="lbl">عدد الفواتير النشطة</div><div className="val amt">{fmtNum(activeInvoices.length)}</div>{refundedCount > 0 && <div className="trend"><span>{fmtNum(refundedCount)} مرتجعة</span></div>}</div>
       </div>
 
       <div className="grid2">

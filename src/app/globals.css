@@ -359,7 +359,10 @@ tr.clickable{cursor:pointer}
 .cell.today .dn{background:var(--pine);color:#fff;border-radius:50%;width:22px;height:22px;display:inline-grid;place-items:center}
 .cell.drag-over{background:var(--sage-bg);box-shadow:inset 0 0 0 2px var(--sage)}
 .cell .dn{font-size:12.5px;color:var(--muted);font-weight:500}
-.cev{font-size:11px;padding:3px 7px;border-radius:6px;margin-top:5px;cursor:grab;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cev{font-size:11px;padding:4px 7px;border-radius:6px;margin-top:5px;cursor:grab;line-height:1.35;overflow:hidden}
+.cev-title,.cev-client{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cev-title{font-weight:700}
+.cev-client{font-size:10px;opacity:.78;margin-top:1px}
 .cev:active{cursor:grabbing}
 .cev.prog{background:var(--gold-bg);color:#8a651f}
 

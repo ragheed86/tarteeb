@@ -498,9 +498,10 @@ export default function ProjectsPage() {
                         onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('text/plain', p.id); }}
                         onDragEnd={() => setDragCol(null)}
                         onClick={(e) => { e.stopPropagation(); router.push(`/projects/${p.id}`); }}
-                        title={`${p.title} — ${byId[p.client_id] || ''}`}
+                        title={`${p.title} — ${byId[p.client_id] || 'عميل غير معروف'}`}
                       >
-                        {p.title}
+                        <span className="cev-title">{p.title}</span>
+                        <span className="cev-client">{byId[p.client_id] || 'عميل غير معروف'}</span>
                       </div>
                     );
                   })}

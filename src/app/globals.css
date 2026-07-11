@@ -189,7 +189,7 @@ tr.clickable{cursor:pointer}
 .viewtoggle{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
 .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
 /* صف العرض: أزرار العرض ثم زر «مشروع جديد» تحتها محاذى للبداية (يمين في RTL) */
-.toolbar-viewrow{flex-direction:column;align-items:flex-start;gap:10px;margin-bottom:14px}
+.toolbar-viewrow{justify-content:space-between;margin-bottom:14px}
 .vt{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border:0;background:none;border-radius:8px;font-family:var(--body);font-size:13.5px;color:var(--muted);cursor:pointer}
 .vt.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500}
 .fdate{font-family:var(--body);font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:8px 12px;outline:none;cursor:pointer}
@@ -806,20 +806,32 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   table:not(.inv-items) tfoot,
   table:not(.inv-items) tr,
   table:not(.inv-items) td{display:block;width:100%;min-width:0;max-width:100%}
-  table:not(.inv-items) tr{padding:12px 0;border-bottom:1px solid var(--surface-2)}
-  table:not(.inv-items) tr:last-child{border-bottom:0}
-  table:not(.inv-items) td{padding:5px 2px;font-size:13.5px;border-bottom:0;white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-align:start!important}
-  table:not(.inv-items) td:last-child{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-start;white-space:normal}
-  tbody tr:hover{background:transparent}
-  td .btn.sm{margin-top:4px;margin-inline-start:0!important}
-  /* عنونة خلايا الجوال: بما أن رأس الجدول مخفي هنا، تُعرض تسمية العمود فوق كل قيمة */
+  /* الجوال: كل صف جدول يصبح بطاقة مرتّبة، وكل حقل سطر واحد (تسمية ← قيمة) */
+  table:not(.inv-items) tbody tr{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow-card)}
+  table:not(.inv-items) tbody tr:last-child{margin-bottom:0}
+  table:not(.inv-items) tfoot tr{background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+  table:not(.inv-items) td{padding:0;font-size:13.5px;border-bottom:0;white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-align:start!important}
+  tbody tr:hover{background:var(--surface)}
+  /* الخلية الأساسية (بلا تسمية وليست عمود الإجراءات) = عنوان البطاقة */
+  table:not(.inv-items) tbody td[data-label=""]:not(:last-child){
+    font-weight:600;font-size:14.5px;margin-bottom:2px;padding-bottom:2px}
+  /* بقية الحقول: تسمية العمود على البداية والقيمة على النهاية في سطر واحد */
+  table:not(.inv-items) td[data-label]:not([data-label=""]){
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:8px 0;border-top:1px solid var(--surface-2)}
   table:not(.inv-items) td[data-label]:not([data-label=""])::before{
-    content:attr(data-label);display:block;font-size:11px;font-weight:600;
-    color:var(--muted);margin-bottom:1px;line-height:1.4}
-  table:not(.inv-items) td[data-label]{padding-block:6px}
+    content:attr(data-label);flex-shrink:0;font-size:12px;font-weight:600;
+    color:var(--muted);line-height:1.4}
+  /* خلية الإجراءات (آخر عمود بلا تسمية): أزرار ملتفّة بعرض كامل أسفل البطاقة */
+  table:not(.inv-items) tbody td[data-label=""]:last-child{
+    display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-start;
+    margin-top:10px;padding-top:10px;border-top:1px solid var(--surface-2)}
   table:not(.inv-items) td[data-label]:empty,
   table:not(.inv-items) td[data-label] .hide-mobile{display:none}
   .hide-mobile{display:none!important}
+  td .btn.sm{margin-top:0;margin-inline-start:0!important}
 
   .modal-backdrop{align-items:end;place-items:end stretch;padding:0;background:rgba(8,63,68,.36);backdrop-filter:none;-webkit-backdrop-filter:none}
   .modal-card,.modal-card.modal-sm{width:100%!important;max-height:calc(100dvh - env(safe-area-inset-top));border-radius:18px 18px 0 0;border-inline:0;border-bottom:0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));background:#fff;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:0 -12px 34px rgba(8,63,68,.18)}

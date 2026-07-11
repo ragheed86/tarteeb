@@ -71,6 +71,7 @@ export const INVOICE_STATUS = {
   partial: { label: 'مدفوعة جزئياً', cls: 'p-prog' },
   paid: { label: 'مدفوعة', cls: 'p-done' },
   overdue: { label: 'متأخرة', cls: 'p-cancel' },
+  refunded: { label: 'مرتجعة', cls: 'p-cancel' },
 };
 export const SOURCE_LABEL = {
   instagram: 'انستقرام',

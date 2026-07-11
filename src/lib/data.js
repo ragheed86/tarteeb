@@ -757,6 +757,18 @@ export async function removeInvoice(id) {
   const { error } = await supabase.from('invoices').delete().eq('id', id);
   if (error) throw error;
 }
+// تعديل الفاتورة مع استبدال بنودها. items=[{description,qty,unit_price}]
+export async function updateInvoiceWithItems(id, invoice, items) {
+  const { error } = await supabase.from('invoices').update(invoice).eq('id', id);
+  if (error) throw error;
+  await supabase.from('invoice_items').delete().eq('invoice_id', id);
+  const rows = (items || []).map((it) => ({ invoice_id: id, description: it.description, qty: Number(it.qty) || 1, unit_price: Number(it.unit_price) || 0 }));
+  if (rows.length) {
+    const { error: e2 } = await supabase.from('invoice_items').insert(rows);
+    if (e2) throw e2;
+  }
+  return getInvoice(id);
+}
 export async function getInvoicePayments(invoiceId) {
   const { data, error } = await supabase.from('invoice_payments')
     .select('id,invoice_id,amount,paid_at,method,note,created_at')

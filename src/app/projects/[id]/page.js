@@ -5,7 +5,7 @@ import {
   getProject, getClient, getEmployees, getProjectFinancials,
   getProjectTasks, createProjectTask, updateProjectTask, removeProjectTask,
   getProjectTeam, addProjectTeam, removeProjectTeam,
-  getProjectMedia, createProjectMedia, removeProjectMedia,
+  getProjectMedia, uploadProjectMedia, removeProjectMedia, updateProject,
   getProjectCosts, createProjectCost, removeProjectCost,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, displayProgress } from '@/lib/format';
@@ -90,14 +90,54 @@ export default function ProjectDetail() {
       </div>
 
       <div className="grid2">
+        <DatesCard project={project} onChange={(p) => setD((s) => ({ ...s, project: p }))} />
         <TasksCard projectId={id} tasks={tasks} onChange={(t) => setD((s) => ({ ...s, tasks: t }))} />
+      </div>
+
+      <div className="grid2">
         <TeamCard projectId={id} employees={employees} team={team} teamIds={teamIds}
           onChange={(t) => setD((s) => ({ ...s, team: t }))} />
+        <MediaCard projectId={id} media={media} onChange={(m) => setD((s) => ({ ...s, media: m }))} />
       </div>
 
       <CostsCard projectId={id} costs={costs} onChange={refreshCosts} />
-      <MediaCard projectId={id} media={media} onChange={(m) => setD((s) => ({ ...s, media: m }))} />
     </>
+  );
+}
+
+// ---------- التواريخ ----------
+function DatesCard({ project, onChange }) {
+  const [form, setForm] = useState({ start_date: project.start_date || '', due_date: project.due_date || '' });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true); setMsg('');
+    try {
+      const updated = await updateProject(project.id, {
+        start_date: form.start_date || null,
+        due_date: form.due_date || null,
+      });
+      onChange(updated);
+      setMsg('تم حفظ التواريخ');
+    } catch (err) {
+      setMsg(err.message || 'تعذّر حفظ التواريخ');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card">
+      <div className="sec-head"><h2>تواريخ المشروع</h2><span className="more">{fmtDate(project.start_date)} ← {fmtDate(project.due_date)}</span></div>
+      {msg && <div className={msg.startsWith('تم') ? 'okbar' : 'errbar'}>{msg}</div>}
+      <form onSubmit={save} className="form-grid">
+        <div className="field"><label>تاريخ البدء</label><input type="date" dir="ltr" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} /></div>
+        <div className="field"><label>تاريخ التسليم</label><input type="date" dir="ltr" value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} /></div>
+        <div className="modal-actions" style={{ gridColumn: '1 / -1' }}>
+          <button className="btn sm" disabled={busy}>{busy ? 'جارٍ الحفظ…' : 'حفظ التواريخ'}</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -237,24 +277,29 @@ function CostsCard({ projectId, costs, onChange }) {
 
 // ---------- الوسائط ----------
 function MediaCard({ projectId, media, onChange }) {
-  const [form, setForm] = useState({ kind: 'before', file_url: '' });
+  const [form, setForm] = useState({ kind: 'before', file: null });
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
 
   async function add(e) {
     e.preventDefault();
-    if (!form.file_url.trim()) return;
-    setBusy(true);
+    if (!form.file) { setErr('اختر صورة من الجهاز'); return; }
+    setBusy(true); setErr('');
     try {
-      const m = await createProjectMedia({ project_id: projectId, kind: form.kind, file_url: form.file_url.trim() });
-      onChange([m, ...media]); setForm({ kind: 'before', file_url: '' });
+      const m = await uploadProjectMedia(projectId, form.kind, form.file);
+      onChange([m, ...media]); setForm({ kind: 'before', file: null });
+      e.currentTarget.reset();
+    } catch (uploadErr) {
+      setErr(uploadErr.message || 'تعذّر رفع الصورة');
     } finally { setBusy(false); }
   }
-  async function del(m) { await removeProjectMedia(m.id); onChange(media.filter((x) => x.id !== m.id)); }
+  async function del(m) { await removeProjectMedia(m.id, m.file_path); onChange(media.filter((x) => x.id !== m.id)); }
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
+    <div className="card">
       <div className="sec-head"><h2>الصور (قبل / بعد)</h2><span className="more">{fmtNum(media.length)}</span></div>
-      {media.length === 0 ? <Empty title="لا صور" desc="أضف رابط صورة قبل/بعد التنفيذ." /> : (
+      {err && <div className="errbar">{err}</div>}
+      {media.length === 0 ? <Empty title="لا صور" desc="ارفع صور قبل/بعد التنفيذ." /> : (
         <div className="media-grid">
           {media.map((m) => (
             <figure className="media-item" key={m.id}>
@@ -270,8 +315,8 @@ function MediaCard({ projectId, media, onChange }) {
         <select value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))} style={{ maxWidth: 110 }}>
           {Object.entries(MEDIA_KIND).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <input placeholder="رابط الصورة (URL)" dir="ltr" value={form.file_url} onChange={(e) => setForm((f) => ({ ...f, file_url: e.target.value }))} />
-        <button className="btn sm" disabled={busy}>إضافة</button>
+        <input type="file" accept="image/*" onChange={(e) => setForm((f) => ({ ...f, file: e.target.files?.[0] || null }))} />
+        <button className="btn sm" disabled={busy}>{busy ? 'جارٍ الرفع…' : 'رفع'}</button>
       </form>
     </div>
   );

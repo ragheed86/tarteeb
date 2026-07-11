@@ -491,9 +491,11 @@ export async function removeProjectTask(id) {
 }
 
 // الوسائط (قبل/بعد)
+const PROJECT_MEDIA_BUCKET = 'project-media';
+
 export async function getProjectMedia(projectId) {
   const { data, error } = await supabase.from('project_media')
-    .select('id,project_id,kind,file_url,created_at').eq('project_id', projectId)
+    .select('id,project_id,kind,file_url,file_path,created_at').eq('project_id', projectId)
     .order('created_at', { ascending: false });
   if (error) throw error; return data;
 }
@@ -501,7 +503,17 @@ export async function createProjectMedia(p) {
   const { data, error } = await supabase.from('project_media').insert(p).select().single();
   if (error) throw error; return data;
 }
-export async function removeProjectMedia(id) {
+export async function uploadProjectMedia(projectId, kind, file) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `${projectId}/${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: upErr } = await supabase.storage.from(PROJECT_MEDIA_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (upErr) throw upErr;
+  const { data: pub } = supabase.storage.from(PROJECT_MEDIA_BUCKET).getPublicUrl(path);
+  return createProjectMedia({ project_id: projectId, kind, file_url: pub.publicUrl, file_path: path });
+}
+export async function removeProjectMedia(id, filePath) {
+  if (filePath) await supabase.storage.from(PROJECT_MEDIA_BUCKET).remove([filePath]).catch(() => {});
   const { error } = await supabase.from('project_media').delete().eq('id', id);
   if (error) throw error;
 }

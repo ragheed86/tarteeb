@@ -83,6 +83,7 @@ export default function QuotesPage() {
   const [saving, setSaving] = useState(false);
   const [scale, setScale] = useState(1);
   const [contentScale, setContentScale] = useState(1);
+  const [formW, setFormW] = useState(360); // عرض نموذج الإدخال (قابل للسحب)
   const paneRef = useRef(null);
   const pageRef = useRef(null);
   const innerRef = useRef(null);
@@ -123,6 +124,25 @@ export default function QuotesPage() {
     window.addEventListener('resize', fit);
     return () => { ro.disconnect(); window.removeEventListener('resize', fit); };
   }, [fit, q]);
+
+  // استرجاع عرض النموذج المحفوظ + سحب المقبض لتغييره (الحد 280–640)
+  useEffect(() => {
+    const saved = Number(localStorage.getItem('qg-formw'));
+    if (saved >= 280 && saved <= 640) setFormW(saved);
+  }, []);
+  const startResize = useCallback((e) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = formW;
+    const widthAt = (x) => Math.min(640, Math.max(280, startW + (startX - x)));
+    const onMove = (ev) => setFormW(widthAt(ev.clientX));
+    const onUp = (ev) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      try { localStorage.setItem('qg-formw', String(widthAt(ev.clientX))); } catch (err) { /* تجاهل */ }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [formW]);
 
   const ping = (m) => { toast(m); };
   const set = (k, v) => setQ((s) => ({ ...s, [k]: v }));
@@ -280,7 +300,7 @@ export default function QuotesPage() {
           onOpen={openFromBoard} activeId={q.id} />
       ) : (
       <>
-      <div className="qg-workspace">
+      <div className="qg-workspace" style={{ '--qg-formw': `${formW}px` }}>
         {/* form */}
         <div className="qg-form">
           <h3>بيانات العميل</h3>
@@ -334,6 +354,9 @@ export default function QuotesPage() {
             </div>
           )}
         </div>
+
+        {/* مقبض تغيير عرض النموذج */}
+        <div className="qg-resizer" onPointerDown={startResize} title="اسحب لتغيير العرض" />
 
         {/* preview */}
         <div className="qg-preview" ref={paneRef}>
@@ -496,8 +519,11 @@ const CSS = `
 .qg-btn{border:1px solid var(--tbd);background:#fff;color:var(--tink);font-family:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer;transition:.15s}
 .qg-btn:hover{border-color:var(--tl);color:var(--tl)}
 .qg-primary{background:var(--tl);color:#fff;border-color:var(--tl)}.qg-primary:hover{background:var(--tld);color:#fff}
-.qg-workspace{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start}
-@media(max-width:900px){.qg-workspace{grid-template-columns:1fr}}
+.qg-workspace{display:grid;grid-template-columns:var(--qg-formw,360px) 10px 1fr;gap:8px;align-items:start}
+.qg-resizer{width:10px;align-self:stretch;cursor:col-resize;border-radius:5px;position:sticky;top:64px;max-height:calc(100vh - 90px);touch-action:none}
+.qg-resizer::before{content:'';display:block;width:3px;height:100%;margin:0 auto;border-radius:3px;background:var(--tbd);transition:background .15s}
+.qg-resizer:hover::before,.qg-resizer:active::before{background:var(--tl)}
+@media(max-width:900px){.qg-workspace{grid-template-columns:1fr}.qg-resizer{display:none}}
 .qg-form{background:#fff;border:1px solid var(--tbd);border-radius:16px;padding:18px;position:sticky;top:64px;max-height:calc(100vh - 90px);overflow:auto}
 @media(max-width:900px){.qg-form{position:static;max-height:none}}
 .qg-form h3{font-size:13px;color:var(--tl);font-weight:700;margin:16px 0 9px}.qg-form h3:first-child{margin-top:0}
@@ -638,6 +664,6 @@ const CSS = `
   .qg-a4,.qg-a4 *{visibility:visible}
   .qg-scaler{transform:none !important;height:auto !important}
   .qg-a4{position:absolute;top:0;left:0;box-shadow:none;width:210mm;height:297mm;overflow:hidden;page-break-inside:avoid;break-inside:avoid}
-  .qg-tabs,.qg-form,.qg-drawer,.qg-scrim,.qg-toast{display:none !important}
+  .qg-tabs,.qg-form,.qg-resizer,.qg-drawer,.qg-scrim,.qg-toast{display:none !important}
 }
 `;

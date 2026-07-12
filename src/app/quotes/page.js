@@ -567,7 +567,7 @@ const CSS = `
 .qg-trow{padding:13px 18px;font-size:14px;border-bottom:1px solid var(--tbd);align-items:center}
 .qg-trow .svc{font-weight:500;text-align:right}.qg-trow .c{text-align:center;color:var(--tmut)}.qg-trow .tot{text-align:center;font-weight:600}
 .qg-ttotal{padding:10px 18px;font-size:16px;background:var(--pink2);border-radius:0 0 8px 8px}
-.qg-ttotal .lbl{grid-column:1 / 5;text-align:left;color:var(--cor);font-weight:700}
+.qg-ttotal .lbl{grid-column:4 / 5;text-align:center;color:var(--cor);font-weight:700}
 .qg-ttotal .v{text-align:center;color:var(--cor);font-weight:700}
 .qg-note{font-size:12px;color:#7A8A92;text-align:right;margin-top:10px;line-height:1.8}
 .qg-budget{border:1px solid var(--tbd);border-radius:10px;padding:18px 22px;text-align:right;font-size:13px;line-height:1.9;color:var(--tmut);display:flex;flex-direction:column;gap:10px}

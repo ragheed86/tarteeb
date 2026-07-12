@@ -158,7 +158,7 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
-      <div className="kpis" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+      <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))' }}>
         <div className="kpi"><div className="lbl">{PERIOD_LABEL[period]}</div><div className="val"><AnimatedNumber value={periodRevenue} format={fmtMoney} /> ⃁</div><div className="trend"><span>فواتير مدفوعة خلال الفترة</span></div></div>
         <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val"><AnimatedNumber value={periodProfit} format={fmtMoney} /> ⃁</div><div className="trend"><span>سعر البيع بعد خصم التكاليف</span></div></div>
         <div className="kpi"><div className="lbl">هامش الربح</div><div className="val"><AnimatedNumber value={periodMargin} format={fmtNum} />%</div><div className="trend"><span>على مستوى المشاريع</span></div></div>

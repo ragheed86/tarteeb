@@ -161,7 +161,7 @@ export default function InvoicesPage() {
       </div>
 
       {/* مؤشرات الفواتير */}
-      <div className="kpis" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 18 }}>
+      <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))', marginBottom: 18 }}>
         <div className="kpi"><div className="lbl">إجمالي المفوتر</div><div className="val">{fmtMoney(totalAll)} ⃁</div><div className="trend"><span>{fmtNum(active.length)} فاتورة نشطة</span></div></div>
         <div className="kpi"><div className="lbl">المحصّل</div><div className="val">{fmtMoney(totalPaid)} ⃁</div><div className="trend"><span>نسبة التحصيل {fmtNum(collectRate)}%</span></div></div>
         <div className="kpi"><div className="lbl">المتبقّي</div><div className="val">{fmtMoney(totalRemaining)} ⃁</div><div className="trend"><span>غير محصّل بعد</span></div></div>

@@ -213,15 +213,7 @@ function ClientsPageInner() {
   return (
     <>
       {/* مؤشرات العملاء — مربعات صغيرة في صف واحد */}
-      <style>{`
-        .clients-kpis{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:18px}
-        .clients-kpis .kpi{padding:12px 12px;border-radius:14px;box-shadow:0 6px 16px rgba(14,126,130,.14)}
-        .clients-kpis .kpi .lbl{font-size:11px}
-        .clients-kpis .kpi .val{font-size:22px;margin-top:6px}
-        .clients-kpis .kpi .trend{font-size:10px;margin-top:3px}
-        @media(max-width:760px){.clients-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
-      `}</style>
-      <div className="kpis clients-kpis">
+      <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))' }}>
         <div className="kpi"><div className="lbl">إجمالي العملاء</div><div className="val">{fmtNum(total)}</div><div className="trend"><span>كامل القاعدة</span></div></div>
         <div className="kpi"><div className="lbl">عملاء نشطون</div><div className="val">{fmtNum(activeCount)}</div><div className="trend"><span>{fmtNum(activePct)}% منهم</span></div></div>
         <div className="kpi"><div className="lbl">محتملون</div><div className="val">{fmtNum(leadCount)}</div><div className="trend"><span>فرص للتحويل</span></div></div>

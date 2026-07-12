@@ -212,14 +212,22 @@ function ClientsPageInner() {
 
   return (
     <>
-      {/* مؤشرات العملاء */}
-      <div className="kpis" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 18 }}>
-        <div className="kpi"><div className="lbl">إجمالي العملاء</div><div className="val">{fmtNum(total)}</div><div className="trend"><span>كامل قاعدة العملاء</span></div></div>
-        <div className="kpi"><div className="lbl">عملاء نشطون</div><div className="val">{fmtNum(activeCount)}</div><div className="trend"><span>{fmtNum(activePct)}% من العملاء</span></div></div>
-        <div className="kpi"><div className="lbl">عملاء محتملون</div><div className="val">{fmtNum(leadCount)}</div><div className="trend"><span>فرص للتحويل</span></div></div>
+      {/* مؤشرات العملاء — مربعات صغيرة في صف واحد */}
+      <style>{`
+        .clients-kpis{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:18px}
+        .clients-kpis .kpi{padding:12px 12px;border-radius:14px;box-shadow:0 6px 16px rgba(14,126,130,.14)}
+        .clients-kpis .kpi .lbl{font-size:11px}
+        .clients-kpis .kpi .val{font-size:22px;margin-top:6px}
+        .clients-kpis .kpi .trend{font-size:10px;margin-top:3px}
+        @media(max-width:760px){.clients-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+      `}</style>
+      <div className="kpis clients-kpis">
+        <div className="kpi"><div className="lbl">إجمالي العملاء</div><div className="val">{fmtNum(total)}</div><div className="trend"><span>كامل القاعدة</span></div></div>
+        <div className="kpi"><div className="lbl">عملاء نشطون</div><div className="val">{fmtNum(activeCount)}</div><div className="trend"><span>{fmtNum(activePct)}% منهم</span></div></div>
+        <div className="kpi"><div className="lbl">محتملون</div><div className="val">{fmtNum(leadCount)}</div><div className="trend"><span>فرص للتحويل</span></div></div>
         <div className="kpi"><div className="lbl">بانتظار رد</div><div className="val">{fmtNum(waitingCount)}</div><div className="trend"><span>تحتاج متابعة</span></div></div>
-        <div className="kpi"><div className="lbl">مكتملون</div><div className="val">{fmtNum(completedCount)}</div><div className="trend"><span>انتهى التعامل معهم</span></div></div>
-        <div className="kpi"><div className="lbl">جدد هذا الشهر</div><div className="val">{fmtNum(newThisMonth)}</div><div className="trend"><span>أُضيفوا خلال الشهر الحالي</span></div></div>
+        <div className="kpi"><div className="lbl">مكتملون</div><div className="val">{fmtNum(completedCount)}</div><div className="trend"><span>انتهى التعامل</span></div></div>
+        <div className="kpi"><div className="lbl">جدد هذا الشهر</div><div className="val">{fmtNum(newThisMonth)}</div><div className="trend"><span>خلال الشهر</span></div></div>
       </div>
       <div className="sec-head" style={{ marginBottom: 18 }}>
         <button className="btn" onClick={openAdd}>

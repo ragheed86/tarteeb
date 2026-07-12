@@ -27,7 +27,7 @@ function defaults() {
     id: null, number: '', status: 'draft', client: '', linked_client_id: null,
     date: new Date().toISOString().slice(0, 10),
     desc: 'تنظيم وترتيب غرفة مخزن الشركة بطريقة عملية واحترافية لتحسين الوصول إلى الأدوات والمواد، مع تعظيم الاستفادة من مساحة التخزين المتاحة.',
-    items: [{ svc: 'تنظيم وترتيب غرفة مخزن الشركة لمدة يومين', cost: 500, days: 2, discount: 100 }],
+    items: [blankItem()],
     note: 'السعر لا يشمل الأدوات والمستلزمات التنظيمية، والتي سيتم شراؤها وفوترتها بشكل منفصل.',
     toolsShow: true, toolsMin: 400, toolsMax: 600,
     validity: 'هذا المقترح صالح لمدة أسبوع واحد من تاريخ الإرسال.',

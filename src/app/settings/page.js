@@ -46,7 +46,10 @@ const NAV = [
   },
   {
     label: 'بيانات ثابتة',
-    items: [{ key: 'company', label: 'معلومات الشركة', icon: IconStore }],
+    items: [
+      { key: 'company', label: 'معلومات الشركة', icon: IconStore },
+      { key: 'vat', label: 'الضريبة', icon: IconPercent },
+    ],
   },
   {
     label: 'النظام',
@@ -136,6 +139,7 @@ export default function SettingsPage() {
       {tab === 'team' && <UserPermissions users={users} reload={loadUsers} />}
       {tab === 'gov' && <GovPanel rows={gov} setRows={setGov} />}
       {tab === 'company' && <CompanyForm row={company} setRow={setCompany} />}
+      {tab === 'vat' && <VatForm row={company} setRow={setCompany} />}
       {tab === 'data' && <ImportExportPanel />}
     </div>
   );
@@ -359,6 +363,71 @@ function CompanyForm({ row, setRow }) {
       </div>
       <div className="modal-actions" style={{ marginTop: 18 }}>
         <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المعلومات'}</button>
+      </div>
+      </div>
+      </form>
+    </>
+  );
+}
+
+/* ============================ الضريبة ============================ */
+
+function VatForm({ row, setRow }) {
+  const [form, setForm] = useState(row || {});
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => { setForm(row || {}); }, [row]);
+
+  function set(k, v) { setForm((f) => ({ ...f, [k]: v })); setSaved(false); }
+
+  async function submit(e) {
+    e.preventDefault();
+    const rate = form.default_vat_rate === '' || form.default_vat_rate == null ? null : Number(form.default_vat_rate);
+    if (rate != null && (!Number.isFinite(rate) || rate < 0 || rate > 99.99)) { setErr('النسبة الافتراضية يجب أن تكون بين 0 و99.99'); return; }
+    setSaving(true); setErr('');
+    try {
+      const up = await updateCompanySettings(row.id, {
+        vat_enabled: !!form.vat_enabled,
+        default_vat_rate: rate,
+        vat_exemption_note_ar: (form.vat_exemption_note_ar ?? '').trim() || null,
+      });
+      setRow(up); setForm(up); setSaved(true);
+    } catch (e2) { setErr(e2.message || 'تعذّر الحفظ'); }
+    finally { setSaving(false); }
+  }
+
+  if (!row) return <Loading />;
+
+  return (
+    <>
+      <PanelHead icon={IconPercent} title="الضريبة" />
+      <form className="set-body" onSubmit={submit}>
+      <div className="card" style={{ maxWidth: 760 }}>
+      {err && <div className="errbar">{err}</div>}
+      {saved && <div className="okbar">تم حفظ التغييرات بنجاح ✓</div>}
+      <div className="form-grid">
+        <div className="field span-2">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!form.vat_enabled} onChange={(e) => set('vat_enabled', e.target.checked)} style={{ width: 'auto' }} />
+            تفعيل ضريبة القيمة المضافة على عروض الأسعار
+          </label>
+          <p style={{ fontSize: 12, color: 'var(--tx-3, #7A8A92)', margin: '6px 0 0' }}>
+            عند التعطيل (المنشأة معفاة حالياً) لا يظهر أي سطر ضريبة في عروض الأسعار، ويمكن تجاوز ذلك لكل عرض من داخل المولّد. لا يؤثر هذا الإعداد على الفواتير.
+          </p>
+        </div>
+        <div className="field">
+          <label>النسبة الافتراضية (%)</label>
+          <input type="number" dir="ltr" step="0.01" min="0" max="99.99" value={form.default_vat_rate ?? ''} onChange={(e) => set('default_vat_rate', e.target.value)} />
+        </div>
+        <div className="field span-2">
+          <label>ملاحظة الإعفاء (تظهر أسفل عرض السعر عند عدم تطبيق الضريبة)</label>
+          <textarea rows={2} value={form.vat_exemption_note_ar ?? ''} onChange={(e) => set('vat_exemption_note_ar', e.target.value)} placeholder="مثال: المنشأة غير خاضعة لضريبة القيمة المضافة." />
+        </div>
+      </div>
+      <div className="modal-actions" style={{ marginTop: 18 }}>
+        <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الإعدادات'}</button>
       </div>
       </div>
       </form>
@@ -921,6 +990,9 @@ function IconBank() {
 }
 function IconStore() {
   return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 9h14v11H5zM3.5 9l1.3-4.5h14.4L20.5 9M12 20v-6" /></svg>;
+}
+function IconPercent() {
+  return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M19 5 5 19" /><circle cx="7.5" cy="7.5" r="2.5" /><circle cx="16.5" cy="16.5" r="2.5" /></svg>;
 }
 function IconData() {
   return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>;

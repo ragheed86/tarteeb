@@ -831,7 +831,7 @@ export async function updateCompanySettings(id, p) {
 //  طبقة تحويل بين شكل المولّد في الواجهة وأعمدة قاعدة البيانات:
 //  بند المولّد {svc,cost,days,discount} ⟷ quote_items {description,unit_price,qty,discount}
 // ============================================================
-const QUOTE_COLS = 'id,number,status,client_id,client_name,issue_date,description,terms_note,validity_note,validity_days,tools_show,tools_budget_min,tools_budget_max,rejection_reason,status_history,sent_at,accepted_at,rejected_at,subtotal,discount_total,total,created_by,created_at,updated_at';
+const QUOTE_COLS = 'id,number,status,client_id,client_name,issue_date,description,terms_note,validity_note,validity_days,tools_show,tools_budget_min,tools_budget_max,rejection_reason,status_history,sent_at,accepted_at,rejected_at,subtotal,discount_total,total,apply_vat,created_by,created_at,updated_at';
 
 function mapQuoteRow(row, items) {
   return {
@@ -853,24 +853,35 @@ function mapQuoteRow(row, items) {
     sent_at: row.sent_at ? Date.parse(row.sent_at) : null,
     decided_at: (row.accepted_at || row.rejected_at) ? Date.parse(row.accepted_at || row.rejected_at) : null,
     updatedAt: row.updated_at ? Date.parse(row.updated_at) : 0,
+    applyVat: !!row.apply_vat,
     items: (items || [])
       .slice()
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-      .map((it) => ({ svc: it.description || '', cost: Number(it.unit_price) || 0, days: Number(it.qty) || 0, discount: Number(it.discount) || 0 })),
+      .map((it) => ({ svc: it.description || '', cost: Number(it.unit_price) || 0, days: Number(it.qty) || 0, discount: Number(it.discount) || 0, vatRate: it.vat_rate == null ? null : Number(it.vat_rate) })),
   };
 }
 
-function quoteTotals(items) {
-  let subtotal = 0, discount = 0;
-  for (const it of items || []) {
-    subtotal += (Number(it.cost) || 0) * (Number(it.days) || 0);
-    discount += Number(it.discount) || 0;
+// نسبة ضريبة البند: نسبة البند إن حُدّدت وإلا النسبة الافتراضية للمنشأة
+function itemVatRate(it, fallback) {
+  if (it.vatRate !== null && it.vatRate !== undefined && it.vatRate !== '') return Number(it.vatRate) || 0;
+  const f = Number(fallback);
+  return Number.isFinite(f) ? f : 15;
+}
+
+function quoteTotals(app) {
+  let subtotal = 0, discount = 0, vat = 0;
+  for (const it of app.items || []) {
+    const line = (Number(it.cost) || 0) * (Number(it.days) || 0);
+    const disc = Number(it.discount) || 0;
+    subtotal += line;
+    discount += disc;
+    if (app.applyVat) vat += (line - disc) * itemVatRate(it, app.defaultVatRate) / 100;
   }
-  return { subtotal, discount_total: discount, total: subtotal - discount };
+  return { subtotal, discount_total: discount, total: subtotal - discount + vat };
 }
 
 function fromAppQuote(app) {
-  const t = quoteTotals(app.items);
+  const t = quoteTotals(app);
   const num = (v) => (v === '' || v === null || v === undefined ? null : Number(v) || 0);
   return {
     number: app.number || null,
@@ -893,6 +904,7 @@ function fromAppQuote(app) {
     subtotal: t.subtotal,
     discount_total: t.discount_total,
     total: t.total,
+    apply_vat: !!app.applyVat,
   };
 }
 
@@ -903,6 +915,7 @@ function itemRows(quoteId, items) {
     unit_price: Number(it.cost) || 0,
     qty: Number(it.days) || 0,
     discount: Number(it.discount) || 0,
+    vat_rate: it.vatRate === null || it.vatRate === undefined || it.vatRate === '' ? null : Number(it.vatRate) || 0,
     sort_order: i,
   }));
 }

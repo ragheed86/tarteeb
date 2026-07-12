@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { fmtNum } from '@/lib/format';
-import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber } from '@/lib/data';
+import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber, getCompanySettings } from '@/lib/data';
 import { toast } from '../toast';
 
 const RIYAL = '⃁';
@@ -34,6 +34,7 @@ function defaults() {
     // حقول المتابعة
     validityDays: 7, sent_at: null, decided_at: null, rejection_reason: '',
     status_history: [{ status: 'draft', at: Date.now() }],
+    applyVat: false, // يُهيَّأ من إعدادات المنشأة عند التحميل
   };
 }
 const lineTotal = (it) => (Number(it.cost) || 0) * (Number(it.days) || 0) - (Number(it.discount) || 0);
@@ -84,6 +85,8 @@ export default function QuotesPage() {
   const [scale, setScale] = useState(1);
   const [contentScale, setContentScale] = useState(1);
   const [formW, setFormW] = useState(360); // عرض نموذج الإدخال (قابل للسحب)
+  // إعدادات الضريبة على مستوى المنشأة (من company_settings)
+  const [vatCfg, setVatCfg] = useState({ enabled: false, rate: 15, note: '' });
   const paneRef = useRef(null);
   const pageRef = useRef(null);
   const innerRef = useRef(null);
@@ -95,12 +98,19 @@ export default function QuotesPage() {
   useEffect(() => {
     (async () => {
       setLoading(true);
+      // إعدادات الضريبة: تعذُّر القراءة = معطّلة (المنشأة معفاة حالياً)
+      let cfg = { enabled: false, rate: 15, note: '' };
+      try {
+        const s = await getCompanySettings();
+        cfg = { enabled: !!s.vat_enabled, rate: s.default_vat_rate == null ? 15 : Number(s.default_vat_rate), note: s.vat_exemption_note_ar || '' };
+      } catch (e) { /* تبقى معطّلة */ }
+      setVatCfg(cfg);
       try {
         const [num, quotes] = await Promise.all([nextQuoteNumber(), getQuotes()]);
         setList(quotes);
-        setQ({ ...defaults(), number: num });
+        setQ({ ...defaults(), number: num, applyVat: cfg.enabled });
         setLoadErr('');
-      } catch (e) { setQ(defaults()); setLoadErr('تعذّر الاتصال بالخادم — العروض تُحفظ على الإنترنت، تحقّق من اتصالك ثم أعد المحاولة.'); }
+      } catch (e) { setQ({ ...defaults(), applyVat: cfg.enabled }); setLoadErr('تعذّر الاتصال بالخادم — العروض تُحفظ على الإنترنت، تحقّق من اتصالك ثم أعد المحاولة.'); }
       setLoading(false);
     })();
   }, []);
@@ -165,7 +175,7 @@ export default function QuotesPage() {
     const patch = withStatus(q, ns);
     setQ(patch);
     if (patch.id) {
-      try { await updateQuote(patch.id, patch); await refreshList(); } catch (e) { ping('تعذّر تحديث الحالة'); }
+      try { await updateQuote(patch.id, { ...patch, defaultVatRate: vatCfg.rate }); await refreshList(); } catch (e) { ping('تعذّر تحديث الحالة'); }
     }
   }
   // عند تغيير الحالة إلى «مقبول»: اقترح إضافة العميل لقائمة العملاء (مرة واحدة)
@@ -177,7 +187,7 @@ export default function QuotesPage() {
   async function linkClient(clientId) {
     const patch = { ...q, linked_client_id: clientId };
     setQ(patch);
-    if (patch.id) { try { await updateQuote(patch.id, patch); await refreshList(); } catch (e) { /* يُحفظ لاحقاً */ } }
+    if (patch.id) { try { await updateQuote(patch.id, { ...patch, defaultVatRate: vatCfg.rate }); await refreshList(); } catch (e) { /* يُحفظ لاحقاً */ } }
   }
   // إضافة العميل إلى Supabase (بنقرة واحدة) مع فحص التكرار بالاسم
   async function addClientFromQuote() {
@@ -204,7 +214,8 @@ export default function QuotesPage() {
   async function save() {
     setSaving(true);
     try {
-      const saved = q.id ? await updateQuote(q.id, q) : await createQuote(q);
+      const rec = { ...q, defaultVatRate: vatCfg.rate };
+      const saved = q.id ? await updateQuote(q.id, rec) : await createQuote(rec);
       setQ(saved);
       await refreshList();
       ping('تم حفظ العرض');
@@ -224,7 +235,7 @@ export default function QuotesPage() {
   async function newQuote() {
     let num = '';
     try { num = await nextQuoteNumber(); } catch (e) { /* بلا رقم مؤقتاً */ }
-    setQ({ ...defaults(), number: num });
+    setQ({ ...defaults(), number: num, applyVat: vatCfg.enabled });
     ping('عرض جديد');
   }
   async function openQuote(id) {
@@ -251,6 +262,10 @@ export default function QuotesPage() {
   }
 
   const grand = q.items.reduce((s, it) => s + lineTotal(it), 0);
+  // الضريبة لكل بند: نسبة البند إن حُدّدت وإلا النسبة الافتراضية للمنشأة
+  const lineVatRate = (it) => (it.vatRate === null || it.vatRate === undefined || it.vatRate === '' ? Number(vatCfg.rate) || 0 : Number(it.vatRate) || 0);
+  const vatAmount = q.applyVat ? q.items.reduce((s, it) => s + lineTotal(it) * lineVatRate(it) / 100, 0) : 0;
+  const grandTotal = grand + vatAmount;
 
   function openFromBoard(id) { openQuote(id); setView('editor'); }
 
@@ -324,6 +339,13 @@ export default function QuotesPage() {
           <button className="qg-add" onClick={addItem}>إضافة بند</button>
           <label className="qg-f" style={{ marginTop: 12 }}><span>ملاحظة أسفل الجدول</span><textarea value={q.note} onChange={(e) => set('note', e.target.value)} /></label>
 
+          <h3>الضريبة</h3>
+          <label className="qg-switch">
+            <input type="checkbox" checked={!!q.applyVat} onChange={(e) => set('applyVat', e.target.checked)} />
+            تطبيق ضريبة القيمة المضافة ({fmtNum(Number(vatCfg.rate) || 0)}%)
+          </label>
+          {!q.applyVat && vatCfg.note && <div className="qg-hint">{vatCfg.note}</div>}
+
           <h3>ميزانية الأدوات</h3>
           <label className="qg-switch"><input type="checkbox" checked={q.toolsShow} onChange={(e) => set('toolsShow', e.target.checked)} /> إظهار قسم ميزانية الأدوات</label>
           <div className="qg-row2">
@@ -386,7 +408,15 @@ export default function QuotesPage() {
                     <div className="tot"><Money v={lineTotal(it)} /></div>
                   </div>
                 ))}
-                <div className="qg-ttotal"><div className="lbl">الإجمالي</div><div className="v"><Money v={grand} /></div></div>
+                {q.applyVat ? (
+                  <>
+                    <div className="qg-ttotal qg-tsub"><div className="lbl">المجموع الفرعي</div><div className="v"><Money v={grand} /></div></div>
+                    <div className="qg-ttotal qg-tsub"><div className="lbl">ضريبة القيمة المضافة</div><div className="v"><Money v={vatAmount} /></div></div>
+                    <div className="qg-ttotal"><div className="lbl">الإجمالي</div><div className="v"><Money v={grandTotal} /></div></div>
+                  </>
+                ) : (
+                  <div className="qg-ttotal"><div className="lbl">الإجمالي</div><div className="v"><Money v={grand} /></div></div>
+                )}
                 {q.note && <div className="qg-note">{q.note}</div>}
               </Section>
 
@@ -400,6 +430,7 @@ export default function QuotesPage() {
               )}
 
               <div className="qg-bottom">
+                {!q.applyVat && vatCfg.note && <div className="qg-vatnote">{vatCfg.note}</div>}
                 {q.validity && <div className="qg-validity">{q.validity}</div>}
                 <div className="qg-foot">
                   <span>المملكة العربية السعودية، الرياض</span>
@@ -571,6 +602,9 @@ const CSS = `
 .qg-ttotal{padding:10px 18px;font-size:16px;background:var(--pink2);border-radius:0 0 8px 8px}
 .qg-ttotal .lbl{grid-column:4 / 5;text-align:center;color:var(--cor);font-weight:700}
 .qg-ttotal .v{text-align:center;color:var(--cor);font-weight:700}
+.qg-ttotal.qg-tsub{background:var(--lbg);border-radius:0;font-size:13px;border-bottom:1px solid var(--tbd)}
+.qg-ttotal.qg-tsub .lbl,.qg-ttotal.qg-tsub .v{color:var(--tld)}
+.qg-vatnote{margin:0 48px 8px;font-size:12px;color:#7A8A92;text-align:center;line-height:1.8}
 .qg-note{font-size:12px;color:#7A8A92;text-align:right;margin-top:10px;line-height:1.8}
 .qg-budget{border:1px solid var(--tbd);border-radius:10px;padding:18px 22px;text-align:right;font-size:13px;line-height:1.9;color:var(--tmut);display:flex;flex-direction:column;gap:10px}
 .qg-budget strong{color:var(--tink)}

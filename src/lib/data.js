@@ -381,6 +381,24 @@ export async function getEmployees()        { const { data, error } = await supa
 export async function getGovernmentAccounts(){ const { data, error } = await supabase.from('government_accounts').select('*'); if (error) throw error; return data; }
 export async function getCompanySettings()  { const { data, error } = await supabase.from('company_settings').select('*').limit(1).single(); if (error) throw error; return data; }
 
+// ---------- كتالوج الخدمات ----------
+export async function getServices() {
+  const { data, error } = await supabase.from('services').select('*').order('sort_order').order('name');
+  if (error) throw error; return data;
+}
+export async function createService(p) {
+  const { data, error } = await supabase.from('services').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function updateService(id, p) {
+  const { data, error } = await supabase.from('services').update({ ...p, updated_at: new Date().toISOString() }).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removeService(id) {
+  const { error } = await supabase.from('services').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ---------- الفواتير + الشركاء ----------
 export async function getInvoices() {
   const { data, error } = await supabase.from('invoices')

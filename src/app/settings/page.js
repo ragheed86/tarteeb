@@ -4,6 +4,7 @@ import Link from 'next/link';
 import {
   getCompanySettings, updateCompanySettings,
   getSuppliers, createSupplier, updateSupplier, removeSupplier,
+  getServices, createService, updateService, removeService,
   getGovernmentAccounts, updateGovernmentAccount, uploadGovDocument,
 } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
@@ -48,6 +49,7 @@ const NAV = [
     label: 'بيانات ثابتة',
     items: [
       { key: 'company', label: 'معلومات الشركة', icon: IconStore },
+      { key: 'services', label: 'الخدمات', icon: IconBriefcase, badge: 'services' },
       { key: 'vat', label: 'الضريبة', icon: IconPercent },
     ],
   },
@@ -77,6 +79,7 @@ export default function SettingsPage() {
   const [tab, setTab] = useState('suppliers');
   const [company, setCompany] = useState(null);
   const [suppliers, setSuppliers] = useState(null);
+  const [services, setServices] = useState(null);
   const [users, setUsers] = useState(null);
   const [gov, setGov] = useState(null);
   const [err, setErr] = useState('');
@@ -101,11 +104,12 @@ export default function SettingsPage() {
   useEffect(() => {
     getCompanySettings().then((r) => setCompany(r || {})).catch((e) => setErr(e.message || 'تعذّر التحميل'));
     getSuppliers().then((r) => setSuppliers(r || [])).catch(() => setSuppliers([]));
+    getServices().then((r) => setServices(r || [])).catch(() => setServices([]));
     getGovernmentAccounts().then((r) => setGov(r || [])).catch(() => setGov([]));
     loadUsers().catch(() => setUsers([]));
   }, []);
 
-  const counts = { suppliers: suppliers?.length, users: users?.length, gov: gov?.length };
+  const counts = { suppliers: suppliers?.length, users: users?.length, gov: gov?.length, services: services?.length };
 
   if (err && !company) return <ErrorBar message={err} />;
 
@@ -139,6 +143,7 @@ export default function SettingsPage() {
       {tab === 'team' && <UserPermissions users={users} reload={loadUsers} />}
       {tab === 'gov' && <GovPanel rows={gov} setRows={setGov} />}
       {tab === 'company' && <CompanyForm row={company} setRow={setCompany} />}
+      {tab === 'services' && <ServicesPanel rows={services} setRows={setServices} />}
       {tab === 'vat' && <VatForm row={company} setRow={setCompany} />}
       {tab === 'data' && <ImportExportPanel />}
     </div>
@@ -366,6 +371,164 @@ function CompanyForm({ row, setRow }) {
       </div>
       </div>
       </form>
+    </>
+  );
+}
+
+/* ============================ الخدمات ============================ */
+
+const EMPTY_SERVICE = { name: '', description: '', default_rate: '', vat_rate: '', active: true };
+
+function ServicesPanel({ rows, setRows }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(EMPTY_SERVICE);
+  const [saving, setSaving] = useState(false);
+  const [formErr, setFormErr] = useState('');
+  const [err, setErr] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!rows) return null;
+    const term = q.trim();
+    if (!term) return rows;
+    return rows.filter((s) => `${s.name} ${s.description || ''}`.includes(term));
+  }, [rows, q]);
+
+  function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+  function openAdd() { setEditing(null); setForm(EMPTY_SERVICE); setFormErr(''); setOpen(true); }
+  function openEdit(s) {
+    setEditing(s);
+    setForm({ name: s.name || '', description: s.description || '', default_rate: s.default_rate ?? '', vat_rate: s.vat_rate ?? '', active: s.active !== false });
+    setFormErr(''); setOpen(true);
+  }
+  function close() { if (!saving) { setOpen(false); setEditing(null); } }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.name.trim()) { setFormErr('اسم الخدمة مطلوب'); return; }
+    const rate = Number(form.default_rate);
+    if (!Number.isFinite(rate) || rate < 0) { setFormErr('التكلفة/اليوم يجب أن تكون رقماً صفراً أو أكبر'); return; }
+    const vat = form.vat_rate === '' || form.vat_rate == null ? null : Number(form.vat_rate);
+    if (vat != null && (!Number.isFinite(vat) || vat < 0 || vat > 99.99)) { setFormErr('نسبة الضريبة يجب أن تكون بين 0 و99.99'); return; }
+    setSaving(true); setFormErr('');
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      default_rate: rate,
+      vat_rate: vat,
+      active: !!form.active,
+    };
+    try {
+      if (editing) { const up = await updateService(editing.id, payload); setRows((s) => s.map((x) => (x.id === up.id ? up : x))); }
+      else { const ns = await createService(payload); setRows((s) => [...(s || []), ns]); }
+      close();
+    } catch (e2) { setFormErr(e2.message || 'تعذّر الحفظ'); }
+    finally { setSaving(false); }
+  }
+  async function toggleActive(s) {
+    try { const up = await updateService(s.id, { active: !s.active }); setRows((r) => r.map((x) => (x.id === up.id ? up : x))); }
+    catch (e2) { setErr(e2.message || 'تعذّر التحديث'); }
+  }
+  async function del(s) {
+    if (!confirm(`حذف الخدمة «${s.name}»؟ البنود المكتوبة سابقاً في العروض والفواتير لن تتأثر.`)) return;
+    try { await removeService(s.id); setRows((r) => r.filter((x) => x.id !== s.id)); }
+    catch (e2) { setErr(e2.message || 'تعذّر الحذف'); }
+  }
+
+  if (!rows) return <Loading />;
+
+  return (
+    <>
+      <PanelHead icon={IconBriefcase} title="الخدمات">
+        <div className="searchbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث في الخدمات" />
+        </div>
+        <button className="btn" onClick={openAdd}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
+          خدمة جديدة
+        </button>
+      </PanelHead>
+      <div className="set-body">
+      {err && <div className="errbar">{err}</div>}
+
+      <div className="card" style={{ padding: '6px 0' }}>
+        {filtered.length === 0 ? (
+          <Empty title={q ? 'لا نتائج' : 'لا خدمات'} desc={q ? 'جرّب كلمة بحث أخرى.' : 'أضف خدماتك لتختارها بنقرة في عروض الأسعار والفواتير.'} />
+        ) : (
+          <DataTable
+            rows={filtered}
+            columns={[
+              {
+                key: 'name', label: 'الخدمة', primary: true,
+                render: (s) => (
+                  <span className="sup-cell">
+                    <span className="nm">{s.name}</span>
+                    {s.description && <span className="src" style={{ display: 'block', fontSize: 12 }}>{s.description}</span>}
+                  </span>
+                ),
+              },
+              { key: 'default_rate', label: 'التكلفة/يوم', render: (s) => <Ltr>{fmtNum(s.default_rate)} ⃁</Ltr> },
+              { key: 'vat_rate', label: 'الضريبة', render: (s) => (s.vat_rate == null ? 'الافتراضية' : <Ltr>{fmtNum(s.vat_rate)}%</Ltr>) },
+              {
+                key: 'active', label: 'الحالة',
+                render: (s) => (
+                  <button className={`pill ${s.active ? 'p-done' : 'p-cancel'}`} style={{ cursor: 'pointer', border: 'none' }} onClick={() => toggleActive(s)} title="اضغط للتبديل">
+                    {s.active ? 'نشطة' : 'موقوفة'}
+                  </button>
+                ),
+              },
+              {
+                key: 'actions', label: '', align: 'left',
+                render: (s) => (
+                  <>
+                    <button className="btn ghost sm" onClick={() => openEdit(s)}>تعديل</button>
+                    <button className="btn ghost sm" style={{ marginInlineStart: 8, color: 'var(--neg)' }} onClick={() => del(s)}>حذف</button>
+                  </>
+                ),
+              },
+            ]}
+          />
+        )}
+      </div>
+
+      <Modal
+        open={open}
+        onClose={close}
+        title={editing ? 'تعديل الخدمة' : 'خدمة جديدة'}
+        onSubmit={submit}
+        footer={(
+          <>
+            <button className="btn ghost" type="button" onClick={close} disabled={saving}>إلغاء</button>
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الخدمة'}</button>
+          </>
+        )}
+      >
+        {formErr && <div className="errbar">{formErr}</div>}
+        <div className="form-grid">
+          <Input className="span-2" label="اسم الخدمة" value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus />
+          <div className="field span-2">
+            <label>الوصف (اختياري)</label>
+            <textarea rows={2} value={form.description} onChange={(e) => set('description', e.target.value)} />
+          </div>
+          <div className="field">
+            <label>التكلفة/اليوم *</label>
+            <input type="number" dir="ltr" min="0" step="0.01" value={form.default_rate} onChange={(e) => set('default_rate', e.target.value)} required />
+          </div>
+          <div className="field">
+            <label>نسبة الضريبة (%) — اتركها فارغة للافتراضية</label>
+            <input type="number" dir="ltr" min="0" max="99.99" step="0.01" value={form.vat_rate} onChange={(e) => set('vat_rate', e.target.value)} />
+          </div>
+          <div className="field span-2">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!form.active} onChange={(e) => set('active', e.target.checked)} style={{ width: 'auto' }} />
+              نشطة (تظهر في اقتراحات العروض والفواتير)
+            </label>
+          </div>
+        </div>
+      </Modal>
+      </div>
     </>
   );
 }
@@ -990,6 +1153,9 @@ function IconBank() {
 }
 function IconStore() {
   return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 9h14v11H5zM3.5 9l1.3-4.5h14.4L20.5 9M12 20v-6" /></svg>;
+}
+function IconBriefcase() {
+  return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18" /></svg>;
 }
 function IconPercent() {
   return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M19 5 5 19" /><circle cx="7.5" cy="7.5" r="2.5" /><circle cx="16.5" cy="16.5" r="2.5" /></svg>;

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { fmtNum } from '@/lib/format';
-import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber, getCompanySettings } from '@/lib/data';
+import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber, getCompanySettings, getServices } from '@/lib/data';
 import { toast } from '../toast';
 
 const RIYAL = '⃁';
@@ -21,7 +21,7 @@ const DAY = 86400000;
 const FOLLOWUP_DAYS = 3; // عرض مُرسل بلا رد بعد هذه المدة يحتاج متابعة
 const EXPIRY_WARN_DAYS = 2; // تنبيه قرب انتهاء الصلاحية
 
-function blankItem() { return { svc: '', cost: 0, days: 1, discount: 0 }; }
+function blankItem() { return { svc: '', cost: 0, days: 1, discount: 0, vatRate: null }; }
 function defaults() {
   return {
     id: null, number: '', status: 'draft', client: '', linked_client_id: null,
@@ -87,6 +87,7 @@ export default function QuotesPage() {
   const [formW, setFormW] = useState(360); // عرض نموذج الإدخال (قابل للسحب)
   // إعدادات الضريبة على مستوى المنشأة (من company_settings)
   const [vatCfg, setVatCfg] = useState({ enabled: false, rate: 15, note: '' });
+  const [services, setServices] = useState([]); // كتالوج الخدمات لاقتراحات البنود
   const paneRef = useRef(null);
   const pageRef = useRef(null);
   const innerRef = useRef(null);
@@ -105,6 +106,7 @@ export default function QuotesPage() {
         cfg = { enabled: !!s.vat_enabled, rate: s.default_vat_rate == null ? 15 : Number(s.default_vat_rate), note: s.vat_exemption_note_ar || '' };
       } catch (e) { /* تبقى معطّلة */ }
       setVatCfg(cfg);
+      getServices().then((r) => setServices((r || []).filter((s) => s.active !== false))).catch(() => {});
       try {
         const [num, quotes] = await Promise.all([nextQuoteNumber(), getQuotes()]);
         setList(quotes);
@@ -158,6 +160,16 @@ export default function QuotesPage() {
   const set = (k, v) => setQ((s) => ({ ...s, [k]: v }));
   const setItem = (i, k, v) => setQ((s) => { const items = s.items.map((it, j) => j === i ? { ...it, [k]: v } : it); return { ...s, items }; });
   const addItem = () => setQ((s) => ({ ...s, items: [...s.items, blankItem()] }));
+  // كتابة حقل الخدمة: إن طابق اسم خدمة من الكتالوج تُعبَّأ التكلفة ونسبة الضريبة تلقائياً
+  const setSvc = (i, val) => {
+    const svc = services.find((x) => x.name === val);
+    setQ((st) => ({
+      ...st,
+      items: st.items.map((it, j) => j !== i ? it : (svc
+        ? { ...it, svc: val, cost: Number(svc.default_rate) || 0, vatRate: svc.vat_rate == null ? null : Number(svc.vat_rate) }
+        : { ...it, svc: val })),
+    }));
+  };
   const removeItem = (i) => setQ((s) => { const items = s.items.filter((_, j) => j !== i); return { ...s, items: items.length ? items : [blankItem()] }; });
 
   // بناء نسخة محدّثة الحالة مع تسجيل الانتقال والطوابع الزمنية
@@ -329,7 +341,7 @@ export default function QuotesPage() {
           <div className="qg-ihead"><span>الخدمة</span><span>التكلفة/يوم</span><span>أيام</span><span>الخصم</span><span /></div>
           {q.items.map((it, i) => (
             <div className="qg-irow" key={i}>
-              <input value={it.svc} onChange={(e) => setItem(i, 'svc', e.target.value)} placeholder="الخدمة" />
+              <input list="qg-svclist" value={it.svc} onChange={(e) => setSvc(i, e.target.value)} placeholder="الخدمة" />
               <input type="number" value={it.cost} onChange={(e) => setItem(i, 'cost', e.target.value)} placeholder="التكلفة/يوم" />
               <input type="number" value={it.days} onChange={(e) => setItem(i, 'days', e.target.value)} placeholder="أيام" />
               <input type="number" value={it.discount} onChange={(e) => setItem(i, 'discount', e.target.value)} placeholder="الخصم" />
@@ -337,6 +349,9 @@ export default function QuotesPage() {
             </div>
           ))}
           <button className="qg-add" onClick={addItem}>إضافة بند</button>
+          {services.length > 0 && (
+            <datalist id="qg-svclist">{services.map((s) => <option key={s.id} value={s.name} />)}</datalist>
+          )}
           <label className="qg-f" style={{ marginTop: 12 }}><span>ملاحظة أسفل الجدول</span><textarea value={q.note} onChange={(e) => set('note', e.target.value)} /></label>
 
           <h3>الضريبة</h3>

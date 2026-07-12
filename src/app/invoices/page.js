@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getInvoices, getClients, getProjects, createInvoice, getQuotes, getInvoiceItems, updateInvoiceWithItems, updateInvoice, removeInvoice } from '@/lib/data';
+import { getInvoices, getClients, getProjects, createInvoice, getQuotes, getInvoiceItems, updateInvoiceWithItems, updateInvoice, removeInvoice, getServices } from '@/lib/data';
 import { fmtMoney, fmtNum, INVOICE_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill } from '@/components';
 
@@ -25,6 +25,7 @@ export default function InvoicesPage() {
   const [formErr, setFormErr] = useState('');
   const [head, setHead] = useState({ client_id: '', project_id: '', number: '', issue_at: '', due_at: '', vat_applicable: true, status: 'unpaid' });
   const [items, setItems] = useState([blankItem()]);
+  const [services, setServices] = useState([]); // كتالوج الخدمات لاقتراحات البنود
 
   async function load() {
     try {
@@ -33,7 +34,10 @@ export default function InvoicesPage() {
       setState({ invoices, clients, projects, quotes, byId });
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    getServices().then((r) => setServices((r || []).filter((s) => s.active !== false))).catch(() => {});
+  }, []);
 
   // يحوّل بنود عرض السعر إلى بنود فاتورة (svc→الوصف، days→الكمية، ويطوي الخصم في سعر الوحدة)
   function importQuoteItems(quote) {
@@ -85,6 +89,11 @@ export default function InvoicesPage() {
   function close() { if (!saving) setOpen(false); }
   function setH(k, v) { setHead((h) => ({ ...h, [k]: v })); }
   function setItem(idx, k, v) { setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, [k]: v } : it))); }
+  // كتابة وصف البند: إن طابق اسم خدمة من الكتالوج يُعبَّأ سعر الوحدة تلقائياً
+  function setDesc(idx, val) {
+    const svc = services.find((x) => x.name === val);
+    setItems((arr) => arr.map((it, i) => (i !== idx ? it : (svc ? { ...it, description: val, unit_price: Number(svc.default_rate) || 0 } : { ...it, description: val }))));
+  }
   function addItem() { setItems((arr) => [...arr, blankItem()]); }
   function rmItem(idx) { setItems((arr) => (arr.length > 1 ? arr.filter((_, i) => i !== idx) : arr)); }
 
@@ -243,7 +252,7 @@ export default function InvoicesPage() {
           <label className="field" style={{ marginBottom: 8 }}>البنود</label>
           {items.map((it, idx) => (
             <div className="inline-add" key={idx} style={{ marginTop: 8 }}>
-              <input placeholder="الوصف" value={it.description} onChange={(e) => setItem(idx, 'description', e.target.value)} style={{ flex: 2 }} />
+              <input list="inv-svclist" placeholder="الوصف" value={it.description} onChange={(e) => setDesc(idx, e.target.value)} style={{ flex: 2 }} />
               <input type="number" min="0" step="1" placeholder="الكمية" dir="ltr" style={{ maxWidth: 90 }} value={it.qty} onChange={(e) => setItem(idx, 'qty', e.target.value)} />
               <input type="number" min="0" step="0.01" placeholder="سعر الوحدة" dir="ltr" style={{ maxWidth: 120 }} value={it.unit_price} onChange={(e) => setItem(idx, 'unit_price', e.target.value)} />
               <span className="amt" style={{ minWidth: 90, alignSelf: 'center', color: 'var(--muted)' }}>{fmtMoney((Number(it.qty) || 0) * (Number(it.unit_price) || 0))} ⃁</span>
@@ -251,6 +260,9 @@ export default function InvoicesPage() {
             </div>
           ))}
           <button type="button" className="btn ghost sm" style={{ marginTop: 10 }} onClick={addItem}>+ بند</button>
+          {services.length > 0 && (
+            <datalist id="inv-svclist">{services.map((s) => <option key={s.id} value={s.name} />)}</datalist>
+          )}
         </div>
 
         <div className="totals">

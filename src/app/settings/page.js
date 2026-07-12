@@ -497,6 +497,7 @@ function ServicesPanel({ rows, setRows }) {
         open={open}
         onClose={close}
         title={editing ? 'تعديل الخدمة' : 'خدمة جديدة'}
+        as="form"
         onSubmit={submit}
         footer={(
           <>

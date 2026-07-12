@@ -195,8 +195,32 @@ function ClientsPageInner() {
     : clients;
   const sourceClients = clients.filter((c) => c.id !== editing?.id);
 
+  // مؤشرات على كامل قاعدة العملاء (لا تتأثر بالبحث)
+  const total = clients.length;
+  const byStatus = (s) => clients.filter((c) => (c.status || 'active') === s).length;
+  const activeCount = byStatus('active');
+  const leadCount = byStatus('lead');
+  const waitingCount = byStatus('waiting');
+  const completedCount = byStatus('completed');
+  const now = new Date();
+  const newThisMonth = clients.filter((c) => {
+    if (!c.created_at) return false;
+    const d = new Date(c.created_at);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+  const activePct = total ? Math.round((activeCount / total) * 100) : 0;
+
   return (
     <>
+      {/* مؤشرات العملاء */}
+      <div className="kpis" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 18 }}>
+        <div className="kpi"><div className="lbl">إجمالي العملاء</div><div className="val">{fmtNum(total)}</div><div className="trend"><span>كامل قاعدة العملاء</span></div></div>
+        <div className="kpi"><div className="lbl">عملاء نشطون</div><div className="val">{fmtNum(activeCount)}</div><div className="trend"><span>{fmtNum(activePct)}% من العملاء</span></div></div>
+        <div className="kpi"><div className="lbl">عملاء محتملون</div><div className="val">{fmtNum(leadCount)}</div><div className="trend"><span>فرص للتحويل</span></div></div>
+        <div className="kpi"><div className="lbl">بانتظار رد</div><div className="val">{fmtNum(waitingCount)}</div><div className="trend"><span>تحتاج متابعة</span></div></div>
+        <div className="kpi"><div className="lbl">مكتملون</div><div className="val">{fmtNum(completedCount)}</div><div className="trend"><span>انتهى التعامل معهم</span></div></div>
+        <div className="kpi"><div className="lbl">جدد هذا الشهر</div><div className="val">{fmtNum(newThisMonth)}</div><div className="trend"><span>أُضيفوا خلال الشهر الحالي</span></div></div>
+      </div>
       <div className="sec-head" style={{ marginBottom: 18 }}>
         <button className="btn" onClick={openAdd}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>

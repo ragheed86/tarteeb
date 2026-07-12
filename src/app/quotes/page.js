@@ -536,6 +536,8 @@ const CSS = `
 .qg-ihead,.qg-irow{display:grid;grid-template-columns:1fr 62px 42px 54px 26px;gap:6px;align-items:center}
 .qg-ihead{font-size:10px;color:var(--tmut);font-weight:700;margin-bottom:6px;padding:0 2px}
 .qg-irow{margin-bottom:7px}.qg-irow input{padding:7px 8px;font-size:12px}
+.qg-irow input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.qg-irow input[type=number]::-webkit-outer-spin-button,.qg-irow input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .qg-del{border:none;background:var(--pink2);color:var(--cor);width:26px;height:30px;border-radius:7px;cursor:pointer;font-size:15px;line-height:1}
 .qg-add{font-size:12px;color:var(--tl);background:var(--lbg);border:1px dashed var(--tl);border-radius:8px;padding:8px;width:100%;cursor:pointer;font-family:inherit;font-weight:600;margin-top:2px}
 .qg-switch{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--tmut);cursor:pointer;margin-bottom:8px}

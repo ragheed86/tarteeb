@@ -51,6 +51,19 @@ function waLink(phone, text) {
   return `https://wa.me/${p}?text=${encodeURIComponent(text)}`;
 }
 
+function safeFilePart(value) {
+  return String(value || '')
+    .replace(/[\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function invoicePdfTitle(invoice, client) {
+  const clientName = safeFilePart(client?.name) || 'عميل';
+  const invoiceNumber = safeFilePart(invoice?.number);
+  return invoiceNumber ? `${clientName} - فاتورة ${invoiceNumber}` : `${clientName} - فاتورة`;
+}
+
 export default function InvoiceDetail() {
   const { id } = useParams();
   const router = useRouter();
@@ -148,6 +161,22 @@ export default function InvoiceDetail() {
   const isRefunded = invoice.status === 'refunded';
   const paidAmount = Number(invoice.paid_amount || 0);
   const remainingAmount = Number(invoice.remaining_amount || 0);
+  const pdfTitle = invoicePdfTitle(invoice, client);
+
+  function printInvoice() {
+    const previousTitle = document.title;
+    let restored = false;
+    const restoreTitle = () => {
+      if (restored) return;
+      restored = true;
+      document.title = previousTitle;
+      window.removeEventListener('afterprint', restoreTitle);
+    };
+    document.title = pdfTitle;
+    window.addEventListener('afterprint', restoreTitle);
+    window.print();
+    window.setTimeout(restoreTitle, 10000);
+  }
 
   return (
     <>
@@ -162,7 +191,7 @@ export default function InvoiceDetail() {
           {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         {wa && <a className="btn ghost sm" href={wa} target="_blank" rel="noreferrer">إرسال واتساب</a>}
-        <button className="btn sm" onClick={() => window.print()}>طباعة</button>
+        <button className="btn sm" onClick={printInvoice}>طباعة</button>
       </div>
 
       <div className="kpis no-print" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>

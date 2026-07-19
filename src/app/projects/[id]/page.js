@@ -283,12 +283,13 @@ function MediaCard({ projectId, media, onChange }) {
 
   async function add(e) {
     e.preventDefault();
+    const formEl = e.currentTarget;
     if (!form.file) { setErr('اختر صورة من الجهاز'); return; }
     setBusy(true); setErr('');
     try {
       const m = await uploadProjectMedia(projectId, form.kind, form.file);
       onChange([m, ...media]); setForm({ kind: 'before', file: null });
-      e.currentTarget.reset();
+      formEl.reset();
     } catch (uploadErr) {
       setErr(uploadErr.message || 'تعذّر رفع الصورة');
     } finally { setBusy(false); }

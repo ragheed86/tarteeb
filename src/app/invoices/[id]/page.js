@@ -257,6 +257,29 @@ export default function InvoiceDetail() {
             </div>
           </div>
 
+          {payments.length > 0 && (
+            <div className="inv2-payments">
+              <div className="inv2-pay-head">
+                <span>ملخص السداد</span>
+                <b>{remainingAmount > 0 ? `المتبقي: ${fmtMoney(remainingAmount)} ⃁` : 'مسددة بالكامل'}</b>
+              </div>
+              <div className="inv2-pay-summary">
+                <div><span>إجمالي الفاتورة</span><b dir="ltr">⃁ {fmtMoney(invoice.total)}</b></div>
+                <div><span>المدفوع</span><b dir="ltr">⃁ {fmtMoney(paidAmount)}</b></div>
+                <div><span>المتبقي</span><b dir="ltr">⃁ {fmtMoney(remainingAmount)}</b></div>
+              </div>
+              <div className="inv2-pay-list">
+                {payments.map((p) => (
+                  <div className="inv2-pay-row" key={p.id}>
+                    <span>{fmtDate(p.paid_at)}</span>
+                    <span>{PAYMENT_METHOD[p.method] || p.method || 'دفعة'}</span>
+                    <b dir="ltr">⃁ {fmtMoney(p.amount)}</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ملاحظة */}
           <div className="inv2-note">
             حرصًا على سلامة مقتنياتكم، نأمل حفظ الأغراض الثمينة وإبلاغ المشرفة عن القطع الحساسة، والتأكد من اكتمال الخدمة قبل مغادرة الفريق. وبعد اعتماد الخدمة ومغادرة الفريق، لا تتحمل «ترتيب» مسؤولية أي فقدان أو ملاحظات يتم الإبلاغ عنها لاحقًا.

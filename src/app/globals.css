@@ -1150,14 +1150,30 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .inv2-footer{gap:8px 18px;padding-inline:18px}
 }
 /* الطباعة/التصدير: صفحة A4 نظيفة بلا هوامش متصفح ولا عناصر تطبيق */
-@page inv2 { size:A4; margin:0 }
+@page inv2 { size:A4 portrait; margin:6mm }
 @media print{
-  @page{size:A4 portrait;margin:0}
-  html,body{width:210mm;min-height:297mm;background:#fff}
+  @page{size:A4 portrait;margin:6mm}
+  html,body{width:auto!important;height:auto!important;min-height:0!important;background:#fff;overflow:visible!important}
+  body{font-size:16px!important;line-height:1.6!important}
   .bottom-nav{display:none!important}
-  .inv2-page{display:block;page:inv2}
-  .inv2-sheet{width:210mm;max-width:none;min-height:297mm;margin:0;border:0;border-radius:0;box-shadow:none}
-  .inv2-head{padding:14mm 14mm 0}
-  .inv2-meta,.inv2-parties,.inv2-table,.inv2-payments,.inv2-note,.inv2-footer{margin-inline:14mm}
-  .inv2-footer{padding-bottom:10mm}
+  .inv2-page{display:block;page:inv2;width:100%;overflow:visible}
+  .inv2-sheet{width:100%;max-width:none;min-height:0;margin:0;border:0;border-radius:0;box-shadow:none;overflow:visible;font-size:16px;line-height:1.6}
+  .inv2-head{padding:5mm 5mm 0}
+  .inv2-logo{width:50mm}
+  .inv2-title-lg{font-size:34px}
+  .inv2-meta{margin:5mm 5mm 0;padding:4mm 5mm;border-radius:10px}
+  .inv2-qr{width:23mm;height:23mm}
+  .inv2-parties{margin:5mm 5mm 0;gap:5mm}
+  .inv2-party{padding:12px 14px;border-radius:10px}
+  .inv2-party-name{font-size:14px}
+  .inv2-party-line{font-size:12px}
+  .inv2-table{margin:6mm 5mm 0}
+  .inv2-thead,.inv2-tr,.inv2-total-row{padding-block:8px}
+  .inv2-grand{padding-block:8px}
+  .inv2-payments{margin:5mm 5mm 0}
+  .inv2-pay-head{padding-block:8px}
+  .inv2-pay-summary div{padding-block:8px}
+  .inv2-pay-row{padding-block:7px}
+  .inv2-note{margin:5mm 5mm 0;padding:10px 14px;font-size:11.5px;line-height:1.6}
+  .inv2-footer{margin:6mm 5mm 0;padding:5mm 0 0;font-size:10.5px}
 }

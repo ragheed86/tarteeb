@@ -290,7 +290,14 @@ export default function InvoiceDetail() {
             <div className="inv2-payments">
               <div className="inv2-pay-head">
                 <span>ملخص السداد</span>
-                <b>{remainingAmount > 0 ? `المتبقي: ${fmtMoney(remainingAmount)} ⃁` : 'مسددة بالكامل'}</b>
+                <b>
+                  {remainingAmount > 0 ? (
+                    <>
+                      <span>المتبقي:</span>
+                      <span dir="ltr">⃁ {fmtMoney(remainingAmount)}</span>
+                    </>
+                  ) : 'مسددة بالكامل'}
+                </b>
               </div>
               <div className="inv2-pay-summary">
                 <div><span>إجمالي الفاتورة</span><b dir="ltr">⃁ {fmtMoney(invoice.total)}</b></div>

@@ -522,7 +522,8 @@ export async function createProjectMedia(p) {
   if (error) throw error; return data;
 }
 export async function uploadProjectMedia(projectId, kind, file) {
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const fallbackExt = file.type?.startsWith('video/') ? 'mp4' : 'jpg';
+  const ext = (file.name.split('.').pop() || fallbackExt).toLowerCase();
   const path = `${projectId}/${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error: upErr } = await supabase.storage.from(PROJECT_MEDIA_BUCKET)
     .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });

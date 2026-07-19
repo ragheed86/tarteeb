@@ -13,12 +13,17 @@ import { Loading, Empty, ErrorBar, DataTable } from '@/components';
 
 const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
 const MEDIA_KIND = { before: 'قبل', after: 'بعد', other: 'أخرى' };
+const VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|ogg)$/i;
 
 function costDescription(cost) {
   if (cost.product_name) return cost.supplier_name ? `${cost.product_name} · ${cost.supplier_name}` : cost.product_name;
   if (cost.worker_name) return `عمالة: ${cost.worker_name}`;
   if (cost.note) return cost.note;
   return cost.label || '—';
+}
+
+function isVideoMedia(media) {
+  return VIDEO_EXT_RE.test(media.file_url || '') || VIDEO_EXT_RE.test(media.file_path || '');
 }
 
 export default function ProjectDetail() {
@@ -284,7 +289,7 @@ function MediaCard({ projectId, media, onChange }) {
   async function add(e) {
     e.preventDefault();
     const formEl = e.currentTarget;
-    if (!form.file) { setErr('اختر صورة من الجهاز'); return; }
+    if (!form.file) { setErr('اختر صورة أو فيديو من الجهاز'); return; }
     setBusy(true); setErr('');
     try {
       const m = await uploadProjectMedia(projectId, form.kind, form.file);
@@ -300,12 +305,16 @@ function MediaCard({ projectId, media, onChange }) {
     <div className="card">
       <div className="sec-head"><h2>الصور (قبل / بعد)</h2><span className="more">{fmtNum(media.length)}</span></div>
       {err && <div className="errbar">{err}</div>}
-      {media.length === 0 ? <Empty title="لا صور" desc="ارفع صور قبل/بعد التنفيذ." /> : (
+      {media.length === 0 ? <Empty title="لا وسائط" desc="ارفع صور أو فيديو قبل/بعد التنفيذ." /> : (
         <div className="media-grid">
           {media.map((m) => (
             <figure className="media-item" key={m.id}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={m.file_url} alt={MEDIA_KIND[m.kind] || m.kind} />
+              {isVideoMedia(m) ? (
+                <video src={m.file_url} controls preload="metadata" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.file_url} alt={MEDIA_KIND[m.kind] || m.kind} />
+              )}
               <figcaption><span className={`pill ${m.kind === 'after' ? 'p-done' : 'p-quote'}`}>{MEDIA_KIND[m.kind] || m.kind}</span>
                 <button className="x-btn" onClick={() => del(m)} aria-label="حذف الصورة">✕</button></figcaption>
             </figure>
@@ -316,7 +325,7 @@ function MediaCard({ projectId, media, onChange }) {
         <select value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))} style={{ maxWidth: 110 }}>
           {Object.entries(MEDIA_KIND).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        <input type="file" accept="image/*" onChange={(e) => setForm((f) => ({ ...f, file: e.target.files?.[0] || null }))} />
+        <input type="file" accept="image/*,video/*" onChange={(e) => setForm((f) => ({ ...f, file: e.target.files?.[0] || null }))} />
         <button className="btn sm" disabled={busy}>{busy ? 'جارٍ الرفع…' : 'رفع'}</button>
       </form>
     </div>

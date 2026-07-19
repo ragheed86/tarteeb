@@ -500,8 +500,8 @@ export default function ProjectsPage() {
                         onClick={(e) => { e.stopPropagation(); router.push(`/projects/${p.id}`); }}
                         title={`${p.title} — ${byId[p.client_id] || 'عميل غير معروف'}`}
                       >
-                        <span className="cev-title">{p.title}</span>
                         <span className="cev-client">{byId[p.client_id] || 'عميل غير معروف'}</span>
+                        <span className="cev-title">{p.title}</span>
                       </div>
                     );
                   })}

@@ -7,7 +7,7 @@ import {
 import {
   fmtMoney, fmtNum, fmtDate, CLIENT_STATUS, PROJECT_STATUS, INVOICE_STATUS, SOURCE_LABEL,
 } from '@/lib/format';
-import { Loading, Empty, ErrorBar, DataTable, Money, DateText, Ltr, StatusPill } from '@/components';
+import { Loading, Empty, ErrorBar, DataTable, Money, DateText, Ltr, StatusPill, KpiCard } from '@/components';
 
 const CHANNEL = { whatsapp: 'واتساب', telegram: 'تيليجرام', email: 'بريد', phone: 'هاتف', system: 'النظام' };
 const DIRECTION = { in: 'وارد', out: 'صادر', system: 'النظام' };
@@ -95,10 +95,10 @@ export default function ClientProfile() {
       </button>
 
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <div className="kpi"><div className="lbl">إجمالي المفوتر</div><div className="val amt">{fmtMoney(invoiced)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">المحصّل</div><div className="val amt">{fmtMoney(paid)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">المتبقّي</div><div className="val amt">{fmtMoney(outstanding)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">عدد الفواتير النشطة</div><div className="val amt">{fmtNum(activeInvoices.length)}</div>{refundedCount > 0 && <div className="trend"><span>{fmtNum(refundedCount)} مرتجعة</span></div>}</div>
+        <KpiCard label="إجمالي المفوتر" value={`${fmtMoney(invoiced)} ⃁`} definition="مجموع قيمة فواتير هذا العميل بعد استبعاد الفواتير المرتجعة." period="كامل سجل العميل" formula="جمع إجمالي الفواتير غير المرتجعة" breakdown={[{ label: 'الفواتير النشطة', value: fmtNum(activeInvoices.length) }, { label: 'إجمالي المفوتر', value: `${fmtMoney(invoiced)} ⃁` }]} />
+        <KpiCard label="المحصّل" value={`${fmtMoney(paid)} ⃁`} definition="مجموع الدفعات المسجلة على فواتير العميل غير المرتجعة." period="كامل سجل العميل" formula="جمع المبلغ المحصّل من كل فاتورة نشطة" breakdown={[{ label: 'المفوتر', value: `${fmtMoney(invoiced)} ⃁` }, { label: 'المحصّل', value: `${fmtMoney(paid)} ⃁` }]} />
+        <KpiCard label="المتبقّي" value={`${fmtMoney(outstanding)} ⃁`} definition="الرصيد الذي لم يُحصّل بعد من فواتير العميل النشطة." period="الحالة الحالية" formula="إجمالي المفوتر − إجمالي المحصّل" breakdown={[{ label: 'إجمالي المفوتر', value: `${fmtMoney(invoiced)} ⃁` }, { label: 'المحصّل', value: `− ${fmtMoney(paid)} ⃁` }, { label: 'المتبقّي', value: `${fmtMoney(outstanding)} ⃁` }]} />
+        <KpiCard label="عدد الفواتير النشطة" value={fmtNum(activeInvoices.length)} trend={refundedCount > 0 ? `${fmtNum(refundedCount)} مرتجعة` : undefined} definition="عدد فواتير العميل التي لم تُسجل كمرتجعة، بجميع حالات الدفع." period="كامل سجل العميل" formula="إجمالي الفواتير − الفواتير المرتجعة" breakdown={[{ label: 'كل الفواتير', value: fmtNum(invoices.length) }, { label: 'مرتجعة', value: fmtNum(refundedCount) }, { label: 'نشطة', value: fmtNum(activeInvoices.length) }]} />
       </div>
 
       <div className="grid2">

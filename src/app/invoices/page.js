@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getInvoices, getClients, getProjects, createInvoice, getQuotes, getInvoiceItems, updateInvoiceWithItems, updateInvoice, removeInvoice, getServices } from '@/lib/data';
 import { fmtMoney, fmtNum, INVOICE_STATUS } from '@/lib/format';
-import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill } from '@/components';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill, KpiCard } from '@/components';
 
 const VAT_RATE = 15;
 const blankItem = () => ({ description: '', qty: 1, unit_price: '' });
@@ -162,12 +162,12 @@ export default function InvoicesPage() {
 
       {/* مؤشرات الفواتير */}
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))', marginBottom: 18 }}>
-        <div className="kpi"><div className="lbl">إجمالي المفوتر</div><div className="val">{fmtMoney(totalAll)} ⃁</div><div className="trend"><span>{fmtNum(active.length)} فاتورة نشطة</span></div></div>
-        <div className="kpi"><div className="lbl">المحصّل</div><div className="val">{fmtMoney(totalPaid)} ⃁</div><div className="trend"><span>نسبة التحصيل {fmtNum(collectRate)}%</span></div></div>
-        <div className="kpi"><div className="lbl">المتبقّي</div><div className="val">{fmtMoney(totalRemaining)} ⃁</div><div className="trend"><span>غير محصّل بعد</span></div></div>
-        <div className="kpi"><div className="lbl">فواتير متأخرة</div><div className="val">{fmtNum(overdueCount)}</div><div className="trend"><span>تجاوزت الاستحقاق</span></div></div>
-        <div className="kpi"><div className="lbl">إجمالي الفواتير</div><div className="val">{fmtNum(invoices.length)}</div><div className="trend"><span>كل الحالات</span></div></div>
-        <div className="kpi"><div className="lbl">مرتجعات</div><div className="val">{fmtNum(refunded.length)}</div><div className="trend"><span>{fmtMoney(refundedSum)} ⃁</span></div></div>
+        <KpiCard label="إجمالي المفوتر" value={`${fmtMoney(totalAll)} ⃁`} trend={`${fmtNum(active.length)} فاتورة نشطة`} definition="مجموع القيم النهائية لكل الفواتير غير المرتجعة." period="جميع الفواتير" formula="جمع إجمالي الفواتير النشطة" breakdown={[{ label: 'عدد الفواتير النشطة', value: fmtNum(active.length) }, { label: 'إجمالي المفوتر', value: `${fmtMoney(totalAll)} ⃁` }]} />
+        <KpiCard label="المحصّل" value={`${fmtMoney(totalPaid)} ⃁`} trend={`نسبة التحصيل ${fmtNum(collectRate)}%`} definition="مجموع جميع الدفعات المسجلة على الفواتير غير المرتجعة." period="جميع الفواتير" formula="جمع المبالغ المحصّلة" breakdown={[{ label: 'إجمالي المفوتر', value: `${fmtMoney(totalAll)} ⃁` }, { label: 'المحصّل', value: `${fmtMoney(totalPaid)} ⃁` }, { label: 'نسبة التحصيل', value: `${fmtNum(collectRate)}%` }]} />
+        <KpiCard label="المتبقّي" value={`${fmtMoney(totalRemaining)} ⃁`} trend="غير محصّل بعد" definition="إجمالي الأرصدة المتبقية على الفواتير غير المرتجعة." period="الحالة الحالية" formula="إجمالي المفوتر − إجمالي المحصّل" breakdown={[{ label: 'إجمالي المفوتر', value: `${fmtMoney(totalAll)} ⃁` }, { label: 'المحصّل', value: `− ${fmtMoney(totalPaid)} ⃁` }, { label: 'المتبقّي', value: `${fmtMoney(totalRemaining)} ⃁` }]} />
+        <KpiCard label="فواتير متأخرة" value={fmtNum(overdueCount)} trend="تجاوزت الاستحقاق" definition="فواتير نشطة تجاوز تاريخ استحقاقها وما زالت مصنفة كمتأخرة." period="الحالة الحالية" formula="عدّ الفواتير بالحالة «متأخرة»" breakdown={active.filter((i) => i.status === 'overdue').slice(0, 5).map((i) => ({ label: i.number || 'بلا رقم', value: `${fmtMoney(i.remaining_amount)} ⃁` }))} />
+        <KpiCard label="إجمالي الفواتير" value={fmtNum(invoices.length)} trend="كل الحالات" definition="عدد جميع الفواتير المسجلة، بما فيها المسودات والمدفوعة والمتأخرة والمرتجعة." period="كل البيانات المسجلة" formula="عدّ جميع سجلات الفواتير" breakdown={[{ label: 'نشطة وغير مرتجعة', value: fmtNum(active.length) }, { label: 'مرتجعة', value: fmtNum(refunded.length) }]} />
+        <KpiCard label="مرتجعات" value={fmtNum(refunded.length)} trend={`${fmtMoney(refundedSum)} ⃁`} definition="عدد الفواتير التي سُجلت كمرتجعة واستُبعدت من مؤشرات التحصيل النشطة." period="كل البيانات المسجلة" formula="عدّ الفواتير بالحالة «مرتجعة»" breakdown={[{ label: 'عدد المرتجعات', value: fmtNum(refunded.length) }, { label: 'قيمتها الإجمالية', value: `${fmtMoney(refundedSum)} ⃁` }]} />
       </div>
 
       <div className="card" style={{ padding: '6px 0' }}>

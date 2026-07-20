@@ -7,6 +7,7 @@ import { fmtMoney, fmtNum } from '@/lib/format';
 import { buildDistrictIndex, aggregateByDistrict } from '@/lib/heatmap/aggregate';
 import { METRICS, buildColorScale, BUCKET_COLORS, EMPTY_COLOR, DEMAND_LABELS } from '@/lib/heatmap/colors';
 import { Loading, Empty, ErrorBar } from '../ui';
+import { KpiCard } from '@/components';
 
 const RiyadhNeighborhoodMap = dynamic(() => import('./RiyadhNeighborhoodMap'), {
   ssr: false,
@@ -78,10 +79,10 @@ export default function HeatmapPage() {
       </div>
 
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <div className="kpi"><div className="lbl">أحياء فيها نشاط</div><div className="val">{fmtNum(totals.activeDistricts)}</div></div>
-        <div className="kpi pos"><div className="lbl">إجمالي العملاء</div><div className="val">{fmtNum(totals.clients)}</div></div>
-        <div className="kpi"><div className="lbl">إجمالي المشاريع</div><div className="val">{fmtNum(totals.projects)}</div></div>
-        <div className="kpi alert"><div className="lbl">قيمة العقود</div><div className="val">{fmtMoney(totals.revenue)} ⃁</div></div>
+        <KpiCard label="أحياء فيها نشاط" value={fmtNum(totals.activeDistricts)} definition="عدد أحياء الرياض التي ارتبط بها عميل أو مشروع في البيانات الحالية." period="الحالة الحالية للخريطة" formula="عدّ الأحياء ذات السجلات المرتبطة" breakdown={topDistricts.slice(0, 5).map((d) => ({ label: d.nameAr, value: `${fmtNum(d.clients)} عميل` }))} />
+        <KpiCard tone="pos" label="إجمالي العملاء" value={fmtNum(totals.clients)} definition="عدد العملاء الذين أمكن ربطهم بأحياء الرياض على الخريطة." period="كل بيانات الخريطة" formula="جمع عدد العملاء في جميع الأحياء" note="العملاء بلا حي معروف لا يدخلون في هذا الرقم." />
+        <KpiCard label="إجمالي المشاريع" value={fmtNum(totals.projects)} definition="عدد المشاريع المرتبطة بعملاء موزعين على أحياء الخريطة." period="كل بيانات الخريطة" formula="جمع عدد المشاريع في جميع الأحياء" />
+        <KpiCard tone="alert" label="قيمة العقود" value={`${fmtMoney(totals.revenue)} ⃁`} definition="مجموع قيم عقود المشاريع التي أمكن توزيعها جغرافيًا على أحياء الرياض." period="كل بيانات الخريطة" formula="جمع قيمة عقود المشاريع المرتبطة بالأحياء" breakdown={topDistricts.slice(0, 5).map((d) => ({ label: d.nameAr, value: `${fmtMoney(d.revenue)} ⃁` }))} />
       </div>
 
       <div className="hmwrap">

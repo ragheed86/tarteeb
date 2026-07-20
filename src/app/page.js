@@ -6,13 +6,14 @@ import {
   getAllInvoicePayments, getDashboardMedia, uploadDashboardMedia, removeDashboardMedia, getCompanyExpenses,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, displayProgress, OPEN_DELIVERY_STATUSES } from '@/lib/format';
-import { Loading, Empty, ErrorBar, DataTable, StatusPill } from '@/components';
+import { Loading, Empty, ErrorBar, DataTable, StatusPill, KpiCard } from '@/components';
 import AnimatedNumber from './AnimatedNumber';
 
 const ACTIVE = ['quote', 'preparing', 'in_progress'];
 const OPEN_DELIVERY = OPEN_DELIVERY_STATUSES;
 const PERIOD_DAYS = { day: 1, week: 7, month: 30, year: 365 };
 const PERIOD_LABEL = { day: 'إيرادات اليوم', week: 'إيرادات الأسبوع', month: 'إيرادات الشهر', year: 'إيرادات السنة' };
+const PERIOD_SCOPE = { day: 'آخر يوم', week: 'آخر 7 أيام', month: 'آخر 30 يومًا', year: 'آخر 365 يومًا' };
 const ARABIC_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const SOURCE_COLORS = ['var(--gold)', 'var(--sage)', 'var(--green)', 'var(--faint)', 'var(--pine)', 'var(--neg)'];
 
@@ -159,12 +160,12 @@ export default function Dashboard() {
         </div>
       </div>
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))' }}>
-        <div className="kpi"><div className="lbl">{PERIOD_LABEL[period]}</div><div className="val"><AnimatedNumber value={periodRevenue} format={fmtMoney} /> ⃁</div><div className="trend"><span>فواتير مدفوعة خلال الفترة</span></div></div>
-        <div className="kpi pos"><div className="lbl">صافي الربح النقدي</div><div className="val"><AnimatedNumber value={periodProfit} format={fmtMoney} /> ⃁</div><div className="trend"><span>المحصّل بعد تكاليف المشاريع والشركة</span></div></div>
-        <div className="kpi"><div className="lbl">هامش الربح</div><div className="val"><AnimatedNumber value={periodMargin} format={fmtNum} />%</div><div className="trend"><span>من الإيرادات المحصّلة</span></div></div>
-        <div className="kpi"><div className="lbl">العملاء الجدد</div><div className="val"><AnimatedNumber value={periodNewClients} format={fmtNum} /></div><div className="trend"><span>خلال الفترة المختارة</span></div></div>
-        <div className="kpi"><div className="lbl">مشاريع نشطة</div><div className="val"><AnimatedNumber value={data.activeProjects} format={fmtNum} /></div><div className="trend"><span>{fmtNum(data.upcoming.length)} تسليم قريب</span></div></div>
-        <div className="kpi alert"><div className="lbl">تنبيهات المستودع</div><div className="val"><AnimatedNumber value={data.lowStock.length} format={fmtNum} /></div><div className="trend down">أصناف وصلت حد النفاد</div></div>
+        <KpiCard label={PERIOD_LABEL[period]} value={<><AnimatedNumber value={periodRevenue} format={fmtMoney} /> ⃁</>} trend="فواتير مدفوعة خلال الفترة" definition="مجموع الدفعات المسجلة على الفواتير غير المرتجعة خلال الفترة المختارة." period={PERIOD_SCOPE[period]} formula="جمع مبالغ دفعات الفواتير بتاريخ الدفع" breakdown={[{ label: 'عدد الدفعات', value: fmtNum(data.payments.filter((p) => withinDays(p.paid_at, days)).length) }, { label: 'إجمالي المحصّل', value: `${fmtMoney(periodRevenue)} ⃁` }]} />
+        <KpiCard tone="pos" label="صافي الربح النقدي" value={<><AnimatedNumber value={periodProfit} format={fmtMoney} /> ⃁</>} trend="المحصّل بعد تكاليف المشاريع والشركة" definition="ما تبقّى من الإيرادات المحصّلة فعليًا بعد خصم المصاريف المدفوعة في الفترة نفسها." period={PERIOD_SCOPE[period]} formula="الإيرادات المحصّلة − تكاليف المشاريع − مصاريف الشركة المدفوعة" breakdown={[{ label: 'الإيرادات المحصّلة', value: `${fmtMoney(periodRevenue)} ⃁` }, { label: 'تكاليف المشاريع', value: `− ${fmtMoney(periodProjectCosts)} ⃁` }, { label: 'مصاريف الشركة', value: `− ${fmtMoney(periodCompanyExpenses)} ⃁` }]} note="قد يختلف عن الربح المحاسبي إذا كانت هناك فواتير أو مصاريف لم تُدفع بعد." />
+        <KpiCard label="هامش الربح" value={<><AnimatedNumber value={periodMargin} format={fmtNum} />%</>} trend="من الإيرادات المحصّلة" definition="نسبة صافي الربح النقدي إلى الإيرادات المحصّلة خلال الفترة." period={PERIOD_SCOPE[period]} formula="صافي الربح النقدي ÷ الإيرادات المحصّلة × 100" breakdown={[{ label: 'صافي الربح', value: `${fmtMoney(periodProfit)} ⃁` }, { label: 'الإيرادات', value: `${fmtMoney(periodRevenue)} ⃁` }]} />
+        <KpiCard label="العملاء الجدد" value={<AnimatedNumber value={periodNewClients} format={fmtNum} />} trend="خلال الفترة المختارة" definition="عدد العملاء الذين كان أول تواصل معهم أو تاريخ إضافتهم ضمن الفترة المختارة." period={PERIOD_SCOPE[period]} formula="عدّ سجلات العملاء ضمن الفترة" breakdown={[{ label: 'العملاء الجدد', value: fmtNum(periodNewClients) }, { label: 'إجمالي العملاء', value: fmtNum(data.clients.length) }]} />
+        <KpiCard label="مشاريع نشطة" value={<AnimatedNumber value={data.activeProjects} format={fmtNum} />} trend={`${fmtNum(data.upcoming.length)} تسليم قريب`} definition="المشاريع التي حالتها عرض سعر أو قيد التحضير أو قيد التنفيذ." period="الحالة الحالية — لا تتأثر بفلتر الفترة" formula="عدّ المشاريع ذات الحالات النشطة" breakdown={[{ label: 'مشاريع نشطة', value: fmtNum(data.activeProjects) }, { label: 'تسليم خلال 14 يومًا أو متأخر', value: fmtNum(data.upcoming.length) }]} />
+        <KpiCard tone="alert" label="تنبيهات المستودع" value={<AnimatedNumber value={data.lowStock.length} format={fmtNum} />} trend="أصناف وصلت حد النفاد" definition="عدد أصناف المخزون التي أصبحت كميتها أقل من حد إعادة الطلب المحدد لها." period="الحالة الحالية للمخزون" formula="عدّ الأصناف التي كميتها الحالية أقل من حد التنبيه" breakdown={data.lowStock.slice(0, 5).map((item) => ({ label: item.name, value: `${fmtNum(item.quantity)} / ${fmtNum(item.reorder_level)}` }))} note={data.lowStock.length > 5 ? `يظهر هنا أول 5 من أصل ${fmtNum(data.lowStock.length)} تنبيه.` : undefined} />
       </div>
 
       <div className="grid2">

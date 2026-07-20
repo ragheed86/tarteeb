@@ -5,7 +5,7 @@ import {
   getCompanyExpenses, createCompanyExpense, getReconciliationInvoicePayments,
 } from '@/lib/data';
 import { fmtMoney, fmtNum } from '@/lib/format';
-import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill } from '@/components';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill, KpiCard } from '@/components';
 import { toast } from '@/app/toast';
 
 const STATUS = {
@@ -99,6 +99,7 @@ export default function BankReconciliationPage() {
   const visible = rows.filter((r) => filter === 'all' || (filter === 'suggested' ? Boolean(r.suggestion) : r.status === filter));
   const matched = rows.filter((r) => r.status === 'matched').length;
   const pending = rows.filter((r) => r.status === 'unmatched').length;
+  const suggested = rows.filter((r) => r.suggestion).length;
   const balance = (state?.accounts.find((a) => a.id === accountId)?.opening_balance || 0) + rows.reduce((s, r) => s + Number(r.amount || 0), 0);
 
   async function addAccount(e) {
@@ -169,9 +170,9 @@ export default function BankReconciliationPage() {
           <div className="csv-hint">الأعمدة المدعومة: date, description, amount, reference — أو debit / credit</div>
         </div>
         <div className="kpis bank-kpis">
-          <div className="kpi"><div className="lbl">الرصيد المحسوب</div><div className="val">{fmtMoney(balance)} ⃁</div><div className="trend"><span>{account?.bank_name || account?.name}</span></div></div>
-          <div className="kpi pos"><div className="lbl">حركات مطابقة</div><div className="val">{fmtNum(matched)}</div><div className="trend"><span>{rows.length ? fmtNum(Math.round(matched / rows.length * 100)) : '0'}% من الكشف</span></div></div>
-          <div className="kpi alert"><div className="lbl">تحتاج مراجعة</div><div className="val">{fmtNum(pending)}</div><div className="trend"><span>{fmtNum(rows.filter((r) => r.suggestion).length)} اقتراح تلقائي</span></div></div>
+          <KpiCard label="الرصيد المحسوب" value={`${fmtMoney(balance)} ⃁`} trend={account?.bank_name || account?.name} definition="الرصيد الافتتاحي للحساب مضافًا إليه صافي جميع الحركات المستوردة." period="جميع حركات الحساب المحدد" formula="الرصيد الافتتاحي + الإيداعات − المسحوبات" breakdown={[{ label: 'الرصيد الافتتاحي', value: `${fmtMoney(account?.opening_balance || 0)} ⃁` }, { label: 'صافي الحركات', value: `${fmtMoney(rows.reduce((s, r) => s + Number(r.amount || 0), 0))} ⃁` }, { label: 'الرصيد المحسوب', value: `${fmtMoney(balance)} ⃁` }]} note="يجب أن يطابق الرصيد الختامي في كشف البنك بعد استيراد جميع الحركات." />
+          <KpiCard tone="pos" label="حركات مطابقة" value={fmtNum(matched)} trend={`${rows.length ? fmtNum(Math.round(matched / rows.length * 100)) : '0'}% من الكشف`} definition="الحركات البنكية التي تم اعتماد ربطها بمصروف شركة أو دفعة فاتورة." period="كشف الحساب المحدد" formula="عدد الحركات المعتمدة ÷ إجمالي الحركات × 100" breakdown={[{ label: 'إجمالي الحركات', value: fmtNum(rows.length) }, { label: 'مطابقة', value: fmtNum(matched) }, { label: 'نسبة المطابقة', value: `${rows.length ? fmtNum(Math.round(matched / rows.length * 100)) : '0'}%` }]} />
+          <KpiCard tone="alert" label="تحتاج مراجعة" value={fmtNum(pending)} trend={`${fmtNum(suggested)} اقتراح تلقائي`} definition="الحركات التي لم تُعتمد مطابقتها ولم تُستبعد بعد." period="كشف الحساب المحدد" formula="عدّ الحركات بالحالة «غير مطابق»" breakdown={[{ label: 'تحتاج مراجعة', value: fmtNum(pending) }, { label: 'لها اقتراح تلقائي', value: fmtNum(suggested) }, { label: 'بلا اقتراح', value: fmtNum(Math.max(pending - suggested, 0)) }]} />
         </div>
         <div className="viewtoggle bank-tabs">
           {[['all', 'الكل'], ['suggested', 'مقترحة'], ['unmatched', 'غير مطابقة'], ['matched', 'مطابقة'], ['excluded', 'مستبعدة']].map(([key, label]) => <button key={key} className={`vt${filter === key ? ' active' : ''}`} onClick={() => setFilter(key)}>{label}</button>)}

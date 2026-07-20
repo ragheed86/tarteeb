@@ -7,7 +7,7 @@ import {
   updateInvoice, createInvoicePayment, removeInvoicePayment,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS } from '@/lib/format';
-import { Loading, Empty, ErrorBar, DataTable } from '@/components';
+import { Loading, Empty, ErrorBar, DataTable, KpiCard } from '@/components';
 
 const STATUS_OPTS = [
   { value: 'draft', label: 'مسودة' },
@@ -195,10 +195,10 @@ export default function InvoiceDetail() {
       </div>
 
       <div className="kpis no-print" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <div className="kpi"><div className="lbl">إجمالي الفاتورة</div><div className="val amt">{fmtMoney(invoice.total)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">المحصّل</div><div className="val amt">{fmtMoney(paidAmount)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">المتبقي</div><div className="val amt">{fmtMoney(remainingAmount)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">عدد الدفعات</div><div className="val amt">{fmtNum(payments.length)}</div></div>
+        <KpiCard label="إجمالي الفاتورة" value={`${fmtMoney(invoice.total)} ⃁`} definition="القيمة النهائية للفاتورة بعد إضافة الضريبة المطبقة." period={`الفاتورة ${invoice.number || ''}`} formula="الإجمالي قبل الضريبة + قيمة الضريبة" breakdown={[{ label: 'قبل الضريبة', value: `${fmtMoney(invoice.subtotal)} ⃁` }, { label: 'الضريبة', value: `${fmtMoney(invoice.vat_amount)} ⃁` }, { label: 'الإجمالي', value: `${fmtMoney(invoice.total)} ⃁` }]} />
+        <KpiCard label="المحصّل" value={`${fmtMoney(paidAmount)} ⃁`} definition="مجموع الدفعات المسجلة فعليًا على هذه الفاتورة." period={`الفاتورة ${invoice.number || ''}`} formula="جمع جميع دفعات الفاتورة" breakdown={payments.slice(0, 6).map((p) => ({ label: fmtDate(p.paid_at), value: `${fmtMoney(p.amount)} ⃁` }))} note={payments.length > 6 ? `يظهر آخر 6 دفعات من أصل ${fmtNum(payments.length)}.` : undefined} />
+        <KpiCard label="المتبقي" value={`${fmtMoney(remainingAmount)} ⃁`} definition="المبلغ الذي لا يزال مطلوبًا تحصيله على الفاتورة." period="الحالة الحالية للفاتورة" formula="إجمالي الفاتورة − المبلغ المحصّل" breakdown={[{ label: 'إجمالي الفاتورة', value: `${fmtMoney(invoice.total)} ⃁` }, { label: 'المحصّل', value: `− ${fmtMoney(paidAmount)} ⃁` }, { label: 'المتبقي', value: `${fmtMoney(remainingAmount)} ⃁` }]} />
+        <KpiCard label="عدد الدفعات" value={fmtNum(payments.length)} definition="عدد عمليات الدفع المنفصلة المسجلة على هذه الفاتورة." period="كامل سجل الفاتورة" formula="عدّ سجلات الدفعات" breakdown={[{ label: 'عدد الدفعات', value: fmtNum(payments.length) }, { label: 'إجماليها', value: `${fmtMoney(paidAmount)} ⃁` }]} />
       </div>
 
       {/* ورقة الفاتورة — التصميم المعتمد بمقاس A4 (مطابق 100%) */}

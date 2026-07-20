@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createClient, updateClient, removeClient, getClients, getEmployees } from '@/lib/data';
 import { fmtNum, CLIENT_STATUS, SOURCE_LABEL } from '@/lib/format';
-import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Ltr } from '@/components';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Ltr, KpiCard } from '@/components';
 import { toast } from '../toast';
 
 // القائمة الكاملة لأحياء الرياض (ويكيبيديا: https://ar.wikipedia.org/wiki/أحياء_الرياض)
@@ -214,12 +214,12 @@ function ClientsPageInner() {
     <>
       {/* مؤشرات العملاء — مربعات صغيرة في صف واحد */}
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))' }}>
-        <div className="kpi"><div className="lbl">إجمالي العملاء</div><div className="val">{fmtNum(total)}</div><div className="trend"><span>كامل القاعدة</span></div></div>
-        <div className="kpi"><div className="lbl">عملاء نشطون</div><div className="val">{fmtNum(activeCount)}</div><div className="trend"><span>{fmtNum(activePct)}% منهم</span></div></div>
-        <div className="kpi"><div className="lbl">محتملون</div><div className="val">{fmtNum(leadCount)}</div><div className="trend"><span>فرص للتحويل</span></div></div>
-        <div className="kpi"><div className="lbl">بانتظار رد</div><div className="val">{fmtNum(waitingCount)}</div><div className="trend"><span>تحتاج متابعة</span></div></div>
-        <div className="kpi"><div className="lbl">مكتملون</div><div className="val">{fmtNum(completedCount)}</div><div className="trend"><span>انتهى التعامل</span></div></div>
-        <div className="kpi"><div className="lbl">جدد هذا الشهر</div><div className="val">{fmtNum(newThisMonth)}</div><div className="trend"><span>خلال الشهر</span></div></div>
+        <KpiCard label="إجمالي العملاء" value={fmtNum(total)} trend="كامل القاعدة" definition="إجمالي سجلات العملاء بجميع الحالات، ولا يتأثر بنتيجة البحث الحالية." period="كل البيانات المسجلة" formula="عدّ جميع العملاء" breakdown={[{ label: 'نشطون', value: fmtNum(activeCount) }, { label: 'محتملون', value: fmtNum(leadCount) }, { label: 'بانتظار رد', value: fmtNum(waitingCount) }, { label: 'مكتملون', value: fmtNum(completedCount) }]} />
+        <KpiCard label="عملاء نشطون" value={fmtNum(activeCount)} trend={`${fmtNum(activePct)}% منهم`} definition="العملاء المصنفون حاليًا بالحالة «نشط»." period="الحالة الحالية" formula="عدد العملاء النشطين ÷ إجمالي العملاء × 100" breakdown={[{ label: 'عدد النشطين', value: fmtNum(activeCount) }, { label: 'إجمالي العملاء', value: fmtNum(total) }, { label: 'النسبة', value: `${fmtNum(activePct)}%` }]} />
+        <KpiCard label="محتملون" value={fmtNum(leadCount)} trend="فرص للتحويل" definition="عملاء محتملون لم يبدأ التعامل الفعلي معهم بعد." period="الحالة الحالية" formula="عدّ العملاء بالحالة «محتمل»" />
+        <KpiCard label="بانتظار رد" value={fmtNum(waitingCount)} trend="تحتاج متابعة" definition="عملاء ينتظرون ردًا أو إجراء متابعة من الفريق." period="الحالة الحالية" formula="عدّ العملاء بالحالة «بانتظار رد»" />
+        <KpiCard label="مكتملون" value={fmtNum(completedCount)} trend="انتهى التعامل" definition="عملاء انتهت معاملاتهم الحالية وصُنّفوا كمكتملين." period="الحالة الحالية" formula="عدّ العملاء بالحالة «مكتمل»" />
+        <KpiCard label="جدد هذا الشهر" value={fmtNum(newThisMonth)} trend="خلال الشهر" definition="العملاء الذين أضيفت سجلاتهم خلال الشهر الميلادي الحالي." period={`${now.getMonth() + 1}/${now.getFullYear()}`} formula="عدّ العملاء الذين يقع تاريخ إضافتهم في الشهر الحالي" breakdown={[{ label: 'عملاء هذا الشهر', value: fmtNum(newThisMonth) }, { label: 'إجمالي العملاء', value: fmtNum(total) }]} />
       </div>
       <div className="sec-head" style={{ marginBottom: 18 }}>
         <button className="btn" onClick={openAdd}>

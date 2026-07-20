@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { fmtNum } from '@/lib/format';
 import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber, getCompanySettings, getServices } from '@/lib/data';
 import { toast } from '../toast';
+import { KpiCard } from '@/components';
 
 const RIYAL = '⃁';
 const AR_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -511,18 +512,18 @@ function Section({ n, title, children }) {
   );
 }
 
-function Kpi({ label, value, tone }) {
-  return <div className={`qg-kpi ${tone}`}><div className="qg-kpil">{label}</div><div className="qg-kpiv">{value}</div></div>;
+function Kpi({ label, value, tone, definition, formula, breakdown }) {
+  return <KpiCard baseClass="qg-kpi" labelClass="qg-kpil" valueClass="qg-kpiv" label={label} value={value} tone={tone} definition={definition} formula={formula} period="كل عروض الأسعار المسجلة" breakdown={breakdown} />;
 }
 
 function Board({ byColumn, stats, onOpen, activeId }) {
   return (
     <div className="qg-board">
       <div className="qg-kpis">
-        <Kpi label="تحتاج متابعة" value={stats.followup} tone="warn" />
-        <Kpi label="معدل النجاح" value={`${stats.winRate}%`} tone="ok" />
-        <Kpi label="القيمة المعلّقة" value={<span dir="ltr"><span className="qg-riyal">{RIYAL}</span> {fmtNum(stats.pipeline)}</span>} tone="teal" />
-        <Kpi label="إجمالي العروض" value={stats.total} tone="ink" />
+        <Kpi label="تحتاج متابعة" value={stats.followup} tone="warn" definition="العروض المرسلة التي مضت عليها مدة المتابعة المحددة دون قبول أو رفض." formula="عدّ العروض المستحقة للمتابعة" />
+        <Kpi label="معدل النجاح" value={`${stats.winRate}%`} tone="ok" definition="نسبة العروض المقبولة من مجموع العروض التي اتُخذ قرار بشأنها." formula="العروض المقبولة ÷ (المقبولة + المرفوضة) × 100" />
+        <Kpi label="القيمة المعلّقة" value={<span dir="ltr"><span className="qg-riyal">{RIYAL}</span> {fmtNum(stats.pipeline)}</span>} tone="teal" definition="مجموع قيم العروض التي ما زالت مرسلة أو قيد التفاوض." formula="جمع قيمة عروض الإرسال والتفاوض" />
+        <Kpi label="إجمالي العروض" value={stats.total} tone="ink" definition="عدد جميع عروض الأسعار المسجلة بجميع حالاتها." formula="عدّ جميع عروض الأسعار" breakdown={BOARD_COLUMNS.map((status) => ({ label: STATUS[status][1], value: fmtNum((byColumn[status] || []).length) }))} />
       </div>
       <div className="qg-cols">
         {BOARD_COLUMNS.map((col) => {

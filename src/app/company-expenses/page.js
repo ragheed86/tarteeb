@@ -5,7 +5,7 @@ import {
   getCompanyExpenseBudgets, saveCompanyExpenseBudget,
 } from '@/lib/data';
 import { fmtMoney, fmtNum } from '@/lib/format';
-import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Money, DateText, StatusPill } from '@/components';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Money, DateText, StatusPill, KpiCard } from '@/components';
 import { toast } from '@/app/toast';
 
 const CATEGORIES = {
@@ -108,10 +108,10 @@ export default function CompanyExpensesPage() {
 
       {alerting && <div className={`expense-alert${budgetPct >= 100 ? ' danger' : ''}`}>بلغ الصرف {fmtNum(budgetPct)}% من ميزانية هذا الشهر.</div>}
       <div className="kpis expense-kpis">
-        <div className="kpi"><div className="lbl">إجمالي الفترة</div><div className="val">{fmtMoney(total)} ⃁</div><div className="trend"><span>{fmtNum(filtered.length)} مصروف</span></div></div>
-        <div className="kpi"><div className="lbl">الضريبة القابلة للتتبع</div><div className="val">{fmtMoney(vat)} ⃁</div><div className="trend"><span>ضمن الإجمالي</span></div></div>
-        <div className="kpi alert"><div className="lbl">مبالغ معلّقة</div><div className="val">{fmtMoney(pending)} ⃁</div><div className="trend"><span>لم تُدفع بعد</span></div></div>
-        <div className="kpi"><div className="lbl">ميزانية الشهر</div><div className="val">{monthBudget ? `${fmtMoney(monthBudget.amount)} ⃁` : '—'}</div><div className="trend"><button className="link-btn" onClick={openBudget}>{monthBudget ? `المستخدم ${fmtNum(budgetPct)}%` : 'تحديد ميزانية'}</button></div></div>
+        <KpiCard label="إجمالي الفترة" value={`${fmtMoney(total)} ⃁`} trend={`${fmtNum(filtered.length)} مصروف`} definition="مجموع المصاريف التي تطابق الشهر والتصنيف وحالة الدفع والبحث المحدد حاليًا." period={filter.month || 'كل الفترات'} formula="جمع إجمالي المصاريف الظاهرة بعد الفلترة" breakdown={Object.entries(CATEGORIES).map(([key, label]) => ({ label, value: filtered.filter((r) => r.category === key).reduce((s, r) => s + Number(r.amount || 0), 0) })).filter((x) => x.value > 0).map((x) => ({ label: x.label, value: `${fmtMoney(x.value)} ⃁` }))} />
+        <KpiCard label="الضريبة القابلة للتتبع" value={`${fmtMoney(vat)} ⃁`} trend="ضمن الإجمالي" definition="مجموع مبالغ الضريبة المدخلة داخل المصاريف الظاهرة حاليًا." period={filter.month || 'كل الفترات'} formula="جمع حقل مبلغ الضريبة لكل مصروف ظاهر" note="هذا المؤشر للتتبع الداخلي، ولا يُعد إقرارًا ضريبيًا." />
+        <KpiCard tone="alert" label="مبالغ معلّقة" value={`${fmtMoney(pending)} ⃁`} trend="لم تُدفع بعد" definition="إجمالي المصاريف الظاهرة التي ما زالت حالة دفعها «معلّق»." period={filter.month || 'كل الفترات'} formula="جمع المصاريف المعلّقة بعد تطبيق الفلاتر" breakdown={filtered.filter((r) => r.payment_status === 'pending').slice(0, 6).map((r) => ({ label: r.description, value: `${fmtMoney(r.amount)} ⃁` }))} />
+        <KpiCard label="ميزانية الشهر" value={monthBudget ? `${fmtMoney(monthBudget.amount)} ⃁` : '—'} trend={monthBudget ? `المستخدم ${fmtNum(budgetPct)}%` : 'اضغط للتفاصيل'} definition="سقف الإنفاق الذي حددته لمصاريف الشركة في الشهر المختار." period={filter.month} formula="نسبة الاستخدام = إجمالي مصاريف الفترة ÷ الميزانية × 100" breakdown={[{ label: 'الميزانية', value: monthBudget ? `${fmtMoney(monthBudget.amount)} ⃁` : 'غير محددة' }, { label: 'المصروف', value: `${fmtMoney(total)} ⃁` }, { label: 'نسبة الاستخدام', value: monthBudget ? `${fmtNum(budgetPct)}%` : '—' }]} actionLabel={monthBudget ? 'تعديل الميزانية' : 'تحديد الميزانية'} onAction={openBudget} />
       </div>
 
       <div className="card expense-filters">

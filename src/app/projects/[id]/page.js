@@ -9,7 +9,7 @@ import {
   getProjectCosts, createProjectCost, removeProjectCost,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, displayProgress } from '@/lib/format';
-import { Loading, Empty, ErrorBar, DataTable } from '@/components';
+import { Loading, Empty, ErrorBar, DataTable, KpiCard } from '@/components';
 
 const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
 const MEDIA_KIND = { before: 'قبل', after: 'بعد', other: 'أخرى' };
@@ -88,10 +88,10 @@ export default function ProjectDetail() {
 
       {/* المؤشرات المالية من view */}
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <div className="kpi"><div className="lbl">قيمة العقد</div><div className="val amt">{fmtMoney(project.sale_price)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">إجمالي التكاليف</div><div className="val amt">{fmtMoney(totalCost)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">صافي الربح</div><div className="val amt">{fmtMoney(netProfit)} ⃁</div></div>
-        <div className="kpi"><div className="lbl">هامش الربح</div><div className="val amt">{fmtNum(marginPct)}%</div></div>
+        <KpiCard label="قيمة العقد" value={`${fmtMoney(project.sale_price)} ⃁`} definition="قيمة بيع المشروع المسجلة في بيانات المشروع." period="هذا المشروع" formula="قيمة العقد المتفق عليها" note="لا تعني بالضرورة أن كامل المبلغ تم تحصيله من العميل." />
+        <KpiCard label="إجمالي التكاليف" value={`${fmtMoney(totalCost)} ⃁`} definition="مجموع جميع بنود التكلفة المرتبطة بهذا المشروع." period="هذا المشروع" formula="جمع العمالة والمواد والنقل والحوافز والتكاليف الأخرى" breakdown={costs.slice(0, 6).map((cost) => ({ label: costDescription(cost), value: `${fmtMoney(cost.amount)} ⃁` }))} note={costs.length > 6 ? `يظهر أول 6 بنود من أصل ${fmtNum(costs.length)}.` : undefined} />
+        <KpiCard label="صافي الربح" value={`${fmtMoney(netProfit)} ⃁`} definition="الربح المتوقع للمشروع بعد خصم جميع تكاليفه المسجلة من قيمة العقد." period="هذا المشروع" formula="قيمة العقد − إجمالي التكاليف" breakdown={[{ label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }, { label: 'إجمالي التكاليف', value: `− ${fmtMoney(totalCost)} ⃁` }, { label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }]} />
+        <KpiCard label="هامش الربح" value={`${fmtNum(marginPct)}%`} definition="النسبة التي يمثلها صافي الربح من قيمة عقد المشروع." period="هذا المشروع" formula="صافي الربح ÷ قيمة العقد × 100" breakdown={[{ label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }, { label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }]} />
       </div>
 
       <div className="grid2">

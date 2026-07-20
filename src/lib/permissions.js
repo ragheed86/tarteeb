@@ -26,7 +26,8 @@ export const PERMISSION_GROUPS = [
     items: [
       { key: 'quotes', label: 'عروض الأسعار', description: 'إنشاء وطباعة عروض الأسعار' },
       { key: 'invoices', label: 'الفواتير', description: 'إنشاء ومتابعة الفواتير' },
-      { key: 'partners', label: 'حسابات الشركاء', description: 'الأرباح والسحوبات' },
+      { key: 'expenses', label: 'مصاريف الشركة', description: 'النفقات التشغيلية العامة' },
+      { key: 'bank_reconciliation', label: 'المطابقة البنكية', description: 'استيراد ومطابقة حركات الحساب البنكي' },
       { key: 'government', label: 'الجهات الحكومية', description: 'الحسابات والرخص والتنبيهات' },
     ],
   },
@@ -36,8 +37,8 @@ export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.items.
 
 export const ROLE_PRESETS = {
   admin: ALL_PERMISSIONS,
-  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap', 'quotes', 'invoices'],
-  accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'partners'],
+  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap', 'quotes', 'invoices', 'expenses'],
+  accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation'],
   operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees'],
   viewer: ['dashboard', 'clients', 'projects'],
 };
@@ -86,7 +87,9 @@ export function permissionForPath(pathname) {
   if (path.startsWith('/heatmap')) return 'heatmap';
   if (path.startsWith('/quotes')) return 'quotes';
   if (path.startsWith('/invoices')) return 'invoices';
-  if (path.startsWith('/partners')) return 'partners';
+  if (path.startsWith('/company-expenses')) return 'expenses';
+  if (path.startsWith('/bank-reconciliation')) return 'bank_reconciliation';
+  if (path.startsWith('/partners')) return 'expenses';
   if (path.startsWith('/government')) return 'government';
   if (path.startsWith('/suppliers')) return 'warehouse';
   if (path.startsWith('/settings')) return 'settings';

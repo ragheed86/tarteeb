@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   getClients, getProjects, getInvoices, getInventory, getAllProjectCosts,
-  getAllInvoicePayments, getDashboardMedia, uploadDashboardMedia, removeDashboardMedia,
+  getAllInvoicePayments, getDashboardMedia, uploadDashboardMedia, removeDashboardMedia, getCompanyExpenses,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, displayProgress, OPEN_DELIVERY_STATUSES } from '@/lib/format';
 import { Loading, Empty, ErrorBar, DataTable, StatusPill } from '@/components';
@@ -44,8 +44,8 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       try {
-        const [clients, projects, invoices, payments, inventory, costs] = await Promise.all([
-          getClients(), getProjects(), getInvoices(), getAllInvoicePayments(), getInventory(), getAllProjectCosts(),
+        const [clients, projects, invoices, payments, inventory, costs, companyExpenses] = await Promise.all([
+          getClients(), getProjects(), getInvoices(), getAllInvoicePayments(), getInventory(), getAllProjectCosts(), getCompanyExpenses().catch(() => []),
         ]);
         const activeProjects = projects.filter((p) => ACTIVE.includes(p.status)).length;
         const lowStock = inventory.filter((it) => Number(it.quantity) < Number(it.reorder_level));
@@ -56,7 +56,7 @@ export default function Dashboard() {
         const costByProject = {};
         for (const c of costs) costByProject[c.project_id] = (costByProject[c.project_id] || 0) + Number(c.amount || 0);
 
-        setData({ clients, projects, invoices, payments, activeProjects, lowStock, upcoming, costByProject });
+        setData({ clients, projects, invoices, payments, costs, companyExpenses, activeProjects, lowStock, upcoming, costByProject });
       } catch (e) {
         setErr(e.message || 'تعذّر تحميل البيانات');
       }
@@ -103,10 +103,10 @@ export default function Dashboard() {
   const periodRevenue = data.payments
     .filter((payment) => withinDays(payment.paid_at, days))
     .reduce((s, payment) => s + Number(payment.amount || 0), 0);
-  const periodProjects = data.projects.filter((p) => withinDays(p.due_date || p.created_at, days));
-  const periodSales = periodProjects.reduce((s, p) => s + Number(p.sale_price || 0), 0);
-  const periodProfit = periodProjects.reduce((s, p) => s + (Number(p.sale_price || 0) - (data.costByProject[p.id] || 0)), 0);
-  const periodMargin = periodSales > 0 ? Math.round((periodProfit / periodSales) * 100) : 0;
+  const periodProjectCosts = data.costs.filter((c) => withinDays(c.work_date || c.created_at, days)).reduce((s, c) => s + Number(c.amount || 0), 0);
+  const periodCompanyExpenses = data.companyExpenses.filter((e) => e.payment_status === 'paid' && withinDays(e.expense_date, days)).reduce((s, e) => s + Number(e.amount || 0), 0);
+  const periodProfit = periodRevenue - periodProjectCosts - periodCompanyExpenses;
+  const periodMargin = periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0;
   // يفضَّل تاريخ أول تواصل الحقيقي؛ created_at يعكس تاريخ الإدخال لا اكتساب العميل
   const periodNewClients = data.clients.filter((c) => withinDays(c.first_contact_at || c.created_at, days)).length;
 
@@ -160,8 +160,8 @@ export default function Dashboard() {
       </div>
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))' }}>
         <div className="kpi"><div className="lbl">{PERIOD_LABEL[period]}</div><div className="val"><AnimatedNumber value={periodRevenue} format={fmtMoney} /> ⃁</div><div className="trend"><span>فواتير مدفوعة خلال الفترة</span></div></div>
-        <div className="kpi pos"><div className="lbl">صافي الربح</div><div className="val"><AnimatedNumber value={periodProfit} format={fmtMoney} /> ⃁</div><div className="trend"><span>سعر البيع بعد خصم التكاليف</span></div></div>
-        <div className="kpi"><div className="lbl">هامش الربح</div><div className="val"><AnimatedNumber value={periodMargin} format={fmtNum} />%</div><div className="trend"><span>على مستوى المشاريع</span></div></div>
+        <div className="kpi pos"><div className="lbl">صافي الربح النقدي</div><div className="val"><AnimatedNumber value={periodProfit} format={fmtMoney} /> ⃁</div><div className="trend"><span>المحصّل بعد تكاليف المشاريع والشركة</span></div></div>
+        <div className="kpi"><div className="lbl">هامش الربح</div><div className="val"><AnimatedNumber value={periodMargin} format={fmtNum} />%</div><div className="trend"><span>من الإيرادات المحصّلة</span></div></div>
         <div className="kpi"><div className="lbl">العملاء الجدد</div><div className="val"><AnimatedNumber value={periodNewClients} format={fmtNum} /></div><div className="trend"><span>خلال الفترة المختارة</span></div></div>
         <div className="kpi"><div className="lbl">مشاريع نشطة</div><div className="val"><AnimatedNumber value={data.activeProjects} format={fmtNum} /></div><div className="trend"><span>{fmtNum(data.upcoming.length)} تسليم قريب</span></div></div>
         <div className="kpi alert"><div className="lbl">تنبيهات المستودع</div><div className="val"><AnimatedNumber value={data.lowStock.length} format={fmtNum} /></div><div className="trend down">أصناف وصلت حد النفاد</div></div>

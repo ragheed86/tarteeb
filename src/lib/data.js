@@ -108,7 +108,7 @@ export async function getProjectCosts(projectId) {
 }
 // كل بنود التكلفة لكل المشاريع دفعة واحدة — لحساب الربح الإجمالي بلوحة التحكم
 export async function getAllProjectCosts() {
-  const { data, error } = await supabase.from('project_costs').select('project_id,amount');
+  const { data, error } = await supabase.from('project_costs').select('project_id,amount,work_date,created_at');
   if (error) throw error; return data;
 }
 // تكاليف مفصّلة لكل المشاريع — لتقارير التصدير (تفريق الخدمة عن المنظمات/المواد)
@@ -116,6 +116,66 @@ export async function getAllProjectCostsDetailed() {
   const { data, error } = await supabase.from('project_costs')
     .select('project_id,kind,amount,sale_price,markup_percent');
   if (error) throw error; return data;
+}
+
+// ---------- مصاريف الشركة العامة ----------
+export async function getCompanyExpenses() {
+  const { data, error } = await supabase.from('company_expenses')
+    .select('*').order('expense_date', { ascending: false }).order('created_at', { ascending: false });
+  if (error) throw error; return data;
+}
+export async function createCompanyExpense(p) {
+  const { data, error } = await supabase.from('company_expenses').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function updateCompanyExpense(id, p) {
+  const { data, error } = await supabase.from('company_expenses').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removeCompanyExpense(id) {
+  const { error } = await supabase.from('company_expenses').delete().eq('id', id);
+  if (error) throw error;
+}
+export async function getCompanyExpenseBudgets() {
+  const { data, error } = await supabase.from('company_expense_budgets').select('*').order('month', { ascending: false });
+  if (error) throw error; return data;
+}
+export async function saveCompanyExpenseBudget(month, amount, alertPercent = 80) {
+  const { data, error } = await supabase.from('company_expense_budgets')
+    .upsert({ month, amount, alert_percent: alertPercent }, { onConflict: 'month' }).select('*').single();
+  if (error) throw error; return data;
+}
+
+// ---------- الحسابات والمطابقة البنكية ----------
+export async function getBankAccounts() {
+  const { data, error } = await supabase.from('bank_accounts').select('*').order('created_at');
+  if (error) throw error; return data;
+}
+export async function createBankAccount(p) {
+  const { data, error } = await supabase.from('bank_accounts').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function getBankTransactions(accountId) {
+  let query = supabase.from('bank_transactions').select('*').order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
+  if (accountId) query = query.eq('account_id', accountId);
+  const { data, error } = await query;
+  if (error) throw error; return data;
+}
+export async function importBankTransactions(rows) {
+  if (!rows.length) return [];
+  const { data, error } = await supabase.from('bank_transactions')
+    .upsert(rows, { onConflict: 'account_id,external_id', ignoreDuplicates: true }).select('*');
+  if (error) throw error; return data || [];
+}
+export async function updateBankTransaction(id, p) {
+  const { data, error } = await supabase.from('bank_transactions').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function getReconciliationInvoicePayments() {
+  const { data, error } = await supabase.from('invoice_payments')
+    .select('id,invoice_id,amount,paid_at,note,invoices!inner(number,status)')
+    .neq('invoices.status', 'refunded').order('paid_at', { ascending: false });
+  if (error) throw error; return data || [];
 }
 // بنود «الجدول التقديري» (عمالة/إشراف/مواد/نقل/أخرى بلا وصف مخصّص) مقابل بنود التكلفة الحرة
 // التي يضيفها المستخدم يدوياً بنوع ووصف ومبلغ من اختياره.

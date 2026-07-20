@@ -6,7 +6,7 @@ const path = require('node:path');
 
 const ROUTES = [
   '/', '/clients', '/projects', '/cost', '/warehouse', '/employees',
-  '/heatmap', '/quotes', '/invoices', '/partners', '/suppliers', '/government', '/settings',
+  '/heatmap', '/quotes', '/invoices', '/company-expenses', '/bank-reconciliation', '/suppliers', '/government', '/settings',
 ];
 
 function hasAuthState() {

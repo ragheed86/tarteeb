@@ -119,6 +119,8 @@ export async function getAllProjectCostsDetailed() {
 }
 
 // ---------- مصاريف الشركة العامة ----------
+const COMPANY_EXPENSE_RECEIPTS_BUCKET = 'company-expense-receipts';
+
 export async function getCompanyExpenses() {
   const { data, error } = await supabase.from('company_expenses')
     .select('*').order('expense_date', { ascending: false }).order('created_at', { ascending: false });
@@ -134,6 +136,31 @@ export async function updateCompanyExpense(id, p) {
 }
 export async function removeCompanyExpense(id) {
   const { error } = await supabase.from('company_expenses').delete().eq('id', id);
+  if (error) throw error;
+}
+export async function uploadCompanyExpenseReceipt(expenseId, file) {
+  const rawExt = (file.name.split('.').pop() || (file.type === 'application/pdf' ? 'pdf' : 'jpg')).toLowerCase();
+  const ext = rawExt.replace(/[^a-z0-9]/g, '') || 'bin';
+  const path = `${expenseId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await supabase.storage.from(COMPANY_EXPENSE_RECEIPTS_BUCKET)
+    .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
+  if (error) throw error;
+  return {
+    receipt_path: path,
+    receipt_name: file.name,
+    receipt_type: file.type || null,
+    receipt_size: file.size || null,
+  };
+}
+export async function getCompanyExpenseReceiptUrl(path) {
+  const { data, error } = await supabase.storage.from(COMPANY_EXPENSE_RECEIPTS_BUCKET)
+    .createSignedUrl(path, 300);
+  if (error) throw error;
+  return data.signedUrl;
+}
+export async function removeCompanyExpenseReceipt(path) {
+  if (!path) return;
+  const { error } = await supabase.storage.from(COMPANY_EXPENSE_RECEIPTS_BUCKET).remove([path]);
   if (error) throw error;
 }
 export async function getCompanyExpenseBudgets() {

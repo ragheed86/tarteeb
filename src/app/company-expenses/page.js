@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getCompanyExpenses, createCompanyExpense, updateCompanyExpense, removeCompanyExpense,
-  getCompanyExpenseBudgets, saveCompanyExpenseBudget,
+  getCompanyExpenseBudgets, saveCompanyExpenseBudget, uploadCompanyExpenseReceipt,
+  getCompanyExpenseReceiptUrl, removeCompanyExpenseReceipt,
 } from '@/lib/data';
 import { fmtMoney, fmtNum } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Money, DateText, StatusPill, KpiCard } from '@/components';
@@ -14,8 +15,10 @@ const CATEGORIES = {
 };
 const PAYMENT = { paid: { label: 'مدفوع', cls: 'p-done' }, pending: { label: 'معلّق', cls: 'p-wait' } };
 const RECURRENCE = { none: 'غير متكرر', monthly: 'شهري', yearly: 'سنوي' };
+const MAX_RECEIPT_SIZE = 6 * 1024 * 1024;
 const today = () => new Date().toISOString().slice(0, 10);
 const EMPTY_FORM = { description: '', category: 'software', vendor: '', amount: '', vat_amount: '0', expense_date: today(), payment_status: 'paid', recurrence: 'none', note: '' };
+const fileSize = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} ك.ب` : `${(bytes / (1024 * 1024)).toFixed(1)} م.ب`;
 
 export default function CompanyExpensesPage() {
   const [rows, setRows] = useState(null);
@@ -27,6 +30,11 @@ export default function CompanyExpensesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptPreview, setReceiptPreview] = useState('');
+  const [removeReceipt, setRemoveReceipt] = useState(false);
+  const receiptFileRef = useRef(null);
+  const receiptCameraRef = useRef(null);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [budgetForm, setBudgetForm] = useState({ amount: '', alert_percent: '80' });
 
@@ -37,6 +45,7 @@ export default function CompanyExpensesPage() {
     } catch (e) { setErr(e.message || 'تعذّر تحميل مصاريف الشركة'); }
   }
   useEffect(() => { load(); }, []);
+  useEffect(() => () => { if (receiptPreview) URL.revokeObjectURL(receiptPreview); }, [receiptPreview]);
 
   const filtered = useMemo(() => (rows || []).filter((r) => {
     const q = filter.q.trim().toLowerCase();
@@ -53,30 +62,68 @@ export default function CompanyExpensesPage() {
   const budgetPct = monthBudget ? Math.round((total / Number(monthBudget.amount)) * 100) : 0;
 
   function setF(k, v) { setForm((f) => ({ ...f, [k]: v })); }
-  function add() { setEditing(null); setForm({ ...EMPTY_FORM, expense_date: today() }); setFormErr(''); setOpen(true); }
+  function resetReceipt() { setReceiptFile(null); setReceiptPreview(''); setRemoveReceipt(false); }
+  function closeForm() { if (!saving) { setOpen(false); resetReceipt(); } }
+  function add() { setEditing(null); setForm({ ...EMPTY_FORM, expense_date: today() }); setFormErr(''); resetReceipt(); setOpen(true); }
   function edit(r) {
+    resetReceipt();
     setEditing(r); setForm({
       description: r.description || '', category: r.category || 'other', vendor: r.vendor || '', amount: String(r.amount || ''),
       vat_amount: String(r.vat_amount || 0), expense_date: r.expense_date || today(), payment_status: r.payment_status || 'paid',
       recurrence: r.recurrence || 'none', note: r.note || '',
     }); setFormErr(''); setOpen(true);
   }
+  function chooseReceipt(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!(file.type.startsWith('image/') || file.type === 'application/pdf')) { setFormErr('يمكن إرفاق صورة أو ملف PDF فقط'); return; }
+    if (file.size > MAX_RECEIPT_SIZE) { setFormErr('حجم الفاتورة يجب ألا يتجاوز 6 ميجابايت'); return; }
+    setReceiptFile(file); setRemoveReceipt(false); setFormErr('');
+    setReceiptPreview(file.type.startsWith('image/') ? URL.createObjectURL(file) : '');
+  }
+  async function viewReceipt(row) {
+    const opened = window.open('', '_blank');
+    try {
+      const url = await getCompanyExpenseReceiptUrl(row.receipt_path);
+      if (opened) { opened.opener = null; opened.location = url; }
+      else window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (e) { opened?.close(); toast(e.message || 'تعذّر فتح الفاتورة', 'err'); }
+  }
   async function submit(e) {
     e.preventDefault();
     if (!form.description.trim() || Number(form.amount) <= 0) { setFormErr('أدخل وصف المصروف ومبلغاً صحيحاً'); return; }
     if (Number(form.vat_amount) < 0 || Number(form.vat_amount) > Number(form.amount)) { setFormErr('قيمة الضريبة يجب ألا تتجاوز إجمالي المصروف'); return; }
     setSaving(true); setFormErr('');
-    const payload = { ...form, description: form.description.trim(), vendor: form.vendor.trim() || null, note: form.note.trim() || null, amount: Number(form.amount), vat_amount: Number(form.vat_amount) || 0 };
+    const expenseId = editing?.id || crypto.randomUUID();
+    let uploadedReceipt = null;
     try {
+      if (receiptFile) uploadedReceipt = await uploadCompanyExpenseReceipt(expenseId, receiptFile);
+      const receiptPatch = uploadedReceipt || (removeReceipt ? { receipt_path: null, receipt_name: null, receipt_type: null, receipt_size: null } : {});
+      const payload = {
+        ...form, ...receiptPatch, ...(!editing ? { id: expenseId } : {}),
+        description: form.description.trim(), vendor: form.vendor.trim() || null, note: form.note.trim() || null,
+        amount: Number(form.amount), vat_amount: Number(form.vat_amount) || 0,
+      };
       const saved = editing ? await updateCompanyExpense(editing.id, payload) : await createCompanyExpense(payload);
       setRows((all) => editing ? all.map((r) => r.id === saved.id ? saved : r) : [saved, ...all]);
-      setOpen(false); toast(editing ? 'تم تحديث المصروف' : 'تمت إضافة المصروف');
-    } catch (e2) { setFormErr(e2.message || 'تعذّر الحفظ'); }
+      if (editing?.receipt_path && (uploadedReceipt || removeReceipt)) {
+        removeCompanyExpenseReceipt(editing.receipt_path).catch(() => {});
+      }
+      setOpen(false); resetReceipt(); toast(editing ? 'تم تحديث المصروف' : 'تمت إضافة المصروف');
+    } catch (e2) {
+      if (uploadedReceipt?.receipt_path) removeCompanyExpenseReceipt(uploadedReceipt.receipt_path).catch(() => {});
+      setFormErr(e2.message || 'تعذّر الحفظ');
+    }
     finally { setSaving(false); }
   }
   async function del(r) {
     if (!confirm(`حذف مصروف «${r.description}»؟`)) return;
-    try { await removeCompanyExpense(r.id); setRows((all) => all.filter((x) => x.id !== r.id)); toast('تم حذف المصروف'); }
+    try {
+      await removeCompanyExpense(r.id);
+      if (r.receipt_path) removeCompanyExpenseReceipt(r.receipt_path).catch(() => {});
+      setRows((all) => all.filter((x) => x.id !== r.id)); toast('تم حذف المصروف');
+    }
     catch (e) { toast(e.message || 'تعذّر الحذف', 'err'); }
   }
   function openBudget() {
@@ -123,7 +170,7 @@ export default function CompanyExpensesPage() {
 
       <div className="card" style={{ padding: '6px 0' }}>
         <DataTable rows={filtered} empty={<Empty title="لا توجد مصاريف" desc="أضف أول مصروف عام أو غيّر الفلاتر." />} columns={[
-          { key: 'description', label: 'المصروف', primary: true, render: (r) => <><span className="nm">{r.description}</span>{r.vendor && <><br /><small>{r.vendor}</small></>}</> },
+          { key: 'description', label: 'المصروف', primary: true, render: (r) => <><span className="nm">{r.description}</span>{r.vendor && <><br /><small>{r.vendor}</small></>}{r.receipt_path && <button type="button" className="receipt-link" onClick={() => viewReceipt(r)}>▣ عرض الفاتورة</button>}</> },
           { key: 'category', label: 'التصنيف', render: (r) => CATEGORIES[r.category] || 'أخرى' },
           { key: 'expense_date', label: 'التاريخ', render: (r) => <DateText v={r.expense_date} /> },
           { key: 'amount', label: 'الإجمالي', render: (r) => <Money v={r.amount} /> },
@@ -133,7 +180,7 @@ export default function CompanyExpensesPage() {
         ]} />
       </div>
 
-      <Modal open={open} onClose={() => !saving && setOpen(false)} title={editing ? 'تعديل المصروف' : 'مصروف شركة جديد'} subtitle="لا تستخدم هذه الصفحة لمصاريف مشروع محدد" as="form" onSubmit={submit} footer={<><button type="button" className="btn ghost" onClick={() => setOpen(false)}>إلغاء</button><button className="btn" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ المصروف'}</button></>}>
+      <Modal open={open} onClose={closeForm} title={editing ? 'تعديل المصروف' : 'مصروف شركة جديد'} subtitle="لا تستخدم هذه الصفحة لمصاريف مشروع محدد" as="form" onSubmit={submit} footer={<><button type="button" className="btn ghost" onClick={closeForm} disabled={saving}>إلغاء</button><button className="btn" disabled={saving}>{saving ? 'جارٍ الحفظ…' : receiptFile ? 'حفظ ورفع الفاتورة' : 'حفظ المصروف'}</button></>}>
         {formErr && <div className="errbar">{formErr}</div>}
         <div className="form-grid">
           <Input className="span-2" label="وصف المصروف" value={form.description} onChange={(e) => setF('description', e.target.value)} required autoFocus />
@@ -144,6 +191,31 @@ export default function CompanyExpensesPage() {
           <Input label="تاريخ المصروف" type="date" ltr value={form.expense_date} onChange={(e) => setF('expense_date', e.target.value)} required />
           <Select label="حالة الدفع" value={form.payment_status} onChange={(e) => setF('payment_status', e.target.value)} options={Object.entries(PAYMENT).map(([value, x]) => ({ value, label: x.label }))} />
           <Select label="التكرار" value={form.recurrence} onChange={(e) => setF('recurrence', e.target.value)} options={Object.entries(RECURRENCE).map(([value, label]) => ({ value, label }))} />
+          <div className="field span-2 receipt-field">
+            <label>فاتورة أو إيصال <span className="optional">(اختياري)</span></label>
+            <div className="receipt-actions">
+              <button type="button" className="btn ghost sm" disabled={saving} onClick={() => receiptFileRef.current?.click()}>▣ اختيار صورة أو PDF</button>
+              <input ref={receiptFileRef} id="expense-receipt-file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf" hidden disabled={saving} onChange={chooseReceipt} />
+              <button type="button" className="btn ghost sm camera-btn" disabled={saving} onClick={() => receiptCameraRef.current?.click()}>◎ تصوير الفاتورة</button>
+              <input ref={receiptCameraRef} id="expense-receipt-camera" type="file" accept="image/*" capture="environment" hidden disabled={saving} onChange={chooseReceipt} />
+            </div>
+            <small className="receipt-hint">الصور وملفات PDF حتى 6 ميجابايت. التصوير يفتح الكاميرا الخلفية على الجوال.</small>
+
+            {receiptFile && <div className="receipt-selected">
+              {receiptPreview ? <img src={receiptPreview} alt="معاينة الفاتورة المختارة" /> : <div className="receipt-file-icon">PDF</div>}
+              <div><b>{receiptFile.name}</b><span>{fileSize(receiptFile.size)}</span></div>
+              <button type="button" className="btn ghost sm danger-text" onClick={resetReceipt}>إزالة</button>
+            </div>}
+
+            {!receiptFile && editing?.receipt_path && !removeReceipt && <div className="receipt-selected existing">
+              <div className="receipt-file-icon">▣</div>
+              <div><b>{editing.receipt_name || 'الفاتورة المرفقة'}</b><span>{editing.receipt_size ? fileSize(editing.receipt_size) : 'مرفق محفوظ'}</span></div>
+              <button type="button" className="btn ghost sm" onClick={() => viewReceipt(editing)}>فتح</button>
+              <button type="button" className="btn ghost sm danger-text" onClick={() => setRemoveReceipt(true)}>إزالة</button>
+            </div>}
+
+            {!receiptFile && removeReceipt && <div className="receipt-remove-note">ستتم إزالة الفاتورة الحالية عند الحفظ. <button type="button" onClick={() => setRemoveReceipt(false)}>تراجع</button></div>}
+          </div>
           <TextArea className="span-2" label="ملاحظات" value={form.note} onChange={(e) => setF('note', e.target.value)} rows="3" />
         </div>
       </Modal>
@@ -161,6 +233,7 @@ const CSS = `
 .expense-kpis{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px}.expense-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px;padding:14px}.expense-filters .field{margin:0}
 .expense-alert{margin-bottom:14px;padding:11px 15px;border-radius:11px;background:var(--gold-bg);color:#725821;font-size:13px}.expense-alert.danger{background:var(--neg-bg);color:var(--neg)}
 .link-btn{border:0;background:none;color:var(--green);padding:0;cursor:pointer;font:inherit}.row-actions{display:flex;gap:6px;justify-content:flex-end}.danger-text{color:var(--neg)!important}
+.receipt-link{display:block;border:0;background:none;color:var(--green);font:inherit;font-size:11.5px;padding:4px 0 0;cursor:pointer}.receipt-field{border:1px solid var(--line);border-radius:12px;padding:13px;background:var(--surface-2)}.receipt-field>label{display:block;font-size:13px;font-weight:600;margin-bottom:9px}.receipt-field .optional{font-weight:400;color:var(--muted)}.receipt-actions{display:flex;gap:8px;flex-wrap:wrap}.receipt-hint{display:block;color:var(--muted);font-size:11.5px;line-height:1.6;margin-top:7px}.camera-btn{color:var(--green)!important;border-color:rgba(14,126,130,.3)!important}.receipt-selected{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:10px;margin-top:11px;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}.receipt-selected.existing{grid-template-columns:42px minmax(0,1fr) auto auto}.receipt-selected img{width:54px;height:54px;border-radius:8px;object-fit:cover}.receipt-selected b{display:block;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.receipt-selected span{display:block;color:var(--muted);font-size:11px;margin-top:3px}.receipt-file-icon{width:42px;height:42px;border-radius:8px;display:grid;place-items:center;background:var(--sage-bg);color:var(--green);font-size:11px;font-weight:700}.receipt-remove-note{margin-top:10px;border-radius:9px;padding:9px 11px;background:var(--neg-bg);color:var(--neg);font-size:12px}.receipt-remove-note button{border:0;background:none;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;font-weight:600}
 @media(max-width:900px){.expense-kpis{grid-template-columns:repeat(2,1fr)}.expense-filters{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:580px){.expense-head{align-items:flex-start}.expense-kpis,.expense-filters{grid-template-columns:1fr}}
+@media(max-width:580px){.expense-head{align-items:flex-start}.expense-kpis,.expense-filters{grid-template-columns:1fr}.receipt-actions .btn{flex:1;justify-content:center}.receipt-selected,.receipt-selected.existing{grid-template-columns:46px minmax(0,1fr)}.receipt-selected .btn{grid-column:1/-1;justify-content:center}.receipt-selected img{width:46px;height:46px}}
 `;

@@ -1,9 +1,33 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { supabaseAdmin, supabaseAdminReady } from '@/lib/supabaseAdmin';
 import {
   ALL_PERMISSIONS, ROLE_PRESETS, isPrimaryAdmin, normalizeEmail, normalizePermissions,
 } from '@/lib/permissions';
 import { apiError, requireAdmin } from '../../_auth';
+
+async function proxyToSupabaseAdminUsers(request) {
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!baseUrl) return apiError('إعدادات Supabase غير مكتملة', 500);
+
+  const source = new URL(request.url);
+  const target = new URL('/functions/v1/admin-users', baseUrl);
+  target.search = source.search;
+
+  const headers = {
+    Authorization: request.headers.get('authorization') || '',
+  };
+  const contentType = request.headers.get('content-type');
+  if (contentType) headers['Content-Type'] = contentType;
+
+  const res = await fetch(target, {
+    method: request.method,
+    headers,
+    body: request.method === 'GET' ? undefined : await request.text(),
+    cache: 'no-store',
+  });
+  const payload = await res.json().catch(() => ({}));
+  return NextResponse.json(payload, { status: res.status });
+}
 
 function cleanUserPayload(input) {
   const email = normalizeEmail(input.email);
@@ -46,6 +70,7 @@ async function listRowsWithAuth() {
 }
 
 export async function GET(request) {
+  if (!supabaseAdminReady) return proxyToSupabaseAdminUsers(request);
   const admin = await requireAdmin(request);
   if (admin.response) return admin.response;
   try {
@@ -57,6 +82,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  if (!supabaseAdminReady) return proxyToSupabaseAdminUsers(request);
   const admin = await requireAdmin(request);
   if (admin.response) return admin.response;
   try {
@@ -101,6 +127,7 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
+  if (!supabaseAdminReady) return proxyToSupabaseAdminUsers(request);
   const admin = await requireAdmin(request);
   if (admin.response) return admin.response;
   try {

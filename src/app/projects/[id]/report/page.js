@@ -67,7 +67,7 @@ function groupCosts(costs) {
   return Array.from(days.values()).sort((a, b) => daySortValue(a) - daySortValue(b) || a.key.localeCompare(b.key));
 }
 
-// يبني ملف PDF من عنصر التقرير: تصوير DOM بعرض سطح المكتب ثم تقطيعه صفحات A4
+// يبني ملف PDF من عنصر التقرير: تصوير DOM ثم ضغطه داخل صفحة A4 واحدة
 async function buildPdfBlob(node) {
   const pageW = 210;
   const pageH = 297;
@@ -96,18 +96,13 @@ async function buildPdfBlob(node) {
   });
   const imgW = pageW;
   const imgH = (canvas.height * imgW) / canvas.width;
+  const fit = Math.min(1, pageH / imgH);
+  const fittedW = imgW * fit;
+  const fittedH = imgH * fit;
+  const x = (pageW - fittedW) / 2;
   const img = canvas.toDataURL('image/jpeg', 0.92);
   const pdf = new jsPDF({ unit: 'mm', format: [pageW, pageH], orientation: 'portrait' });
-  let position = 0;
-  let heightLeft = imgH;
-  pdf.addImage(img, 'JPEG', 0, position, imgW, imgH);
-  heightLeft -= pageH;
-  while (heightLeft > 0) {
-    position -= pageH;
-    pdf.addPage();
-    pdf.addImage(img, 'JPEG', 0, position, imgW, imgH);
-    heightLeft -= pageH;
-  }
+  pdf.addImage(img, 'JPEG', x, 0, fittedW, fittedH);
   return pdf.output('blob');
 }
 

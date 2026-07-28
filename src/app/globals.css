@@ -955,12 +955,12 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .no-print,.app-shell aside,.mobilebar,.install-banner,.topbar{display:none!important}
   .print-only{display:block}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  html,body{width:210mm;min-height:297mm;overflow:visible}
+  html,body{width:210mm;height:297mm;overflow:hidden}
   body{background:#fff!important;font-size:8.6px;line-height:1.16}
   .app-shell{display:block!important}
   .main{padding:0!important}
   .content{padding:0!important;max-width:none!important}
-  .rpt{width:210mm;min-height:297mm;height:auto;margin:0;border:0;border-radius:0;box-shadow:none;overflow:visible}
+  .rpt{width:210mm;height:297mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden}
   .rpt-hero{padding:4mm 6mm 10mm}
   .rpt-hero:after{height:2px}
   .rpt-brand{margin-bottom:4px}

@@ -12,6 +12,28 @@ function num(value) {
   return Number(value) || 0;
 }
 
+function cleanWorkerName(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isFreelanceWorker(value) {
+  const name = cleanWorkerName(value);
+  return name.includes('فريلانسر') || name.includes('freelance') || name.includes('freelancer');
+}
+
+function defaultHourlyRateForWorker(value) {
+  const name = cleanWorkerName(value);
+  if (!name) return '';
+  if (isFreelanceWorker(name)) return '20';
+  if (name.includes('رغيد') || name.includes('ragheed') || name.includes('دلال') || name.includes('dalal')) return '200';
+  if (name.includes('زين') || name.includes('zain')) return '400';
+  return '';
+}
+
 function makeId(prefix) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 }
@@ -96,6 +118,19 @@ function updateRow(rows, id, key, value, suppliers) {
   });
 }
 
+function updateLaborRow(rows, id, key, value) {
+  return rows.map((r) => {
+    if (r.id !== id) return r;
+    const next = { ...r, [key]: value };
+    if (key === 'worker') {
+      if (value && !isFreelanceWorker(value)) next.workerCount = '1';
+      const defaultRate = defaultHourlyRateForWorker(value);
+      if (defaultRate) next.rate = defaultRate;
+    }
+    return next;
+  });
+}
+
 export default function CostPage() {
   const [state, setState] = useState(null);
   const [err, setErr] = useState('');
@@ -171,7 +206,7 @@ export default function CostPage() {
   }
 
   function updateLabor(date, id, key, value) {
-    updateDay(date, (day) => ({ ...day, laborRows: updateRow(day.laborRows, id, key, value, state.suppliers) }));
+    updateDay(date, (day) => ({ ...day, laborRows: updateLaborRow(day.laborRows, id, key, value) }));
   }
 
   function updateProduct(date, id, key, value) {

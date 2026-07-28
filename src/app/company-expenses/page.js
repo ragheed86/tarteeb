@@ -14,10 +14,19 @@ const CATEGORIES = {
   marketing: 'تسويق', payroll: 'رواتب ومكافآت', legal: 'قانوني ومحاسبي', maintenance: 'صيانة', other: 'أخرى',
 };
 const PAYMENT = { paid: { label: 'مدفوع', cls: 'p-done' }, pending: { label: 'معلّق', cls: 'p-wait' } };
+const PAYMENT_METHOD = {
+  bank_transfer: 'تحويل بنكي',
+  card: 'بطاقة',
+  mada: 'مدى',
+  cash: 'نقداً',
+  stc_pay: 'STC Pay',
+  apple_pay: 'Apple Pay',
+  other: 'أخرى',
+};
 const RECURRENCE = { none: 'غير متكرر', monthly: 'شهري', yearly: 'سنوي' };
 const MAX_RECEIPT_SIZE = 6 * 1024 * 1024;
 const today = () => new Date().toISOString().slice(0, 10);
-const EMPTY_FORM = { description: '', category: 'software', vendor: '', amount: '', vat_amount: '0', expense_date: today(), payment_status: 'paid', recurrence: 'none', note: '' };
+const EMPTY_FORM = { description: '', category: 'software', vendor: '', amount: '', vat_amount: '0', expense_date: today(), payment_status: 'paid', paid_by: '', payment_method: 'bank_transfer', recurrence: 'none', note: '' };
 const fileSize = (bytes) => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} ك.ب` : `${(bytes / (1024 * 1024)).toFixed(1)} م.ب`;
 
 export default function CompanyExpensesPage() {
@@ -37,6 +46,7 @@ export default function CompanyExpensesPage() {
   const receiptCameraRef = useRef(null);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [budgetForm, setBudgetForm] = useState({ amount: '', alert_percent: '80' });
+  const [receiptViewer, setReceiptViewer] = useState(null);
 
   async function load() {
     try {
@@ -52,7 +62,7 @@ export default function CompanyExpensesPage() {
     return (!filter.month || r.expense_date?.startsWith(filter.month))
       && (filter.category === 'all' || r.category === filter.category)
       && (filter.status === 'all' || r.payment_status === filter.status)
-      && (!q || `${r.description} ${r.vendor || ''} ${r.note || ''}`.toLowerCase().includes(q));
+      && (!q || `${r.description} ${r.vendor || ''} ${r.paid_by || ''} ${PAYMENT_METHOD[r.payment_method] || ''} ${r.note || ''}`.toLowerCase().includes(q));
   }), [rows, filter]);
 
   const total = filtered.reduce((s, r) => s + Number(r.amount || 0), 0);
@@ -70,7 +80,7 @@ export default function CompanyExpensesPage() {
     setEditing(r); setForm({
       description: r.description || '', category: r.category || 'other', vendor: r.vendor || '', amount: String(r.amount || ''),
       vat_amount: String(r.vat_amount || 0), expense_date: r.expense_date || today(), payment_status: r.payment_status || 'paid',
-      recurrence: r.recurrence || 'none', note: r.note || '',
+      paid_by: r.paid_by || '', payment_method: r.payment_method || 'bank_transfer', recurrence: r.recurrence || 'none', note: r.note || '',
     }); setFormErr(''); setOpen(true);
   }
   function chooseReceipt(e) {
@@ -83,12 +93,14 @@ export default function CompanyExpensesPage() {
     setReceiptPreview(file.type.startsWith('image/') ? URL.createObjectURL(file) : '');
   }
   async function viewReceipt(row) {
-    const opened = window.open('', '_blank');
+    setReceiptViewer({ row, url: '', loading: true });
     try {
       const url = await getCompanyExpenseReceiptUrl(row.receipt_path);
-      if (opened) { opened.opener = null; opened.location = url; }
-      else window.open(url, '_blank', 'noopener,noreferrer');
-    } catch (e) { opened?.close(); toast(e.message || 'تعذّر فتح الفاتورة', 'err'); }
+      setReceiptViewer({ row, url, loading: false });
+    } catch (e) {
+      setReceiptViewer(null);
+      toast(e.message || 'تعذّر فتح الفاتورة', 'err');
+    }
   }
   async function submit(e) {
     e.preventDefault();
@@ -103,6 +115,7 @@ export default function CompanyExpensesPage() {
       const payload = {
         ...form, ...receiptPatch, ...(!editing ? { id: expenseId } : {}),
         description: form.description.trim(), vendor: form.vendor.trim() || null, note: form.note.trim() || null,
+        paid_by: form.paid_by.trim() || null, payment_method: form.payment_method || null,
         amount: Number(form.amount), vat_amount: Number(form.vat_amount) || 0,
       };
       const saved = editing ? await updateCompanyExpense(editing.id, payload) : await createCompanyExpense(payload);
@@ -174,7 +187,8 @@ export default function CompanyExpensesPage() {
           { key: 'category', label: 'التصنيف', render: (r) => CATEGORIES[r.category] || 'أخرى' },
           { key: 'expense_date', label: 'التاريخ', render: (r) => <DateText v={r.expense_date} /> },
           { key: 'amount', label: 'الإجمالي', render: (r) => <Money v={r.amount} /> },
-          { key: 'payment_status', label: 'الدفع', render: (r) => <StatusPill status={r.payment_status} map={PAYMENT} /> },
+          { key: 'paid_by', label: 'الدافع', render: (r) => r.paid_by || '—' },
+          { key: 'payment_status', label: 'الدفع', render: (r) => <div className="payment-cell"><StatusPill status={r.payment_status} map={PAYMENT} /><small>{PAYMENT_METHOD[r.payment_method] || '—'}</small></div> },
           { key: 'recurrence', label: 'التكرار', render: (r) => RECURRENCE[r.recurrence] || '—' },
           { key: 'actions', label: '', align: 'left', render: (r) => <div className="row-actions"><button className="btn ghost sm" onClick={() => edit(r)}>تعديل</button><button className="btn ghost sm danger-text" onClick={() => del(r)}>حذف</button></div> },
         ]} />
@@ -190,6 +204,8 @@ export default function CompanyExpensesPage() {
           <Input label="مبلغ الضريبة" type="number" min="0" step="0.01" ltr value={form.vat_amount} onChange={(e) => setF('vat_amount', e.target.value)} />
           <Input label="تاريخ المصروف" type="date" ltr value={form.expense_date} onChange={(e) => setF('expense_date', e.target.value)} required />
           <Select label="حالة الدفع" value={form.payment_status} onChange={(e) => setF('payment_status', e.target.value)} options={Object.entries(PAYMENT).map(([value, x]) => ({ value, label: x.label }))} />
+          <Input label="مين دفع؟" value={form.paid_by} onChange={(e) => setF('paid_by', e.target.value)} placeholder="مثلاً: رغيد / دلال / زين" />
+          <Select label="طريقة الدفع" value={form.payment_method} onChange={(e) => setF('payment_method', e.target.value)} options={Object.entries(PAYMENT_METHOD).map(([value, label]) => ({ value, label }))} />
           <Select label="التكرار" value={form.recurrence} onChange={(e) => setF('recurrence', e.target.value)} options={Object.entries(RECURRENCE).map(([value, label]) => ({ value, label }))} />
           <div className="field span-2 receipt-field">
             <label>فاتورة أو إيصال <span className="optional">(اختياري)</span></label>
@@ -224,6 +240,24 @@ export default function CompanyExpensesPage() {
         <Input label="الميزانية" type="number" min="1" step="0.01" ltr value={budgetForm.amount} onChange={(e) => setBudgetForm((f) => ({ ...f, amount: e.target.value }))} required />
         <Input label="التنبيه عند (%)" type="number" min="1" max="100" ltr value={budgetForm.alert_percent} onChange={(e) => setBudgetForm((f) => ({ ...f, alert_percent: e.target.value }))} required />
       </Modal>
+
+      <Modal
+        open={!!receiptViewer}
+        onClose={() => setReceiptViewer(null)}
+        title="فاتورة المصروف"
+        subtitle={receiptViewer?.row?.receipt_name || receiptViewer?.row?.description}
+        size="lg"
+        className="receipt-view-modal"
+        footer={<><button type="button" className="btn ghost" onClick={() => setReceiptViewer(null)}>إغلاق</button>{receiptViewer?.url && <a className="btn" href={receiptViewer.url} target="_blank" rel="noreferrer">فتح في تبويب</a>}</>}
+      >
+        {!receiptViewer || receiptViewer.loading ? (
+          <Loading />
+        ) : receiptViewer.row?.receipt_type?.startsWith('image/') ? (
+          <div className="receipt-preview-box"><img src={receiptViewer.url} alt={receiptViewer.row?.receipt_name || 'فاتورة المصروف'} /></div>
+        ) : (
+          <iframe className="receipt-pdf-frame" src={receiptViewer.url} title={receiptViewer.row?.receipt_name || 'فاتورة المصروف'} />
+        )}
+      </Modal>
     </>
   );
 }
@@ -232,8 +266,9 @@ const CSS = `
 .expense-head{margin-bottom:18px;align-items:flex-end}.expense-head h2{margin:0}.expense-head p{margin:5px 0 0;color:var(--muted);font-size:13px}
 .expense-kpis{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:16px}.expense-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px;padding:14px}.expense-filters .field{margin:0}
 .expense-alert{margin-bottom:14px;padding:11px 15px;border-radius:11px;background:var(--gold-bg);color:#725821;font-size:13px}.expense-alert.danger{background:var(--neg-bg);color:var(--neg)}
-.link-btn{border:0;background:none;color:var(--green);padding:0;cursor:pointer;font:inherit}.row-actions{display:flex;gap:6px;justify-content:flex-end}.danger-text{color:var(--neg)!important}
+.link-btn{border:0;background:none;color:var(--green);padding:0;cursor:pointer;font:inherit}.row-actions{display:flex;gap:6px;justify-content:flex-end}.danger-text{color:var(--neg)!important}.payment-cell{display:grid;gap:4px}.payment-cell small{color:var(--muted);font-size:11.5px}
 .receipt-link{display:block;border:0;background:none;color:var(--green);font:inherit;font-size:11.5px;padding:4px 0 0;cursor:pointer}.receipt-field{border:1px solid var(--line);border-radius:12px;padding:13px;background:var(--surface-2)}.receipt-field>label{display:block;font-size:13px;font-weight:600;margin-bottom:9px}.receipt-field .optional{font-weight:400;color:var(--muted)}.receipt-actions{display:flex;gap:8px;flex-wrap:wrap}.receipt-hint{display:block;color:var(--muted);font-size:11.5px;line-height:1.6;margin-top:7px}.camera-btn{color:var(--green)!important;border-color:rgba(14,126,130,.3)!important}.receipt-selected{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:10px;margin-top:11px;padding:9px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}.receipt-selected.existing{grid-template-columns:42px minmax(0,1fr) auto auto}.receipt-selected img{width:54px;height:54px;border-radius:8px;object-fit:cover}.receipt-selected b{display:block;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.receipt-selected span{display:block;color:var(--muted);font-size:11px;margin-top:3px}.receipt-file-icon{width:42px;height:42px;border-radius:8px;display:grid;place-items:center;background:var(--sage-bg);color:var(--green);font-size:11px;font-weight:700}.receipt-remove-note{margin-top:10px;border-radius:9px;padding:9px 11px;background:var(--neg-bg);color:var(--neg);font-size:12px}.receipt-remove-note button{border:0;background:none;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;font-weight:600}
+.receipt-view-modal{width:min(920px,calc(100vw - 28px))!important}.receipt-preview-box{border:1px solid var(--line);border-radius:14px;background:var(--surface-2);padding:10px;display:grid;place-items:center;min-height:50vh}.receipt-preview-box img{max-width:100%;max-height:72vh;border-radius:10px;object-fit:contain}.receipt-pdf-frame{width:100%;height:min(72vh,760px);border:1px solid var(--line);border-radius:14px;background:#fff}
 @media(max-width:900px){.expense-kpis{grid-template-columns:repeat(2,1fr)}.expense-filters{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:580px){.expense-head{align-items:flex-start}.expense-kpis,.expense-filters{grid-template-columns:1fr}.receipt-actions .btn{flex:1;justify-content:center}.receipt-selected,.receipt-selected.existing{grid-template-columns:46px minmax(0,1fr)}.receipt-selected .btn{grid-column:1/-1;justify-content:center}.receipt-selected img{width:46px;height:46px}}
 `;

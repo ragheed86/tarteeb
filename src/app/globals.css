@@ -201,6 +201,12 @@ tr.clickable{cursor:pointer}
 .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
 /* صف العرض: أزرار العرض ثم زر «مشروع جديد» تحتها محاذى للبداية (يمين في RTL) */
 .toolbar-viewrow{justify-content:space-between;margin-bottom:14px}
+.project-search{margin-inline-start:0;width:260px}
+.project-date-grid{display:flex;align-items:center;gap:10px}
+.project-date-field{display:flex;align-items:center;gap:8px}
+.project-date-field span{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.project-filter-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.project-filter-note{font-size:12.5px;color:var(--muted);margin:-4px 0 16px}
 .vt{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border:0;background:none;border-radius:8px;font-family:var(--body);font-size:13.5px;color:var(--muted);cursor:pointer}
 .vt.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500}
 .fdate{font-family:var(--body);font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:8px 12px;outline:none;cursor:pointer}
@@ -782,6 +788,18 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .sec-head{flex-wrap:wrap}
   .toolbar{display:grid;grid-template-columns:1fr 1fr}
   .toolbar .btn{grid-column:1 / -1;justify-content:center}
+  .project-viewbar{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin-bottom:12px}
+  .project-viewbar .viewtoggle{width:100%}
+  .project-viewbar .btn{width:100%}
+  .project-filters{display:flex;flex-direction:column;align-items:stretch;gap:10px;margin-bottom:12px}
+  .project-filters .project-search{width:100%!important;min-height:48px;margin:0}
+  .project-filters .project-search input{padding-inline-start:38px}
+  .project-date-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+  .project-date-field{display:flex;flex-direction:column;align-items:stretch;gap:6px;min-width:0}
+  .project-date-field span{font-size:12px;padding-inline:2px}
+  .project-filter-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
+  .project-filter-actions .chip{width:100%;justify-content:center;border-radius:12px;text-align:center}
+  .project-filter-note{margin:0 0 16px;text-align:center;line-height:1.7}
   .sec-head .btn{width:100%;justify-content:center;order:2}
   .sec-head .search{order:1;width:100%!important;margin-inline-start:0!important;min-height:44px}
   .sec-head .more{order:3;margin-inline-start:0;width:100%;text-align:center}

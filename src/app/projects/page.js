@@ -277,7 +277,7 @@ export default function ProjectsPage() {
   const paginated = view === 'table' || view === 'cards';
   return (
     <>
-      <div className="toolbar toolbar-viewrow">
+      <div className="toolbar toolbar-viewrow project-viewbar">
         <div className="viewtoggle">
           <button className={`vt${view === 'table' ? ' active' : ''}`} onClick={() => setView('table')}>جدول</button>
           <button className={`vt${view === 'cards' ? ' active' : ''}`} onClick={() => setView('cards')}>بطاقات</button>
@@ -289,19 +289,27 @@ export default function ProjectsPage() {
           مشروع جديد
         </button>
       </div>
-      <div className="toolbar">
-        <div className="search" style={{ marginInlineStart: 0, width: 220 }}>
+      <div className="toolbar project-filters">
+        <div className="search project-search">
           <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" /></svg>
           <input placeholder="بحث بالمشروع أو العميل أو التاريخ…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>من</span>
-        <input type="date" className="fdate" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>إلى</span>
-        <input type="date" className="fdate" value={to} onChange={(e) => setTo(e.target.value)} />
-        <button className="chip" onClick={resetCurrentMonth}>هذا الشهر</button>
-        <button className={`chip${showAll ? ' active' : ''}`} onClick={showAllProjects}>عرض كل المشاريع</button>
+        <div className="project-date-grid">
+          <label className="project-date-field">
+            <span>من</span>
+            <input type="date" className="fdate" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label className="project-date-field">
+            <span>إلى</span>
+            <input type="date" className="fdate" value={to} onChange={(e) => setTo(e.target.value)} />
+          </label>
+        </div>
+        <div className="project-filter-actions">
+          <button className="chip" onClick={resetCurrentMonth}>هذا الشهر</button>
+          <button className={`chip${showAll ? ' active' : ''}`} onClick={showAllProjects}>عرض كل المشاريع</button>
+        </div>
       </div>
-      <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '-4px 0 16px' }}>
+      <div className="project-filter-note">
         {!isBrowsing ? 'ابحث عن مشروع أو عميل، أو اختر نطاق تاريخ، لعرض المشاريع' : hasDateFilter ? 'يعرض المشاريع ضمن نطاق التاريخ المحدد' : 'يعرض كل المشاريع'} · البحث يعمل باسم المشروع أو العميل أو التاريخ{isBrowsing ? ` · ${fmtNum(filtered.length)} نتيجة` : ''}
       </div>
 

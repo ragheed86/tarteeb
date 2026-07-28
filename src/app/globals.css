@@ -217,6 +217,9 @@ tr.clickable{cursor:pointer}
 .cdcard .ring span{font-size:9.5px;margin-top:1px}
 .cdcard .cdttl{font-weight:600;font-size:14px}.cdcard .cdttl.urgent{color:var(--neg)}
 .cdcard small{color:var(--muted);font-size:12px;display:block}
+.cdcard .cdbody{min-width:0}
+.cdcard .cdbody small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cdcard .cdmeta{color:var(--ink);font-size:11.5px;margin-top:3px}
 
 .costwrap{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}
 .cost-line{display:flex;align-items:center;justify-content:space-between;padding:13px 4px;border-bottom:1px solid var(--surface-2);font-size:14px}
@@ -948,16 +951,16 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
 }
 
 @media print{
-  @page{size:A4 portrait;margin:5mm}
+  @page{size:A4 portrait;margin:0}
   .no-print,.app-shell aside,.mobilebar,.install-banner,.topbar{display:none!important}
   .print-only{display:block}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  html,body{width:200mm;height:287mm;overflow:hidden}
+  html,body{width:210mm;min-height:297mm;overflow:visible}
   body{background:#fff!important;font-size:8.6px;line-height:1.16}
   .app-shell{display:block!important}
   .main{padding:0!important}
   .content{padding:0!important;max-width:none!important}
-  .rpt{width:200mm;height:287mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden}
+  .rpt{width:210mm;min-height:297mm;height:auto;margin:0;border:0;border-radius:0;box-shadow:none;overflow:visible}
   .rpt-hero{padding:4mm 6mm 10mm}
   .rpt-hero:after{height:2px}
   .rpt-brand{margin-bottom:4px}

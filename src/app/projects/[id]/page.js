@@ -9,6 +9,7 @@ import {
   getProjectCosts, createProjectCost, removeProjectCost,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, displayProgress } from '@/lib/format';
+import { isSupervisorLaborRow } from '@/lib/labor';
 import { Loading, Empty, ErrorBar, DataTable, KpiCard } from '@/components';
 
 const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
@@ -17,7 +18,7 @@ const VIDEO_EXT_RE = /\.(mp4|mov|m4v|webm|ogg)$/i;
 
 function costDescription(cost) {
   if (cost.product_name) return cost.supplier_name ? `${cost.product_name} · ${cost.supplier_name}` : cost.product_name;
-  if (cost.worker_name) return `عمالة: ${cost.worker_name}`;
+  if (cost.worker_name) return `${isSupervisorLaborRow(cost) ? 'إشراف' : 'عمالة'}: ${cost.worker_name}`;
   if (cost.note) return cost.note;
   return cost.label || '—';
 }

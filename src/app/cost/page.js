@@ -6,32 +6,11 @@ import {
   getProjectCostAttachments, uploadProjectCostAttachment, removeProjectCostAttachment,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS, PROJECT_STATUS, progressForStatus } from '@/lib/format';
+import { defaultHourlyRateForWorker, isFreelanceWorker, isSupervisorLaborRow } from '@/lib/labor';
 import { Loading, Empty, ErrorBar } from '../ui';
 
 function num(value) {
   return Number(value) || 0;
-}
-
-function cleanWorkerName(value) {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[\u064B-\u065F\u0670]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function isFreelanceWorker(value) {
-  const name = cleanWorkerName(value);
-  return name.includes('فريلانسر') || name.includes('freelance') || name.includes('freelancer');
-}
-
-function defaultHourlyRateForWorker(value) {
-  const name = cleanWorkerName(value);
-  if (!name) return '';
-  if (isFreelanceWorker(name)) return '20';
-  if (name.includes('رغيد') || name.includes('ragheed') || name.includes('دلال') || name.includes('dalal')) return '200';
-  if (name.includes('زين') || name.includes('zain')) return '400';
-  return '';
 }
 
 function makeId(prefix) {
@@ -76,6 +55,7 @@ function normalizeDay(day) {
       ...r,
       workerCount: r.workerCount ?? r.count ?? r.qty ?? (r.person ? 1 : ''),
       worker: r.worker ?? r.person ?? '',
+      role: r.role || (isSupervisorLaborRow(r) ? 'supervisor' : 'worker'),
       id: r.id || makeId('labor'),
     })) : [emptyLabor()],
     productRows: day.productRows?.length ? day.productRows.map((r) => ({ ...emptyProduct(), ...r, id: r.id || makeId('product') })) : [emptyProduct()],
@@ -123,6 +103,7 @@ function updateLaborRow(rows, id, key, value) {
     if (r.id !== id) return r;
     const next = { ...r, [key]: value };
     if (key === 'worker') {
+      next.role = isSupervisorLaborRow({ worker: value }) ? 'supervisor' : 'worker';
       if (value && !isFreelanceWorker(value)) next.workerCount = '1';
       const defaultRate = defaultHourlyRateForWorker(value);
       if (defaultRate) next.rate = defaultRate;
@@ -254,13 +235,21 @@ export default function CostPage() {
       const rowHours = workers * num(row.hours);
       const amount = rowHours * num(row.rate);
       if (workers || rowHours || amount) hasLabor = true;
-      summary.workerDays += workers;
+      if (isSupervisorLaborRow(row)) {
+        summary.supervisorDays += workers;
+        summary.supervisorHours += rowHours;
+        summary.supervisorAmount += amount;
+      } else {
+        summary.workerDays += workers;
+        summary.workerHours += rowHours;
+        summary.workerAmount += amount;
+      }
       summary.hours += rowHours;
       summary.amount += amount;
     }
     if (hasLabor) summary.days += 1;
     return summary;
-  }, { days: 0, workerDays: 0, hours: 0, amount: 0 });
+  }, { days: 0, workerDays: 0, supervisorDays: 0, workerHours: 0, supervisorHours: 0, workerAmount: 0, supervisorAmount: 0, hours: 0, amount: 0 });
 
   const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024; // حد Supabase الافتراضي 50 ميجابايت
 
@@ -403,14 +392,19 @@ export default function CostPage() {
             </div>
           </div>
 
-          {(laborSummary.workerDays > 0 || laborSummary.hours > 0 || laborSummary.amount > 0) && (
+          {(laborSummary.workerDays > 0 || laborSummary.supervisorDays > 0 || laborSummary.hours > 0 || laborSummary.amount > 0) && (
             <div className="card" style={{ marginBottom: 16 }}>
-              <div className="sec-head"><h2>ملخص العمالة</h2><span className="more">{fmtNum(laborSummary.days)} يوم فيه عمالة</span></div>
+              <div className="sec-head"><h2>ملخص العمالة والإشراف</h2><span className="more">{fmtNum(laborSummary.days)} يوم فيه عمالة/إشراف</span></div>
               <div className="daily-people-grid">
                 <div className="person-due">
                   <b>إجمالي العمال</b>
                   <span>{fmtNum(laborSummary.workerDays)} عامل/يوم</span>
-                  <strong className="amt">{fmtMoney(laborSummary.amount)} ⃁</strong>
+                  <strong className="amt">{fmtMoney(laborSummary.workerAmount)} ⃁</strong>
+                </div>
+                <div className="person-due">
+                  <b>إجمالي المشرفين</b>
+                  <span>{fmtNum(laborSummary.supervisorDays)} مشرف/يوم</span>
+                  <strong className="amt">{fmtMoney(laborSummary.supervisorAmount)} ⃁</strong>
                 </div>
                 <div className="person-due">
                   <b>إجمالي الساعات</b>
@@ -460,33 +454,37 @@ export default function CostPage() {
                   </div>
 
                   <DailyTable
-                    title="العمالة"
+                    title="العمالة والإشراف"
                     total={totals.labor}
-                    columns={['عدد العمال', 'الموظف (اختياري)', 'ساعات العامل', 'إجمالي الساعات', 'سعر الساعة', 'الإجمالي', '']}
+                    columns={['العدد', 'الموظف/المشرف', 'ساعات الفرد', 'إجمالي الساعات', 'سعر الساعة', 'الإجمالي', '']}
                     headClass="labor-head"
                     onAdd={() => addRow(day.date, 'laborRows')}
-                    addLabel="+ إضافة بند عمالة"
+                    addLabel="+ إضافة عامل/مشرف"
                   >
-                    {day.laborRows.map((row) => (
-                      <div className="daily-table-row labor-row" key={row.id}>
-                        <span className="dcell" data-label="عدد العمال"><input type="number" min="0" step="1" value={row.workerCount} onChange={(e) => updateLabor(day.date, row.id, 'workerCount', e.target.value)} dir="ltr" aria-label="عدد العمال" /></span>
-                        <span className="dcell" data-label="الموظف (اختياري)">
-                          <select value={row.worker || ''} onChange={(e) => updateLabor(day.date, row.id, 'worker', e.target.value)} aria-label="الموظف">
-                            <option value="">— بدون —</option>
-                            {(state.employees || []).map((em) => <option key={em.id} value={em.name}>{em.name}</option>)}
-                            {row.worker && row.worker !== 'فريلانسر' && !(state.employees || []).some((em) => em.name === row.worker) && (
-                              <option value={row.worker}>{row.worker}</option>
-                            )}
-                            <option value="فريلانسر">فريلانسر (مستقل)</option>
-                          </select>
-                        </span>
-                        <span className="dcell" data-label="ساعات العامل"><input type="number" min="0" step="0.5" value={row.hours} onChange={(e) => updateLabor(day.date, row.id, 'hours', e.target.value)} dir="ltr" aria-label="ساعات العامل" /></span>
-                        <span className="dcell" data-label="إجمالي الساعات"><span className="row-total amt">{fmtNum(num(row.workerCount) * num(row.hours))}</span></span>
-                        <span className="dcell" data-label="سعر الساعة"><input type="number" min="0" step="0.01" value={row.rate} onChange={(e) => updateLabor(day.date, row.id, 'rate', e.target.value)} dir="ltr" aria-label="سعر الساعة" /></span>
-                        <span className="dcell" data-label="الإجمالي"><span className="row-total amt">{fmtMoney(num(row.workerCount) * num(row.hours) * num(row.rate))} ⃁</span></span>
-                        <span className="dcell dcell-action"><button className="x-btn" type="button" onClick={() => removeRow(day.date, 'laborRows', row.id)} aria-label="حذف البند">✕</button></span>
-                      </div>
-                    ))}
+                    {day.laborRows.map((row) => {
+                      const isSupervisor = isSupervisorLaborRow(row);
+                      return (
+                        <div className="daily-table-row labor-row" key={row.id}>
+                          <span className="dcell" data-label={isSupervisor ? 'عدد المشرفين' : 'عدد العمال'}><input type="number" min="0" step="1" value={row.workerCount} onChange={(e) => updateLabor(day.date, row.id, 'workerCount', e.target.value)} dir="ltr" aria-label={isSupervisor ? 'عدد المشرفين' : 'عدد العمال'} /></span>
+                          <span className="dcell" data-label="الموظف/المشرف">
+                            <select value={row.worker || ''} onChange={(e) => updateLabor(day.date, row.id, 'worker', e.target.value)} aria-label="الموظف أو المشرف">
+                              <option value="">— بدون —</option>
+                              {(state.employees || []).map((em) => <option key={em.id} value={em.name}>{em.name}</option>)}
+                              {row.worker && row.worker !== 'فريلانسر' && !(state.employees || []).some((em) => em.name === row.worker) && (
+                                <option value={row.worker}>{row.worker}</option>
+                              )}
+                              <option value="فريلانسر">فريلانسر (مستقل)</option>
+                            </select>
+                            {row.worker && <small className="more">{isSupervisor ? 'مشرف' : 'عامل'}</small>}
+                          </span>
+                          <span className="dcell" data-label={isSupervisor ? 'ساعات المشرف' : 'ساعات العامل'}><input type="number" min="0" step="0.5" value={row.hours} onChange={(e) => updateLabor(day.date, row.id, 'hours', e.target.value)} dir="ltr" aria-label={isSupervisor ? 'ساعات المشرف' : 'ساعات العامل'} /></span>
+                          <span className="dcell" data-label="إجمالي الساعات"><span className="row-total amt">{fmtNum(num(row.workerCount) * num(row.hours))}</span></span>
+                          <span className="dcell" data-label="سعر الساعة"><input type="number" min="0" step="0.01" value={row.rate} onChange={(e) => updateLabor(day.date, row.id, 'rate', e.target.value)} dir="ltr" aria-label="سعر الساعة" /></span>
+                          <span className="dcell" data-label="الإجمالي"><span className="row-total amt">{fmtMoney(num(row.workerCount) * num(row.hours) * num(row.rate))} ⃁</span></span>
+                          <span className="dcell dcell-action"><button className="x-btn" type="button" onClick={() => removeRow(day.date, 'laborRows', row.id)} aria-label="حذف البند">✕</button></span>
+                        </div>
+                      );
+                    })}
                   </DailyTable>
 
                   <DailyTable

@@ -4,6 +4,7 @@
 //  (supabase/migrations/0001_init.sql)
 // ============================================================
 import { supabase } from './supabase';
+import { isSupervisorLaborRow } from './labor';
 
 const isRefundedInvoice = (invoice) => invoice?.status === 'refunded';
 
@@ -226,11 +227,13 @@ export function estimateToCostRows(estimate) {
       for (const r of day.laborRows || []) {
         const workerCount = n(r.workerCount ?? r.count ?? r.qty ?? (r.person ? 1 : 0));
         const amount = workerCount * n(r.hours) * n(r.rate);
+        const workerName = clean(r.worker);
         rows.push({
           kind: 'labor',
           label: null,
           work_date: day.date,
-          worker_name: clean(r.worker),
+          note: isSupervisorLaborRow(r) ? `مشرف: ${workerName || 'مشرف'}` : null,
+          worker_name: workerName,
           qty: workerCount,
           hours: n(r.hours),
           rate: n(r.rate),
@@ -326,6 +329,7 @@ export function costRowsToEstimate(rows) {
             id: r.id || `labor-${day.laborRows.length}`,
             workerCount: r.qty ?? '',
             worker: r.worker_name || '',
+            role: isSupervisorLaborRow(r) ? 'supervisor' : 'worker',
             hours: r.hours ?? '',
             rate: r.rate ?? '',
           });
@@ -364,6 +368,7 @@ export function costRowsToEstimate(rows) {
             id: r.id || `labor-${day.laborRows.length}`,
             workerCount: r.qty ?? (findPart('عمالة:').match(/\d+(\.\d+)?/)?.[0] || ''),
             worker: findPart('الموظف:') || '',
+            role: isSupervisorLaborRow({ ...r, worker: findPart('الموظف:') || '', note: findPart('مشرف:') || r.note }) ? 'supervisor' : 'worker',
             hours: r.hours ?? '',
             rate: r.rate ?? '',
           });

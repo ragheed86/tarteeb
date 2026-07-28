@@ -5,6 +5,7 @@ import {
   getProject, getClient, getProjectCosts, getProjectFinancials,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, CURRENCY, SOURCE_LABEL } from '@/lib/format';
+import { isSupervisorLaborRow } from '@/lib/labor';
 import { Loading, Empty, ErrorBar } from '../../../ui';
 
 const COST_KIND = { labor: 'عمالة', materials: 'مواد', transport: 'نقل', bonus: 'حوافز', other: 'أخرى' };
@@ -68,6 +69,8 @@ function groupCosts(costs) {
 
 // يبني ملف PDF من عنصر التقرير: تصوير DOM بعرض سطح المكتب ثم تقطيعه صفحات A4
 async function buildPdfBlob(node) {
+  const pageW = 210;
+  const pageH = 297;
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
     import('html2canvas'),
     import('jspdf'),
@@ -77,14 +80,24 @@ async function buildPdfBlob(node) {
     backgroundColor: '#ffffff',
     useCORS: true,
     logging: false,
-    windowWidth: 1000,
+    windowWidth: 794,
+    onclone: (doc) => {
+      const report = doc.querySelector('[data-pdf-report="project-expense"]');
+      if (!report) return;
+      report.style.width = `${pageW}mm`;
+      report.style.maxWidth = `${pageW}mm`;
+      report.style.minHeight = `${pageH}mm`;
+      report.style.margin = '0';
+      report.style.border = '0';
+      report.style.borderRadius = '0';
+      report.style.boxShadow = 'none';
+      report.style.overflow = 'visible';
+    },
   });
-  const pageW = 210;
-  const pageH = 297;
   const imgW = pageW;
   const imgH = (canvas.height * imgW) / canvas.width;
   const img = canvas.toDataURL('image/jpeg', 0.92);
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+  const pdf = new jsPDF({ unit: 'mm', format: [pageW, pageH], orientation: 'portrait' });
   let position = 0;
   let heightLeft = imgH;
   pdf.addImage(img, 'JPEG', 0, position, imgW, imgH);
@@ -149,17 +162,18 @@ export default function ProjectExpenseReport() {
     const materialRows = costs.filter((c) => c.kind === 'materials');
     const materialTotal = materialRows.reduce((sum, c) => sum + n(c.amount), 0);
     const transportTotal = costs.filter((c) => c.kind === 'transport').reduce((sum, c) => sum + n(c.amount), 0);
+    const supervisorRows = laborRows.filter((c) => isSupervisorLaborRow(c));
+    const workerRows = laborRows.filter((c) => !isSupervisorLaborRow(c));
     const laborHourlyTotal = laborRows
-      .filter((c) => n(c.qty) && n(c.hours) && n(c.rate))
+      .filter((c) => !isSupervisorLaborRow(c) && n(c.qty) && n(c.hours) && n(c.rate))
       .reduce((sum, c) => sum + n(c.amount), 0);
-    const supervisorTotal = laborRows
-      .filter((c) => !(n(c.qty) && n(c.hours) && n(c.rate)))
-      .reduce((sum, c) => sum + n(c.amount), 0);
+    const supervisorTotal = supervisorRows.reduce((sum, c) => sum + n(c.amount), 0);
     const otherTotal = Math.max(0, totalCost - laborHourlyTotal - supervisorTotal - transportTotal - materialTotal);
-    const workerHours = laborRows.reduce((sum, c) => sum + n(c.qty) * n(c.hours), 0);
+    const workerHours = workerRows.reduce((sum, c) => sum + n(c.qty) * n(c.hours), 0);
+    const supervisorHours = supervisorRows.reduce((sum, c) => sum + n(c.qty) * n(c.hours), 0);
     return {
       sale, totalCost, profit, margin, dayGroups, materialRows, materialTotal,
-      transportTotal, laborHourlyTotal, supervisorTotal, otherTotal, workerHours,
+      transportTotal, laborHourlyTotal, supervisorTotal, otherTotal, workerHours, supervisorHours,
     };
   }, [state]);
 
@@ -212,7 +226,7 @@ export default function ProjectExpenseReport() {
       </div>
       {note && <div className="rpt-note no-print">{note}</div>}
 
-      <article className="rpt" ref={reportRef}>
+      <article className="rpt" ref={reportRef} data-pdf-report="project-expense">
         <header className="rpt-hero">
           <div className="rpt-brand">
             <b>ترتيب</b>
@@ -263,6 +277,7 @@ export default function ProjectExpenseReport() {
               {report.otherTotal > 0 ? <MixLine label="أخرى" value={report.otherTotal} total={report.totalCost} /> : null}
               <div className="rpt-stats">
                 <span>{fmtNum(report.workerHours)} ساعة عمل</span>
+                <span>{fmtNum(report.supervisorHours)} ساعة إشراف</span>
                 <span>{fmtNum(workDays)} أيام عمل</span>
                 <span>إجمالي {fmtMoney(report.totalCost)} {CURRENCY}</span>
               </div>

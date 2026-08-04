@@ -50,9 +50,11 @@ export default function Dashboard() {
         ]);
         const activeProjects = projects.filter((p) => ACTIVE.includes(p.status)).length;
         const lowStock = inventory.filter((it) => Number(it.quantity) < Number(it.reorder_level));
+        const clientsById = Object.fromEntries(clients.map((client) => [client.id, client]));
         const upcoming = projects
           .filter((p) => OPEN_DELIVERY.includes(p.status) && p.due_date && daysUntil(p.due_date) !== null && daysUntil(p.due_date) <= 14)
-          .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+          .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+          .map((project) => ({ ...project, client: clientsById[project.client_id] || null }));
 
         const costByProject = {};
         for (const c of costs) costByProject[c.project_id] = (costByProject[c.project_id] || 0) + Number(c.amount || 0);
@@ -139,10 +141,15 @@ export default function Dashboard() {
       <div className="countdowns">
         {data.upcoming.slice(0, 4).map((item) => {
           const n = daysUntil(item.due_date);
+          const clientMeta = [item.client?.name, item.client?.district].filter(Boolean).join(' · ');
           return (
             <div className="cdcard" key={item.id}>
               <div className="ring"><b>{n === null ? '—' : n < 0 ? fmtNum(-n) : fmtNum(n)}</b><span>{n < 0 ? 'متأخر' : 'يوم'}</span></div>
-              <div><div className={`cdttl${n !== null && n <= 3 ? ' urgent' : ''}`}>{n < 0 ? `متأخر ${fmtNum(-n)} يوم` : n === 0 ? 'اليوم' : `خلال ${fmtNum(n)} يوم`}</div><small>{item.title}</small></div>
+              <div className="cdbody">
+                <div className={`cdttl${n !== null && n <= 3 ? ' urgent' : ''}`}>{n < 0 ? `متأخر ${fmtNum(-n)} يوم` : n === 0 ? 'اليوم' : `خلال ${fmtNum(n)} يوم`}</div>
+                <small>{item.title}</small>
+                {clientMeta && <small className="cdmeta">{clientMeta}</small>}
+              </div>
             </div>
           );
         })}
@@ -201,7 +208,17 @@ export default function Dashboard() {
               {data.upcoming.map((project) => {
                 const n = daysUntil(project.due_date);
                 const st = PROJECT_STATUS[project.status] || { label: project.status, cls: 'p-wait' };
-                return <div className="alert-row clickable" key={project.id} onClick={() => router.push(`/projects/${project.id}`)} style={{ cursor: 'pointer' }}><span className="nm">{project.title}</span><span className={`pill ${st.cls}`}>{st.label}</span><span className="tag" style={{ color: n < 0 ? 'var(--neg)' : n <= 3 ? 'var(--gold)' : 'var(--muted)' }}>{n < 0 ? `متأخر ${fmtNum(-n)} يوم` : n === 0 ? 'اليوم' : `خلال ${fmtNum(n)} يوم`}</span></div>;
+                const clientMeta = [project.client?.name, project.client?.district].filter(Boolean).join(' · ');
+                return (
+                  <div className="alert-row clickable" key={project.id} onClick={() => router.push(`/projects/${project.id}`)} style={{ cursor: 'pointer' }}>
+                    <span className="alert-main">
+                      <span className="nm">{project.title}</span>
+                      {clientMeta && <small>{clientMeta}</small>}
+                    </span>
+                    <span className={`pill ${st.cls}`}>{st.label}</span>
+                    <span className="tag" style={{ color: n < 0 ? 'var(--neg)' : n <= 3 ? 'var(--gold)' : 'var(--muted)' }}>{n < 0 ? `متأخر ${fmtNum(-n)} يوم` : n === 0 ? 'اليوم' : `خلال ${fmtNum(n)} يوم`}</span>
+                  </div>
+                );
               })}
             </div>
           )}

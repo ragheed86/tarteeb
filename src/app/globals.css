@@ -403,6 +403,8 @@ tr.clickable{cursor:pointer}
 .alert-list{display:flex;flex-direction:column}
 .alert-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--surface-2);font-size:14px}
 .alert-row:last-child{border-bottom:0}
+.alert-row .alert-main{display:grid;gap:2px;min-width:0}
+.alert-row .alert-main small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .alert-row .tag{margin-inline-start:auto;font-size:12px;font-weight:600}
 
 /* نماذج / نوافذ */

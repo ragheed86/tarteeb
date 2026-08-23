@@ -8,7 +8,7 @@ export function apiError(message, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
-export function missingAdminClient() {
+function missingAdminClient() {
   if (supabaseAdminReady) return null;
   return apiError('إعدادات سيرفر الصلاحيات غير مكتملة', 500);
 }
@@ -23,7 +23,7 @@ export async function getSessionUser(request) {
   return { user: data.user };
 }
 
-export function accessFromRow(row, user) {
+function accessFromRow(row, user) {
   const email = normalizeEmail(row?.email || user?.email);
   const primary = isPrimaryAdmin(email);
   const role = primary ? 'admin' : row?.role || 'viewer';

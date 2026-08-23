@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   getProjects, getClients, getSuppliers, getEmployees, updateProject,
   getProjectCosts, getProjectInvoices, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
@@ -420,7 +421,7 @@ export default function CostPage() {
             <button className="btn ghost" onClick={() => setInvoicePanelOpen(true)} type="button">
               مرفقات الفواتير {(projectInvoices.length + attachments.length) ? `(${fmtNum(projectInvoices.length + attachments.length)})` : ''}
             </button>
-            <button className="btn ghost" onClick={() => window.location.assign(`/projects/${selected.id}/report`)} type="button">تقرير PDF</button>
+            <Link className="btn ghost" href={`/projects/${selected.id}/report`}>تقرير PDF</Link>
             <button className="btn ghost" onClick={save} disabled={saving} type="button">{saving ? 'جارٍ الحفظ…' : 'حفظ التكاليف اليومية'}</button>
             {saveMsg && <span>{saveMsg}</span>}
           </div>
@@ -573,16 +574,13 @@ function InvoiceAttachmentsModal({
                       <span>{fmtDate(invoice.issue_at)} · {fmtMoney(invoice.total)} ⃁</span>
                     </div>
                     <span className={`pill ${st.cls}`}>{st.label}</span>
-                    <button
+                    <Link
                       className="btn ghost sm"
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        window.location.assign(`/invoices/${invoice.id}`);
-                      }}
+                      href={`/invoices/${invoice.id}`}
+                      onClick={onClose}
                     >
                       فتح الفاتورة
-                    </button>
+                    </Link>
                   </div>
                 );
               })}

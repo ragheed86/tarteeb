@@ -643,8 +643,8 @@ function GovPanel({ rows, setRows }) {
     if (!file) return;
     setBusyId(g.id); setErr('');
     try {
-      const url = await uploadGovDocument(file);
-      const up = await updateGovernmentAccount(g.id, { doc_url: url });
+      const uploaded = await uploadGovDocument(file);
+      const up = await updateGovernmentAccount(g.id, { doc_url: null, doc_path: uploaded.path });
       setRows((s) => s.map((x) => (x.id === up.id ? up : x)));
     } catch (e2) {
       setErr(e2.message || 'تعذّر رفع المستند');

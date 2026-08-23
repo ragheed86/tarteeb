@@ -5,6 +5,7 @@
 // ============================================================
 import { supabase } from './supabase';
 import { isSupervisorLaborRow } from './labor';
+import { signStoredFile, signStoredFiles } from './storage';
 
 const isRefundedInvoice = (invoice) => invoice?.status === 'refunded';
 
@@ -469,8 +470,16 @@ export async function getProductDemand() {
 
 // ---------- الموردون / الموظفون / الجهات / الإعدادات ----------
 export async function getSuppliers()        { const { data, error } = await supabase.from('suppliers').select('*');            if (error) throw error; return data; }
-export async function getEmployees()        { const { data, error } = await supabase.from('employees').select('*');            if (error) throw error; return data; }
-export async function getGovernmentAccounts(){ const { data, error } = await supabase.from('government_accounts').select('*'); if (error) throw error; return data; }
+export async function getEmployees() {
+  const { data, error } = await supabase.from('employees').select('*');
+  if (error) throw error;
+  return signStoredFiles(data, 'employee-photos', 'photo_path', 'photo_url');
+}
+export async function getGovernmentAccounts() {
+  const { data, error } = await supabase.from('government_accounts').select('*');
+  if (error) throw error;
+  return signStoredFiles(data, 'gov-documents', 'doc_path', 'doc_url');
+}
 export async function getCompanySettings()  { const { data, error } = await supabase.from('company_settings').select('*').limit(1).single(); if (error) throw error; return data; }
 
 // ---------- كتالوج الخدمات ----------
@@ -532,11 +541,6 @@ async function attachInvoiceSummaries(invoices) {
     };
   });
 }
-export async function getPartners() {
-  const { data, error } = await supabase.from('partners').select('*');
-  if (error) throw error; return data;
-}
-
 // ---------- الوارد الموحّد / 360 ----------
 export async function getCommunications(clientId) {
   const q = supabase.from('communications').select('*').order('occurred_at', { ascending: false });
@@ -607,7 +611,8 @@ export async function getProjectMedia(projectId) {
   const { data, error } = await supabase.from('project_media')
     .select('id,project_id,kind,file_url,file_path,created_at').eq('project_id', projectId)
     .order('created_at', { ascending: false });
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFiles(data, PROJECT_MEDIA_BUCKET);
 }
 export async function createProjectMedia(p) {
   const { data, error } = await supabase.from('project_media').insert(p).select().single();
@@ -620,8 +625,8 @@ export async function uploadProjectMedia(projectId, kind, file) {
   const { error: upErr } = await supabase.storage.from(PROJECT_MEDIA_BUCKET)
     .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
   if (upErr) throw upErr;
-  const { data: pub } = supabase.storage.from(PROJECT_MEDIA_BUCKET).getPublicUrl(path);
-  return createProjectMedia({ project_id: projectId, kind, file_url: pub.publicUrl, file_path: path });
+  const row = await createProjectMedia({ project_id: projectId, kind, file_url: path, file_path: path });
+  return signStoredFile(row, PROJECT_MEDIA_BUCKET);
 }
 export async function removeProjectMedia(id, filePath) {
   if (filePath) await supabase.storage.from(PROJECT_MEDIA_BUCKET).remove([filePath]).catch(() => {});
@@ -636,10 +641,11 @@ export async function getDashboardMedia() {
   const { data, error } = await supabase.from('dashboard_media')
     .select('id,kind,file_url,file_path,caption,created_at')
     .order('created_at', { ascending: false });
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFiles(data, DASHBOARD_MEDIA_BUCKET);
 }
 
-// يرفع الملف إلى الحاوية، يجلب الرابط العام، ثم يسجّل صفاً في الجدول
+// يرفع الملف إلى الحاوية الخاصة، ثم يعيد رابطاً موقّعاً محدود الصلاحية.
 export async function uploadDashboardMedia(file, caption = '') {
   const kind = file.type.startsWith('video') ? 'video' : 'image';
   const ext = (file.name.split('.').pop() || (kind === 'video' ? 'mp4' : 'jpg')).toLowerCase();
@@ -647,10 +653,10 @@ export async function uploadDashboardMedia(file, caption = '') {
   const { error: upErr } = await supabase.storage.from(DASHBOARD_MEDIA_BUCKET)
     .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
   if (upErr) throw upErr;
-  const { data: pub } = supabase.storage.from(DASHBOARD_MEDIA_BUCKET).getPublicUrl(path);
-  const row = { kind, file_url: pub.publicUrl, file_path: path, caption: caption?.trim() || null };
+  const row = { kind, file_url: path, file_path: path, caption: caption?.trim() || null };
   const { data, error } = await supabase.from('dashboard_media').insert(row).select().single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFile(data, DASHBOARD_MEDIA_BUCKET);
 }
 
 export async function removeDashboardMedia(id, filePath) {
@@ -667,28 +673,29 @@ export async function getProjectCostAttachments(projectId) {
     .select('id,project_id,file_name,file_url,file_path,file_type,file_size,note,created_at')
     .eq('project_id', projectId)
     .order('created_at', { ascending: false });
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFiles(data, COST_ATTACHMENTS_BUCKET);
 }
 
-// يرفع المستند إلى الحاوية، يجلب الرابط العام، ثم يسجّل صفاً في الجدول
+// يرفع المستند إلى الحاوية الخاصة، ثم يعيد رابطاً موقّعاً محدود الصلاحية.
 export async function uploadProjectCostAttachment(projectId, file, note = '') {
   const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
   const path = `${projectId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error: upErr } = await supabase.storage.from(COST_ATTACHMENTS_BUCKET)
     .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
   if (upErr) throw upErr;
-  const { data: pub } = supabase.storage.from(COST_ATTACHMENTS_BUCKET).getPublicUrl(path);
   const row = {
     project_id: projectId,
     file_name: file.name,
-    file_url: pub.publicUrl,
+    file_url: path,
     file_path: path,
     file_type: file.type || null,
     file_size: file.size || null,
     note: note?.trim() || null,
   };
   const { data, error } = await supabase.from('project_cost_attachments').insert(row).select().single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFile(data, COST_ATTACHMENTS_BUCKET);
 }
 
 export async function removeProjectCostAttachment(id, filePath) {
@@ -744,7 +751,7 @@ export async function removeProductImage(path) {
 // ============================================================
 //  الموظفون · CRUD + مستندات
 // ============================================================
-// يرفع صورة الموظف إلى حاوية التخزين العامة ويعيد الرابط العام
+// يرفع صورة الموظف إلى حاوية خاصة ويعيد مسارها ورابط معاينة موقّعاً.
 const EMPLOYEE_PHOTOS_BUCKET = 'employee-photos';
 export async function uploadEmployeePhoto(file) {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
@@ -752,17 +759,19 @@ export async function uploadEmployeePhoto(file) {
   const { error: upErr } = await supabase.storage.from(EMPLOYEE_PHOTOS_BUCKET)
     .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
   if (upErr) throw upErr;
-  const { data: pub } = supabase.storage.from(EMPLOYEE_PHOTOS_BUCKET).getPublicUrl(path);
-  return pub.publicUrl;
+  const signed = await signStoredFile({ photo_path: path, photo_url: path }, EMPLOYEE_PHOTOS_BUCKET, 'photo_path', 'photo_url');
+  return { path, url: signed.photo_url };
 }
 
 export async function createEmployee(p) {
   const { data, error } = await supabase.from('employees').insert(p).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFile(data, EMPLOYEE_PHOTOS_BUCKET, 'photo_path', 'photo_url');
 }
 export async function updateEmployee(id, p) {
   const { data, error } = await supabase.from('employees').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFile(data, EMPLOYEE_PHOTOS_BUCKET, 'photo_path', 'photo_url');
 }
 export async function removeEmployee(id) {
   const { error } = await supabase.from('employees').delete().eq('id', id);
@@ -800,39 +809,9 @@ export async function removeSupplier(id) {
 }
 
 // ============================================================
-//  الشركاء · CRUD + حركات
-// ============================================================
-export async function createPartner(p) {
-  const { data, error } = await supabase.from('partners').insert(p).select('*').single();
-  if (error) throw error; return data;
-}
-export async function updatePartner(id, p) {
-  const { data, error } = await supabase.from('partners').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
-}
-export async function removePartner(id) {
-  const { error } = await supabase.from('partners').delete().eq('id', id);
-  if (error) throw error;
-}
-export async function getPartnerTransactions() {
-  const { data, error } = await supabase.from('partner_transactions')
-    .select('id,partner_id,period,txn_type,amount,note,created_at')
-    .order('period', { ascending: false });
-  if (error) throw error; return data;
-}
-export async function createPartnerTransaction(p) {
-  const { data, error } = await supabase.from('partner_transactions').insert(p).select().single();
-  if (error) throw error; return data;
-}
-export async function removePartnerTransaction(id) {
-  const { error } = await supabase.from('partner_transactions').delete().eq('id', id);
-  if (error) throw error;
-}
-
-// ============================================================
 //  الجهات الحكومية · CRUD
 // ============================================================
-// يرفع مستند جهة حكومية إلى حاوية التخزين ويعيد الرابط العام
+// يرفع مستند جهة حكومية إلى حاوية خاصة ويعيد مساره ورابط معاينة موقّعاً.
 const GOV_DOCUMENTS_BUCKET = 'gov-documents';
 export async function uploadGovDocument(file) {
   const ext = (file.name.split('.').pop() || 'pdf').toLowerCase();
@@ -840,17 +819,19 @@ export async function uploadGovDocument(file) {
   const { error: upErr } = await supabase.storage.from(GOV_DOCUMENTS_BUCKET)
     .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
   if (upErr) throw upErr;
-  const { data: pub } = supabase.storage.from(GOV_DOCUMENTS_BUCKET).getPublicUrl(path);
-  return pub.publicUrl;
+  const signed = await signStoredFile({ doc_path: path, doc_url: path }, GOV_DOCUMENTS_BUCKET, 'doc_path', 'doc_url');
+  return { path, url: signed.doc_url };
 }
 
 export async function createGovernmentAccount(p) {
   const { data, error } = await supabase.from('government_accounts').insert(p).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFile(data, GOV_DOCUMENTS_BUCKET, 'doc_path', 'doc_url');
 }
 export async function updateGovernmentAccount(id, p) {
   const { data, error } = await supabase.from('government_accounts').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  return signStoredFile(data, GOV_DOCUMENTS_BUCKET, 'doc_path', 'doc_url');
 }
 export async function removeGovernmentAccount(id) {
   const { error } = await supabase.from('government_accounts').delete().eq('id', id);

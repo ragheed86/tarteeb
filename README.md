@@ -9,13 +9,12 @@ tarteeb/
 ├─ prototype/
 │  └─ tarteeb-app.html          ← النموذج التفاعلي (مرجع التصميم)
 ├─ supabase/
-│  └─ migrations/
-│     └─ 0001_init.sql          ← المخطط النظيف (يُشغّل في Supabase SQL Editor)
+│  └─ migrations/               ← سجل المخطط والسياسات وحاويات التخزين
 ├─ src/
 │  ├─ lib/
 │  │  ├─ supabase.js            ← تهيئة عميل Supabase
 │  │  └─ data.js                ← دوال قراءة البيانات (عملاء، مشاريع، فواتير...)
-│  └─ app/                      ← صفحات Next.js (تُبنى لاحقاً)
+│  └─ app/                      ← صفحات Next.js (App Router)
 ├─ .env.local.example
 ├─ .gitignore
 └─ package.json
@@ -29,11 +28,15 @@ cp .env.local.example .env.local   # ثم عبّئ القيم من Supabase
 npm run dev                        # http://localhost:3000
 ```
 
+لاختبارات الواجهة المصادَقة استخدم مشروع Supabase مخصصاً للاختبار واضبط
+`SUPABASE_SERVICE_ROLE_KEY` و`PW_TEST_EMAIL`. لا تستخدم حساب الأدمن أو قاعدة الإنتاج.
+
 ## Supabase (قاعدة البيانات)
 
-1. أنشئ مشروعاً جديداً (بداية نظيفة).
-2. SQL Editor → الصق محتوى `supabase/migrations/0001_init.sql` → Run.
-3. Project Settings → API → انسخ الـ URL ومفتاح anon إلى `.env.local`.
+1. أنشئ مشروعاً جديداً أو اربط المشروع الحالي عبر Supabase CLI.
+2. طبّق جميع الملفات الموجودة في `supabase/migrations` بترتيبها، ولا تشغّل `0001_init.sql` وحده.
+3. Project Settings → API → انسخ الـ URL والمفتاح القابل للنشر إلى `.env.local`.
+4. فعّل حماية كلمات المرور المسرّبة من إعدادات Auth في المشاريع الإنتاجية.
 
 ## GitHub (البيت الدائم للكود)
 
@@ -56,4 +59,4 @@ git push -u origin main
 
 - صافي الربح والهامش لا يُخزَّنان؛ يُحسبان عبر الـ view `project_financials`.
 - بيانات الدخول الحكومية الحسّاسة تُخزَّن عبر Supabase Vault (لا نصاً صريحاً).
-- سياسة RLS المبدئية: وصول كامل للمستخدم الموثّق؛ تُشدَّد بالأدوار لاحقاً.
+- جميع جداول `public` محمية بـRLS وصلاحيات التطبيق، والملفات الداخلية في حاويات خاصة تُعرض بروابط موقّعة مؤقتاً.

@@ -3,17 +3,6 @@
 // فتستبدل الترميز المكرر (label + input) في كل مودالات الصفحات.
 import { useId } from 'react';
 
-export function Field({ label, hint, error, children, className = '' }) {
-  return (
-    <div className={`field ${className}`.trim()}>
-      {label && <label>{label}</label>}
-      {children}
-      {hint && !error && <small style={{ color: 'var(--muted)', fontSize: 'var(--fs-xs)' }}>{hint}</small>}
-      {error && <small role="alert" style={{ color: 'var(--neg)', fontSize: 'var(--fs-xs)' }}>{error}</small>}
-    </div>
-  );
-}
-
 export function Input({ label, hint, error, ltr, className = '', ...props }) {
   const id = useId();
   return (

@@ -5,8 +5,6 @@
 const { readFileSync, writeFileSync, mkdirSync } = require('node:fs');
 const path = require('node:path');
 
-const TEST_EMAIL = process.env.PW_TEST_EMAIL || 'r.kallajo@gmail.com';
-
 function readEnvLocal() {
   try {
     const raw = readFileSync(path.join(__dirname, '..', '.env.local'), 'utf8');
@@ -26,10 +24,11 @@ module.exports = async function globalSetup() {
   const url = env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  const testEmail = env.PW_TEST_EMAIL;
 
   const emptyState = { cookies: [], origins: [] };
-  if (!url || !anonKey || !serviceKey) {
-    console.warn('[auth.setup] SUPABASE_SERVICE_ROLE_KEY غير متوفر — ستُتخطى الاختبارات المصادَقة. أضِفه إلى .env.local لتفعيلها.');
+  if (!url || !anonKey || !serviceKey || !testEmail) {
+    console.warn('[auth.setup] يلزم مشروع اختبار مستقل مع SUPABASE_SERVICE_ROLE_KEY وPW_TEST_EMAIL — ستُتخطى الاختبارات المصادَقة.');
     writeFileSync(outFile, JSON.stringify(emptyState));
     return;
   }
@@ -38,7 +37,7 @@ module.exports = async function globalSetup() {
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
   const anon = createClient(url, anonKey, { auth: { persistSession: false } });
 
-  const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email: TEST_EMAIL });
+  const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email: testEmail });
   if (error) throw new Error(`generateLink: ${error.message}`);
   const tokenHash = data.properties?.hashed_token;
   const { data: verified, error: e2 } = await anon.auth.verifyOtp({ type: 'magiclink', token_hash: tokenHash });
@@ -54,5 +53,5 @@ module.exports = async function globalSetup() {
       localStorage: [{ name: storageKey, value: JSON.stringify(verified.session) }],
     }],
   }));
-  console.log('[auth.setup] جلسة اختبار جاهزة لـ', TEST_EMAIL);
+  console.log('[auth.setup] جلسة اختبار جاهزة لـ', testEmail);
 };

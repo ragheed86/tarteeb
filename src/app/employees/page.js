@@ -33,7 +33,7 @@ function roleRank(role) {
   return 800;
 }
 
-const EMPTY = { name: '', role: '', phone: '', national_id: '', nationality: '', wage: 'fixed', status: 'active', photo_url: '' };
+const EMPTY = { name: '', role: '', phone: '', national_id: '', nationality: '', wage: 'fixed', status: 'active', photo_url: '', photo_path: '' };
 
 function daysUntil(d) {
   if (!d) return null;
@@ -71,7 +71,7 @@ export default function EmployeesPage() {
     setForm({
       name: em.name || '', role: em.role || '', phone: em.phone || '', national_id: em.national_id || '',
       nationality: em.nationality || '',
-      wage: em.wage || 'fixed', status: em.status || 'active', photo_url: em.photo_url || '',
+      wage: em.wage || 'fixed', status: em.status || 'active', photo_url: em.photo_url || '', photo_path: em.photo_path || '',
     });
     setPhotoPreview('');
     setFormErr(''); setOpen(true);
@@ -84,8 +84,8 @@ export default function EmployeesPage() {
     setPhotoPreview(URL.createObjectURL(file));
     setUploadingPhoto(true); setFormErr('');
     try {
-      const url = await uploadEmployeePhoto(file);
-      setForm((f) => ({ ...f, photo_url: url }));
+      const uploaded = await uploadEmployeePhoto(file);
+      setForm((f) => ({ ...f, photo_url: uploaded.url, photo_path: uploaded.path }));
     } catch (e2) {
       setFormErr(e2.message || 'تعذّر رفع الصورة');
       setPhotoPreview('');
@@ -103,7 +103,9 @@ export default function EmployeesPage() {
       name: form.name.trim(), role: form.role.trim() || null, phone: form.phone.trim() || null,
       national_id: form.national_id.trim() || null,
       nationality: form.nationality || null,
-      wage: form.wage, status: form.status, photo_url: form.photo_url.trim() || null,
+      wage: form.wage, status: form.status,
+      photo_url: form.photo_path ? null : form.photo_url.trim() || null,
+      photo_path: form.photo_path || null,
     };
     try {
       if (editing) {
@@ -220,7 +222,7 @@ export default function EmployeesPage() {
                   <label className="btn ghost sm" htmlFor="employee-photo">{uploadingPhoto ? 'جارٍ الرفع…' : 'رفع صورة الموظف'}</label>
                   <input id="employee-photo" type="file" accept="image/*" hidden disabled={uploadingPhoto} onChange={handlePhotoFile} />
                   <input
-                    value={form.photo_url} onChange={(e) => set('photo_url', e.target.value)} dir="ltr"
+                    value={form.photo_url} onChange={(e) => setForm((f) => ({ ...f, photo_url: e.target.value, photo_path: '' }))} dir="ltr"
                     placeholder="أو الصق رابط الصورة المستضافة" style={{ flex: 1, minWidth: 200 }}
                   />
                 </div>

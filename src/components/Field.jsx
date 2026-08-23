@@ -5,12 +5,14 @@ import { useId } from 'react';
 
 export function Input({ label, hint, error, ltr, className = '', ...props }) {
   const id = useId();
+  const isDateControl = ['date', 'datetime-local', 'month', 'week'].includes(props.type);
   return (
     <div className={`field ${className}`.trim()}>
       {label && <label htmlFor={id}>{label}</label>}
       <input
         id={id}
         dir={ltr ? 'ltr' : undefined}
+        lang={isDateControl ? 'en-GB' : props.lang}
         aria-invalid={error ? true : undefined}
         {...props}
       />

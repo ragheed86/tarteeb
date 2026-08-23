@@ -1,4 +1,6 @@
-// تنسيق موحّد — الأرقام لاتينية دائماً (en-US)، التواريخ عربية بأرقام لاتينية
+// تنسيق موحّد — الأرقام لاتينية دائماً، والتواريخ عربية ميلادية بأرقام لاتينية.
+// تحديد gregory صراحةً يمنع ar-SA من الرجوع إلى تقويم أم القرى الهجري.
+export const GREGORIAN_DATE_LOCALE = 'ar-SA-u-ca-gregory-nu-latn';
 export const CURRENCY = '⃁'; // رمز الريال السعودي الجديد (Unicode 17.0)
 export function fmtNum(n) {
   return new Intl.NumberFormat('en-US').format(Number(n || 0));
@@ -10,7 +12,7 @@ export function fmtDate(d) {
   if (!d) return '—';
   const date = new Date(d);
   if (Number.isNaN(date.getTime())) return String(d);
-  return new Intl.DateTimeFormat('ar-SA-u-nu-latn', { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat(GREGORIAN_DATE_LOCALE, { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
 }
 // وقت نسبي مختصر لـ«آخر تحديث» — أرقام لاتينية، ويرجع للتاريخ الكامل بعد أسبوع
 export function fmtRelative(d) {

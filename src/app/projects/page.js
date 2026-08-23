@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
   getProjects, getClients, getInvoices, getEmployees, createProject, updateProject, removeProject,
 } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate, fmtRelative, PROJECT_STATUS, displayProgress, progressForStatus, DONE_STATUSES } from '@/lib/format';
+import { GREGORIAN_DATE_LOCALE, fmtMoney, fmtNum, fmtDate, fmtRelative, PROJECT_STATUS, displayProgress, progressForStatus, DONE_STATUSES } from '@/lib/format';
 import { usePersistedState } from '@/lib/usePersistedState';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select } from '@/components';
 
@@ -62,7 +62,7 @@ function projectOverlapsRange(project, from, to) {
 const WEEKDAYS_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 const MONTH_LABEL = (iso) => {
   const [y, m] = iso.split('-').map(Number);
-  return new Intl.DateTimeFormat('ar-SA-u-nu-latn', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1));
+  return new Intl.DateTimeFormat(GREGORIAN_DATE_LOCALE, { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1));
 };
 function addMonthsIso(iso, n) {
   const [y, m] = iso.split('-').map(Number);
@@ -88,7 +88,7 @@ function weekDays(anchorIso) {
 }
 const WEEK_RANGE_LABEL = (anchorIso) => {
   const days = weekDays(anchorIso);
-  const fmt = (dt) => new Intl.DateTimeFormat('ar-SA-u-nu-latn', { day: 'numeric', month: 'short' }).format(dt);
+  const fmt = (dt) => new Intl.DateTimeFormat(GREGORIAN_DATE_LOCALE, { day: 'numeric', month: 'short' }).format(dt);
   return `${fmt(days[0])} — ${fmt(days[6])}`;
 };
 // أعمدة كانبان: [العنوان, الحالات المشمولة, الحالة عند الإفلات]
@@ -297,11 +297,11 @@ export default function ProjectsPage() {
         <div className="project-date-grid">
           <label className="project-date-field">
             <span>من</span>
-            <input type="date" className="fdate" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <input type="date" lang="en-GB" dir="ltr" className="fdate" value={from} onChange={(e) => setFrom(e.target.value)} />
           </label>
           <label className="project-date-field">
             <span>إلى</span>
-            <input type="date" className="fdate" value={to} onChange={(e) => setTo(e.target.value)} />
+            <input type="date" lang="en-GB" dir="ltr" className="fdate" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
         </div>
         <div className="project-filter-actions">

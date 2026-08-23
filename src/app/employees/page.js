@@ -356,7 +356,7 @@ function DocsModal({ employee, onClose }) {
           <select value={form.doc_type} onChange={(e) => setForm((f) => ({ ...f, doc_type: e.target.value }))} style={{ maxWidth: 150 }}>
             {Object.entries(DOC_TYPE).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-          <input type="date" value={form.expiry_date} onChange={(e) => setForm((f) => ({ ...f, expiry_date: e.target.value }))} dir="ltr" style={{ maxWidth: 160 }} />
+          <input type="date" lang="en-GB" value={form.expiry_date} onChange={(e) => setForm((f) => ({ ...f, expiry_date: e.target.value }))} dir="ltr" style={{ maxWidth: 160 }} />
           <label className="btn ghost sm" htmlFor="doc-file">رفع المستند</label>
           <input id="doc-file" type="file" hidden onChange={handleFile} />
           {fileName && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fileName}</span>}

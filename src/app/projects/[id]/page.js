@@ -137,8 +137,8 @@ function DatesCard({ project, onChange }) {
       <div className="sec-head"><h2>تواريخ المشروع</h2><span className="more">{fmtDate(project.start_date)} ← {fmtDate(project.due_date)}</span></div>
       {msg && <div className={msg.startsWith('تم') ? 'okbar' : 'errbar'}>{msg}</div>}
       <form onSubmit={save} className="form-grid">
-        <div className="field"><label>تاريخ البدء</label><input type="date" dir="ltr" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} /></div>
-        <div className="field"><label>تاريخ التسليم</label><input type="date" dir="ltr" value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} /></div>
+        <div className="field"><label>تاريخ البدء</label><input type="date" lang="en-GB" dir="ltr" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} /></div>
+        <div className="field"><label>تاريخ التسليم</label><input type="date" lang="en-GB" dir="ltr" value={form.due_date} onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))} /></div>
         <div className="modal-actions" style={{ gridColumn: '1 / -1' }}>
           <button className="btn sm" disabled={busy}>{busy ? 'جارٍ الحفظ…' : 'حفظ التواريخ'}</button>
         </div>

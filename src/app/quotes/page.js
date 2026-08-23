@@ -333,7 +333,7 @@ export default function QuotesPage() {
         <div className="qg-form">
           <h3>بيانات العميل</h3>
           <label className="qg-f"><span>اسم العميل</span><input value={q.client} onChange={(e) => set('client', e.target.value)} placeholder="اسم العميل" /></label>
-          <label className="qg-f"><span>التاريخ</span><input type="date" value={q.date} onChange={(e) => set('date', e.target.value)} /></label>
+          <label className="qg-f"><span>التاريخ</span><input type="date" lang="en-GB" dir="ltr" value={q.date} onChange={(e) => set('date', e.target.value)} /></label>
 
           <h3>وصف المشروع</h3>
           <label className="qg-f"><textarea value={q.desc} onChange={(e) => set('desc', e.target.value)} /></label>

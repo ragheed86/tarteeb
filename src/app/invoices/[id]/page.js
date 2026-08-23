@@ -350,7 +350,7 @@ export default function InvoiceDetail() {
           {isRefunded && <div className="errbar">هذه الفاتورة مرتجعة؛ تم إيقاف تسجيل الدفعات عليها.</div>}
           <form onSubmit={addPayment} className="form-grid">
             <div className="field"><label>المبلغ</label><input type="number" min="0" step="0.01" value={payment.amount} onChange={(e) => setPayment((p) => ({ ...p, amount: e.target.value }))} dir="ltr" /></div>
-            <div className="field"><label>تاريخ الدفع</label><input type="date" value={payment.paid_at} onChange={(e) => setPayment((p) => ({ ...p, paid_at: e.target.value }))} dir="ltr" /></div>
+            <div className="field"><label>تاريخ الدفع</label><input type="date" lang="en-GB" value={payment.paid_at} onChange={(e) => setPayment((p) => ({ ...p, paid_at: e.target.value }))} dir="ltr" /></div>
             <div className="field"><label>طريقة الدفع</label>
               <select value={payment.method} onChange={(e) => setPayment((p) => ({ ...p, method: e.target.value }))}>
                 {Object.entries(PAYMENT_METHOD).map(([value, label]) => <option key={value} value={value}>{label}</option>)}

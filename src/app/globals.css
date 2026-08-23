@@ -172,23 +172,35 @@ tr.clickable{cursor:pointer}
 
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .pcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-.employee-card{position:relative;overflow:visible;padding-top:46px;margin-top:34px;display:flex;flex-direction:column}
-.employee-card .pb{padding-top:30px;flex:1;display:flex;flex-direction:column}
-.employee-photo{position:absolute;top:-34px;left:50%;transform:translateX(-50%);width:86px;height:86px;border-radius:50%;background:linear-gradient(135deg,#EFFBFA,#E7F5EF);border:4px solid #fff;box-shadow:0 14px 32px rgba(8,63,68,.18);display:flex;align-items:center;justify-content:center;overflow:hidden;z-index:2}
-.employee-photo img{width:100%;height:100%;object-fit:cover;display:block}
-.employee-photo span{font-family:var(--display);font-size:30px;font-weight:800;color:var(--green);line-height:1}
-/* employee card layout */
-.employee-card .emp-head{text-align:center;margin-bottom:14px}
-.employee-card .emp-head h3{font-size:16px;font-weight:600;margin-bottom:7px}
-.employee-card .emp-role{display:inline-block;font-size:11.5px;font-weight:600;color:var(--green);background:var(--sage-bg);border:1px solid var(--teal-200);padding:3px 11px;border-radius:20px}
-.employee-card .emp-nat{font-size:12px;color:var(--muted);margin-top:8px}
-.employee-card .emp-details{display:flex;flex-direction:column;border-top:1px solid var(--surface-2);padding-top:8px;margin-bottom:14px}
-.employee-card .emp-drow{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;padding:5px 0}
-.employee-card .emp-drow>span:first-child{color:var(--muted)}
-.employee-card .emp-drow b{font-weight:500}
-.emp-actions{display:flex;gap:8px;margin-top:auto}
-.emp-actions .btn{flex:1;justify-content:center;padding-inline:6px}
-.emp-actions .btn.danger{color:var(--neg)}
+.employee-list-card{background:rgba(255,255,255,.78);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-card);overflow:hidden}
+.employee-toolbar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.employee-search{display:flex;align-items:center;gap:9px;width:min(440px,100%);border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:8px 12px;color:var(--muted)}
+.employee-search:focus-within{border-color:var(--teal-600);box-shadow:var(--focus-ring)}
+.employee-search svg{width:18px;height:18px;flex-shrink:0}
+.employee-search input{width:100%;border:0;background:transparent;outline:0;color:var(--ink);font-size:13.5px}
+.employee-filter{min-width:145px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:8px 12px;color:var(--ink);outline:0}
+.employee-filter:focus{border-color:var(--teal-600);box-shadow:var(--focus-ring)}
+.employee-result-count{margin-inline-start:auto;color:var(--muted);font-size:12.5px;white-space:nowrap}
+.employee-table-wrap{width:100%;overflow-x:auto}
+.employee-table{min-width:900px}
+.employee-table thead{background:var(--surface-2)}
+.employee-table th{padding-block:12px;font-weight:600}
+.employee-table td{padding-block:15px;vertical-align:middle}
+.employee-person{display:flex;align-items:center;gap:11px;min-width:200px}
+.employee-list-photo{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--teal-50),var(--teal-100));border:2px solid #fff;box-shadow:0 4px 12px rgba(8,63,68,.13);display:grid;place-items:center;overflow:hidden;flex-shrink:0}
+.employee-list-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.employee-list-photo span{font-family:var(--display);font-size:18px;font-weight:700;color:var(--green)}
+.employee-person-copy,.employee-role-cell{display:flex;flex-direction:column;min-width:0}
+.employee-person-copy strong,.employee-role-cell strong{font-size:14px;font-weight:600;color:var(--ink)}
+.employee-person-copy span,.employee-role-cell span{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.employee-completion{display:flex;align-items:center;gap:10px;min-width:170px}
+.employee-progress{width:120px;height:7px;background:var(--surface-2);border-radius:999px;overflow:hidden}
+.employee-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--teal-500),var(--teal-700))}
+.employee-completion b{font-size:12px;font-weight:600;color:var(--ink);min-width:34px;direction:ltr}
+.employee-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
+.employee-row-actions .btn{padding:7px 10px}
+.employee-delete{border:0;background:transparent;color:var(--neg);font-size:12.5px;padding:7px 8px;border-radius:8px;cursor:pointer}
+.employee-delete:hover{background:var(--neg-bg)}
 .pcard .ph{height:96px;background:var(--sage-bg);display:grid;place-items:center;color:var(--sage);position:relative}
 .pcard .pb{padding:15px 16px}.pcard .pb h3{font-size:15px;font-weight:600;margin-bottom:3px}
 .pcard .cl{font-size:12.5px;color:var(--muted);margin-bottom:12px}
@@ -885,7 +897,20 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .set-side{position:static;display:flex;flex-wrap:wrap;gap:4px}
   .set-side>div{flex:1;min-width:150px}
   .searchbox.sm{flex:1 1 100%}
-  .employee-card{min-width:min(82vw,320px)}
+  .employee-toolbar{align-items:stretch;flex-wrap:wrap;padding:12px}
+  .employee-search{width:100%}
+  .employee-filter{flex:1;min-height:44px;font-size:16px}
+  .employee-result-count{display:flex;align-items:center;margin-inline-start:0}
+  .employee-table-wrap{overflow:visible}
+  .employee-table{min-width:0}
+  .employee-table tbody tr{padding:14px}
+  .employee-person{min-width:0}
+  .employee-list-photo{width:52px;height:52px}
+  .employee-person-copy span,.employee-role-cell span{max-width:210px}
+  .employee-completion{min-width:0;width:min(210px,58vw)}
+  .employee-progress{flex:1;width:auto}
+  .employee-row-actions{width:100%;justify-content:flex-start;flex-wrap:wrap}
+  .employee-row-actions .btn{flex:1;justify-content:center}
   .date-pair{grid-template-columns:1fr;gap:10px}
   .project-total-strip{align-items:flex-start;flex-direction:column;gap:4px}
   .daily-cost-summary{grid-template-columns:1fr;gap:12px}

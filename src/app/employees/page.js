@@ -47,6 +47,14 @@ function expiryCls(d) {
   return 'p-done';
 }
 
+function profileCompletion(employee) {
+  const fields = [
+    employee.name, employee.role, employee.phone, employee.national_id,
+    employee.nationality, employee.photo_url || employee.photo_path, employee.wage,
+  ];
+  return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+}
+
 export default function EmployeesPage() {
   const [emps, setEmps] = useState(null);
   const [err, setErr] = useState('');
@@ -58,6 +66,21 @@ export default function EmployeesPage() {
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [docFor, setDocFor] = useState(null); // الموظف الذي تُعرض مستنداته
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const visibleEmployees = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return [...(emps || [])]
+      .filter((employee) => statusFilter === 'all' || employee.status === statusFilter)
+      .filter((employee) => {
+        if (!term) return true;
+        const country = countryByCode(employee.nationality);
+        return [employee.name, employee.role, employee.phone, employee.national_id, country?.ar, country?.en]
+          .some((value) => String(value || '').toLowerCase().includes(term));
+      })
+      .sort((a, b) => roleRank(a.role) - roleRank(b.role));
+  }, [emps, query, statusFilter]);
 
   async function load() {
     try { setEmps(await getEmployees()); } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
@@ -141,40 +164,70 @@ export default function EmployeesPage() {
       {emps.length === 0 ? (
         <div className="card"><Empty title="لا موظفين" desc="أضف أعضاء الفريق ومستنداتهم." /></div>
       ) : (
-        <div className="pgrid">
-          {[...emps].sort((a, b) => roleRank(a.role) - roleRank(b.role)).map((em) => {
-            const st = STATUS[em.status] || { label: em.status, cls: 'p-wait' };
-            const country = countryByCode(em.nationality);
-            return (
-              <div className="pcard employee-card" key={em.id}>
-                <div className="employee-photo">
-                  {em.photo_url ? (
-                    <img src={em.photo_url} alt={em.name} />
-                  ) : (
-                    <span>{em.name?.trim()?.[0] || '؟'}</span>
-                  )}
-                </div>
-                <div className="pb">
-                  <div className="emp-head">
-                    <h3>{em.name}</h3>
-                    <span className="emp-role">{em.role || 'بدون دور'}</span>
-                    {country && <div className="emp-nat">{country.flag} {country.ar}</div>}
-                  </div>
-                  <div className="emp-details">
-                    <div className="emp-drow"><span>الحالة</span><span className={`pill ${st.cls}`}>{st.label}</span></div>
-                    <div className="emp-drow"><span>الأجر</span><b>{WAGE[em.wage] || em.wage || '—'}</b></div>
-                    {em.phone && <div className="emp-drow"><span>الجوال</span><b dir="ltr">{em.phone}</b></div>}
-                    {em.national_id && <div className="emp-drow"><span>الهوية/الإقامة</span><b dir="ltr">{em.national_id}</b></div>}
-                  </div>
-                  <div className="emp-actions">
-                    <button className="btn ghost sm" onClick={() => setDocFor(em)}>المستندات</button>
-                    <button className="btn ghost sm" onClick={() => openEdit(em)}>تعديل</button>
-                    <button className="btn ghost sm danger" onClick={() => del(em)}>حذف</button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div className="employee-list-card">
+          <div className="employee-toolbar">
+            <label className="employee-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث بالاسم أو الدور أو الجوال" aria-label="البحث في الموظفين" />
+            </label>
+            <select className="employee-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="تصفية الموظفين حسب الحالة">
+              <option value="all">كل الحالات</option>
+              {Object.entries(STATUS).map(([value, option]) => <option key={value} value={value}>{option.label}</option>)}
+            </select>
+            <span className="employee-result-count">{fmtNum(visibleEmployees.length)} نتيجة</span>
+          </div>
+
+          {visibleEmployees.length === 0 ? (
+            <Empty title="لا توجد نتائج" desc="غيّر عبارة البحث أو مرشح الحالة." />
+          ) : (
+            <div className="employee-table-wrap">
+              <table className="employee-table">
+                <thead>
+                  <tr><th>الموظف</th><th>الدور والجنسية</th><th>الحالة</th><th>نوع الأجر</th><th>اكتمال البيانات</th><th aria-label="الإجراءات" /></tr>
+                </thead>
+                <tbody>
+                  {visibleEmployees.map((em) => {
+                    const st = STATUS[em.status] || { label: em.status, cls: 'p-wait' };
+                    const country = countryByCode(em.nationality);
+                    const completion = profileCompletion(em);
+                    return (
+                      <tr key={em.id}>
+                        <td data-label="">
+                          <div className="employee-person">
+                            <div className="employee-list-photo">
+                              {em.photo_url ? <img src={em.photo_url} alt="" /> : <span>{em.name?.trim()?.[0] || '؟'}</span>}
+                            </div>
+                            <div className="employee-person-copy">
+                              <strong>{em.name}</strong>
+                              <span dir={em.phone ? 'ltr' : undefined}>{em.phone || em.national_id || 'لا توجد بيانات اتصال'}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td data-label="الدور والجنسية">
+                          <div className="employee-role-cell"><strong>{em.role || 'بدون دور'}</strong><span>{country ? `${country.flag} ${country.ar}` : 'الجنسية غير محددة'}</span></div>
+                        </td>
+                        <td data-label="الحالة"><span className={`pill ${st.cls}`}>{st.label}</span></td>
+                        <td data-label="نوع الأجر"><span>{WAGE[em.wage] || em.wage || '—'}</span></td>
+                        <td data-label="اكتمال البيانات">
+                          <div className="employee-completion" aria-label={`اكتمال البيانات ${completion}%`}>
+                            <div className="employee-progress"><i style={{ width: `${completion}%` }} /></div>
+                            <b>{fmtNum(completion)}%</b>
+                          </div>
+                        </td>
+                        <td data-label="">
+                          <div className="employee-row-actions">
+                            <button className="btn ghost sm" onClick={() => setDocFor(em)}>المستندات</button>
+                            <button className="btn ghost sm" onClick={() => openEdit(em)}>تعديل</button>
+                            <button className="employee-delete" onClick={() => del(em)} aria-label={`حذف ${em.name}`}>حذف</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

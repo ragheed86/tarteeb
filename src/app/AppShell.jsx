@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Toaster } from './toast';
 import { supabase, supabaseReady } from '@/lib/supabase';
 import { ROLE_LABELS, canAccess, permissionForPath } from '@/lib/permissions';
@@ -60,6 +60,12 @@ export default function AppShell({ children }) {
     setGlide({ top: link.offsetTop, height: link.offsetHeight });
   }, [pathname, session, access]);
   useRouteMemory(Boolean(session)); // يستعيد آخر مسار عند إطلاق بارد للتطبيق (PWA) على الشاشة الرئيسية
+
+  // رابط الاستعادة ينشئ جلسة مؤقتة؛ يجب إبقاء المستخدم في نموذج تغيير
+  // كلمة المرور بدلاً من إدخاله إلى التطبيق مباشرة.
+  if (pathname === '/reset-password') {
+    return (<><ResetPassword /><IOSInstallBanner /></>);
+  }
 
   if (session === undefined || (session && access === undefined)) {
     return <Splash />;
@@ -201,6 +207,8 @@ function Splash() {
 function Login() {
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  const [forgotPassword, setForgotPassword] = useState(false);
+  const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -215,28 +223,165 @@ function Login() {
     setBusy(false);
   }
 
+  async function requestPasswordReset(e) {
+    e.preventDefault();
+    if (!supabaseReady) return;
+
+    setBusy(true); setErr('');
+    const redirectTo = `${window.location.origin}/reset-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      setErr('تعذر إرسال رابط الاستعادة الآن. حاول مجدداً بعد قليل');
+    } else {
+      setSent(true);
+    }
+    setBusy(false);
+  }
+
+  function showLogin() {
+    setForgotPassword(false);
+    setSent(false);
+    setErr('');
+  }
+
   return (
     <div className="login-wrap">
-      <form className="login-card" onSubmit={submit}>
+      <form className="login-card" onSubmit={forgotPassword ? requestPasswordReset : submit}>
         <div className="lhead">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/tarteeb-logo.png" alt="ترتيب" className="login-logo" />
-          <small>سجّل الدخول للوصول إلى نظام إدارة الأعمال</small>
+          <small>{forgotPassword ? 'أدخل بريدك وسنرسل لك رابطاً لتعيين كلمة مرور جديدة' : 'سجّل الدخول للوصول إلى نظام إدارة الأعمال'}</small>
         </div>
         {!supabaseReady && <div className="errbar">إعدادات Supabase غير مكتملة في بيئة التشغيل</div>}
         {err && <div className="errbar">{err}</div>}
+        {sent && (
+          <div className="login-success" role="status">
+            إذا كان البريد مسجلاً، أرسلنا إليه رابط الاستعادة. افحص صندوق الوارد والرسائل غير المرغوب فيها.
+          </div>
+        )}
         <div className="field">
           <label>البريد الإلكتروني</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required dir="ltr" autoComplete="username" />
         </div>
-        <div className="field">
-          <label>كلمة المرور</label>
-          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required dir="ltr" autoComplete="current-password" />
-        </div>
+        {!forgotPassword && (
+          <div className="field">
+            <div className="login-field-head">
+              <label>كلمة المرور</label>
+              <button className="login-link" type="button" onClick={() => { setForgotPassword(true); setErr(''); }}>
+                نسيت كلمة المرور؟
+              </button>
+            </div>
+            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required dir="ltr" autoComplete="current-password" />
+          </div>
+        )}
         <button className="btn btn-full" type="submit" disabled={busy || !supabaseReady}>
-          {busy ? 'جارٍ الدخول…' : 'دخول'}
+          {busy ? (forgotPassword ? 'جارٍ الإرسال…' : 'جارٍ الدخول…') : (forgotPassword ? 'إرسال رابط الاستعادة' : 'دخول')}
         </button>
+        {forgotPassword && (
+          <button className="login-link login-back" type="button" onClick={showLogin}>
+            العودة إلى تسجيل الدخول
+          </button>
+        )}
       </form>
+    </div>
+  );
+}
+
+function ResetPassword() {
+  const router = useRouter();
+  const [status, setStatus] = useState('checking');
+  const [pw, setPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    if (!supabaseReady) {
+      setStatus('invalid');
+      return undefined;
+    }
+
+    let mounted = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (mounted && (event === 'PASSWORD_RECOVERY' || nextSession)) setStatus('ready');
+    });
+
+    supabase.auth.getSession().then(({ data: { session: recoverySession } }) => {
+      if (mounted) setStatus(recoverySession ? 'ready' : 'invalid');
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function updatePassword(e) {
+    e.preventDefault();
+    setErr('');
+    if (pw.length < 8) {
+      setErr('يجب أن تتكون كلمة المرور من 8 أحرف على الأقل');
+      return;
+    }
+    if (pw !== confirmPw) {
+      setErr('كلمتا المرور غير متطابقتين');
+      return;
+    }
+
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if (error) {
+      setErr('تعذر تحديث كلمة المرور. أعد فتح رابط الاستعادة أو اطلب رابطاً جديداً');
+    } else {
+      window.history.replaceState({}, '', '/reset-password');
+      setStatus('done');
+    }
+    setBusy(false);
+  }
+
+  if (status === 'checking') return <Splash />;
+
+  return (
+    <div className="login-wrap">
+      <div className="login-card">
+        <div className="lhead">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/tarteeb-logo.png" alt="ترتيب" className="login-logo" />
+          <small>{status === 'done' ? 'اكتملت استعادة الحساب بنجاح' : 'اختر كلمة مرور جديدة لحسابك'}</small>
+        </div>
+
+        {status === 'invalid' && (
+          <>
+            <div className="errbar">رابط الاستعادة غير صالح أو انتهت صلاحيته. اطلب رابطاً جديداً من شاشة الدخول.</div>
+            <button className="btn btn-full" type="button" onClick={() => router.push('/')}>العودة إلى تسجيل الدخول</button>
+          </>
+        )}
+
+        {status === 'done' && (
+          <>
+            <div className="login-success" role="status">تم تحديث كلمة المرور. يمكنك الآن متابعة استخدام التطبيق.</div>
+            <button className="btn btn-full" type="button" onClick={() => router.push('/')}>متابعة إلى التطبيق</button>
+          </>
+        )}
+
+        {status === 'ready' && (
+          <form onSubmit={updatePassword}>
+            {err && <div className="errbar">{err}</div>}
+            <div className="field">
+              <label>كلمة المرور الجديدة</label>
+              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} dir="ltr" autoComplete="new-password" />
+            </div>
+            <div className="field">
+              <label>تأكيد كلمة المرور الجديدة</label>
+              <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} required minLength={8} dir="ltr" autoComplete="new-password" />
+            </div>
+            <p className="login-help">استخدم 8 أحرف على الأقل، ويفضل الجمع بين الحروف والأرقام والرموز.</p>
+            <button className="btn btn-full" type="submit" disabled={busy}>
+              {busy ? 'جارٍ التحديث…' : 'تحديث كلمة المرور'}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

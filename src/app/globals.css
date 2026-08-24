@@ -606,6 +606,12 @@ tr.clickable{cursor:pointer}
 .login-card h1{font-family:var(--display);font-size:22px;font-weight:600}
 .login-card .lhead small{color:var(--muted);font-size:13px}
 .login-logo{display:block;width:min(280px,82%);height:auto;margin:0 auto 6px}
+.login-field-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.login-link{border:0;background:none;color:var(--teal-700);font-size:12.5px;font-weight:600;cursor:pointer;padding:2px;text-decoration:none}
+.login-link:hover{color:var(--teal-800);text-decoration:underline}
+.login-back{display:block;margin:14px auto 0;font-size:13px}
+.login-success{background:var(--pos-bg);border:1px solid #B9E4D1;color:#176A47;border-radius:11px;padding:12px 14px;font-size:13px;line-height:1.8;margin-bottom:16px}
+.login-help{color:var(--muted);font-size:12px;line-height:1.7;margin:-3px 0 14px}
 /* قائمة تغيير حالة العميل المنسدلة داخل الجدول */
 .status-select{appearance:none;-webkit-appearance:none;border:0;outline:0;cursor:pointer;font-family:var(--body);font-size:12px;font-weight:600;border-radius:20px;padding:5px 12px;padding-inline-start:24px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%235C7076' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:left 9px center;background-size:9px}
 .status-select:focus{box-shadow:0 0 0 2px var(--sage)}

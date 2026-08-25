@@ -13,6 +13,13 @@ function addDaysISO(value, days) {
   return date.toISOString().slice(0, 10);
 }
 const isRefunded = (i) => i.status === 'refunded';
+const ARABIC_DIGITS = { '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9', '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9' };
+function normalizeSearch(value) {
+  return String(value ?? '')
+    .replace(/[٠-٩۰-۹]/g, (digit) => ARABIC_DIGITS[digit])
+    .trim()
+    .toLowerCase();
+}
 
 export default function InvoicesPage() {
   const router = useRouter();
@@ -22,6 +29,10 @@ export default function InvoicesPage() {
   const [editId, setEditId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [formErr, setFormErr] = useState('');
   const [head, setHead] = useState({ client_id: '', project_id: '', number: '', issue_at: '', due_at: '', vat_applicable: true, status: 'unpaid' });
   const [items, setItems] = useState([blankItem()]);
@@ -133,8 +144,31 @@ export default function InvoicesPage() {
   if (!state) return <Loading />;
 
   const { invoices, clients, projects, quotes, byId } = state;
+  const projectById = Object.fromEntries(projects.map((project) => [project.id, project.title]));
   const clientQuote = head.client_id ? (quotes || []).find((qt) => qt.linked_client_id === head.client_id && qt.status === 'accepted') : null;
   const clientProjects = projects.filter((p) => p.client_id === head.client_id);
+
+  const term = normalizeSearch(query);
+  const filteredInvoices = invoices.filter((invoice) => {
+    if (statusFilter !== 'all' && invoice.status !== statusFilter) return false;
+    const issueDate = invoice.issue_at ? invoice.issue_at.slice(0, 10) : '';
+    if (dateFrom && (!issueDate || issueDate < dateFrom)) return false;
+    if (dateTo && (!issueDate || issueDate > dateTo)) return false;
+    if (!term) return true;
+    const statusLabel = INVOICE_STATUS[invoice.status]?.label || invoice.status;
+    return [
+      invoice.number,
+      byId[invoice.client_id],
+      projectById[invoice.project_id],
+      statusLabel,
+      invoice.issue_at,
+      invoice.due_at,
+      invoice.total,
+      invoice.paid_amount,
+      invoice.remaining_amount,
+    ].some((value) => normalizeSearch(value).includes(term));
+  });
+  const filtersActive = Boolean(term || statusFilter !== 'all' || dateFrom || dateTo);
 
   // مؤشرات: المرتجعات تُستبعد من الأرقام النشطة وتُعرض على حدة
   const active = invoices.filter((i) => !isRefunded(i));
@@ -154,10 +188,30 @@ export default function InvoicesPage() {
 
       <div className="sec-head" style={{ marginBottom: 16 }}>
         <h2 style={{ marginInlineEnd: 'auto' }}>الفواتير</h2>
+        <div className="invoice-search" role="search">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+          <input
+            aria-label="البحث في الفواتير"
+            placeholder="رقم، عميل، مشروع، مبلغ…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        <select className="filter-sel invoice-status-filter" aria-label="تصفية الفواتير حسب الحالة" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <option value="all">كل الحالات</option>
+          {Object.entries(INVOICE_STATUS).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
+        </select>
         <button className="btn" onClick={openAdd}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
           فاتورة جديدة
         </button>
+      </div>
+
+      <div className="invoice-date-filters" aria-label="تصفية الفواتير حسب تاريخ الإصدار">
+        <label>من <input className="fdate" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+        <label>إلى <input className="fdate" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
+        <span className="invoice-result-count">{fmtNum(filteredInvoices.length)} من {fmtNum(invoices.length)} فاتورة</span>
+        {filtersActive && <button type="button" className="btn ghost sm" onClick={() => { setQuery(''); setStatusFilter('all'); setDateFrom(''); setDateTo(''); }}>مسح البحث</button>}
       </div>
 
       {/* مؤشرات الفواتير */}
@@ -172,10 +226,12 @@ export default function InvoicesPage() {
 
       <div className="card" style={{ padding: '6px 0' }}>
         <DataTable
-          rows={invoices}
+          rows={filteredInvoices}
           rowClassName={(inv) => (isRefunded(inv) ? 'inv-refunded' : '')}
           onRowClick={(inv) => router.push(`/invoices/${inv.id}`)}
-          empty={<Empty title="لا توجد فواتير بعد" desc="أنشئ أول فاتورة لمشروع لتظهر هنا." />}
+          empty={filtersActive
+            ? <Empty title="لا توجد نتائج" desc="جرّب تغيير عبارة البحث أو الحالة أو نطاق التاريخ." />
+            : <Empty title="لا توجد فواتير بعد" desc="أنشئ أول فاتورة لمشروع لتظهر هنا." />}
           columns={[
             { key: 'number', label: 'رقم الفاتورة', primary: true, render: (inv) => <span className="nm amt" dir="ltr">{inv.number || '—'}</span> },
             { key: 'client', label: 'العميل', render: (inv) => byId[inv.client_id] || '—' },
@@ -199,9 +255,10 @@ export default function InvoicesPage() {
               </div>
             ) },
           ]}
-          footer={(
-            <tr><td colSpan={4}><b>الإجمالي (النشط)</b></td><td className="amt"><b>{fmtMoney(totalAll)} ⃁</b></td><td className="amt"><b>{fmtMoney(totalPaid)} ⃁</b></td><td className="amt"><b>{fmtMoney(totalRemaining)} ⃁</b></td><td /><td /></tr>
-          )}
+          footer={filteredInvoices.length > 0 ? (() => {
+            const shown = filteredInvoices.filter((invoice) => !isRefunded(invoice));
+            return <tr><td colSpan={4}><b>إجمالي النتائج النشطة</b></td><td className="amt"><b>{fmtMoney(shown.reduce((sum, invoice) => sum + Number(invoice.total || 0), 0))} ⃁</b></td><td className="amt"><b>{fmtMoney(shown.reduce((sum, invoice) => sum + Number(invoice.paid_amount || 0), 0))} ⃁</b></td><td className="amt"><b>{fmtMoney(shown.reduce((sum, invoice) => sum + Number(invoice.remaining_amount || 0), 0))} ⃁</b></td><td /><td /></tr>;
+          })() : null}
         />
       </div>
 
@@ -276,6 +333,14 @@ export default function InvoicesPage() {
 }
 
 const CSS = `
+.invoice-search{display:flex;align-items:center;gap:9px;width:min(320px,30vw);min-width:220px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:9px 12px;color:var(--faint)}
+.invoice-search:focus-within{border-color:var(--teal-500);box-shadow:var(--focus-ring)}
+.invoice-search input{width:100%;min-width:0;border:0;outline:0;background:none;color:var(--ink);font:inherit}
+.invoice-status-filter{min-width:140px}
+.invoice-date-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-4px 0 16px}
+.invoice-date-filters label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:13px}
+.invoice-date-filters .fdate{min-width:145px}
+.invoice-result-count{color:var(--muted);font-size:13px;margin-inline-start:auto}
 .inv-actions{display:inline-flex;gap:6px;justify-content:flex-end}
 .inv-ic{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface,#fff);color:var(--muted);cursor:pointer;transition:.15s}
 .inv-ic svg{width:16px;height:16px}
@@ -284,6 +349,13 @@ const CSS = `
 .inv-ic:disabled{opacity:.4;cursor:not-allowed}
 .inv-refunded{opacity:.62}
 @media(max-width:768px){
+  .invoice-search{order:1;width:100%;min-width:0;min-height:48px}
+  .invoice-status-filter{order:1;width:100%;min-height:48px;font-size:16px}
+  .invoice-date-filters{display:grid;grid-template-columns:1fr 1fr;align-items:end}
+  .invoice-date-filters label{display:grid;gap:5px}
+  .invoice-date-filters .fdate{width:100%;min-width:0}
+  .invoice-result-count{grid-column:1 / -1;margin:0;text-align:center}
+  .invoice-date-filters .btn{grid-column:1 / -1;justify-content:center}
   .inv-actions{justify-content:flex-start}
   .inv-ic{width:40px;height:40px}
 }

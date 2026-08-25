@@ -76,7 +76,7 @@ function ClientsPageInner() {
   const [clients, setClients] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [err, setErr] = useState('');
-  const [q, setQ] = useState(searchParams.get('district') || '');
+  const [q, setQ] = useState(searchParams.get('q') || searchParams.get('district') || '');
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null); // null = إضافة، كائن = تعديل
   const [form, setForm] = useState(EMPTY_FORM);

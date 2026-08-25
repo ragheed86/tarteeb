@@ -170,6 +170,31 @@ export default function InvoicesPage() {
   });
   const filtersActive = Boolean(term || statusFilter !== 'all' || dateFrom || dateTo);
 
+  // تغطية الفوترة: مقارنة العملاء والمشاريع بالفواتير المرتبطة فعلياً.
+  const invoiceCountByClient = invoices.reduce((counts, invoice) => {
+    if (invoice.client_id) counts[invoice.client_id] = (counts[invoice.client_id] || 0) + 1;
+    return counts;
+  }, {});
+  const invoicedProjectIds = new Set(invoices.map((invoice) => invoice.project_id).filter(Boolean));
+  const projectsByClient = projects.reduce((groups, project) => {
+    if (!groups[project.client_id]) groups[project.client_id] = [];
+    groups[project.client_id].push(project);
+    return groups;
+  }, {});
+  const billingCoverage = clients.map((client) => {
+    const clientProjectRows = projectsByClient[client.id] || [];
+    const uninvoicedProjects = clientProjectRows.filter((project) => !invoicedProjectIds.has(project.id));
+    return {
+      ...client,
+      invoice_count: invoiceCountByClient[client.id] || 0,
+      project_count: clientProjectRows.length,
+      uninvoiced_projects: uninvoicedProjects,
+    };
+  }).sort((a, b) => b.uninvoiced_projects.length - a.uninvoiced_projects.length || a.invoice_count - b.invoice_count || a.name.localeCompare(b.name, 'ar'));
+  const clientsWithoutInvoices = billingCoverage.filter((client) => client.invoice_count === 0);
+  const projectsWithoutInvoices = projects.filter((project) => !invoicedProjectIds.has(project.id));
+  const clientsWithInvoices = clients.length - clientsWithoutInvoices.length;
+
   // مؤشرات: المرتجعات تُستبعد من الأرقام النشطة وتُعرض على حدة
   const active = invoices.filter((i) => !isRefunded(i));
   const refunded = invoices.filter(isRefunded);
@@ -223,6 +248,39 @@ export default function InvoicesPage() {
         <KpiCard label="إجمالي الفواتير" value={fmtNum(invoices.length)} trend="كل الحالات" definition="عدد جميع الفواتير المسجلة، بما فيها المسودات والمدفوعة والمتأخرة والمرتجعة." period="كل البيانات المسجلة" formula="عدّ جميع سجلات الفواتير" breakdown={[{ label: 'نشطة وغير مرتجعة', value: fmtNum(active.length) }, { label: 'مرتجعة', value: fmtNum(refunded.length) }]} />
         <KpiCard label="مرتجعات" value={fmtNum(refunded.length)} trend={`${fmtMoney(refundedSum)} ⃁`} definition="عدد الفواتير التي سُجلت كمرتجعة واستُبعدت من مؤشرات التحصيل النشطة." period="كل البيانات المسجلة" formula="عدّ الفواتير بالحالة «مرتجعة»" breakdown={[{ label: 'عدد المرتجعات', value: fmtNum(refunded.length) }, { label: 'قيمتها الإجمالية', value: `${fmtMoney(refundedSum)} ⃁` }]} />
       </div>
+
+      <section className="billing-coverage card" aria-labelledby="billing-coverage-title">
+        <div className="billing-coverage-head">
+          <div>
+            <h2 id="billing-coverage-title">تغطية الفوترة للعملاء والمشاريع</h2>
+            <p>مقارنة مباشرة بين أسماء العملاء ومشاريعهم والفواتير الصادرة لهم.</p>
+          </div>
+          <div className="billing-coverage-totals">
+            <span><b>{fmtNum(clients.length)}</b> إجمالي العملاء</span>
+            <span className="ok"><b>{fmtNum(clientsWithInvoices)}</b> لديهم فواتير</span>
+            <span className={clientsWithoutInvoices.length ? 'warn' : 'ok'}><b>{fmtNum(clientsWithoutInvoices.length)}</b> بلا فواتير</span>
+            <span className={projectsWithoutInvoices.length ? 'warn' : 'ok'}><b>{fmtNum(projectsWithoutInvoices.length)}</b> مشروع بلا فاتورة</span>
+          </div>
+        </div>
+        <DataTable
+          rows={billingCoverage}
+          pageSize={20}
+          empty={<Empty title="لا يوجد عملاء" desc="ستظهر مقارنة الفوترة بعد إضافة العملاء." />}
+          columns={[
+            { key: 'name', label: 'العميل', primary: true, render: (client) => <span className="nm">{client.name}</span> },
+            { key: 'project_count', label: 'عدد المشاريع', align: 'center', render: (client) => <span className="amt">{fmtNum(client.project_count)}</span> },
+            { key: 'invoice_count', label: 'عدد الفواتير', align: 'center', render: (client) => <span className={`coverage-count ${client.invoice_count === 0 ? 'missing' : ''}`}>{fmtNum(client.invoice_count)}</span> },
+            {
+              key: 'uninvoiced_projects', label: 'مشاريع بلا فاتورة',
+              render: (client) => client.uninvoiced_projects.length ? (
+                <div className="coverage-projects">
+                  {client.uninvoiced_projects.map((project) => <span key={project.id}>{project.title}</span>)}
+                </div>
+              ) : <span className="coverage-complete">مكتملة الفوترة</span>,
+            },
+          ]}
+        />
+      </section>
 
       <div className="card" style={{ padding: '6px 0' }}>
         <DataTable
@@ -341,6 +399,19 @@ const CSS = `
 .invoice-date-filters label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:13px}
 .invoice-date-filters .fdate{min-width:145px}
 .invoice-result-count{color:var(--muted);font-size:13px;margin-inline-start:auto}
+.billing-coverage{padding:0;margin-bottom:18px;overflow:hidden}
+.billing-coverage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:18px 20px;border-bottom:1px solid var(--line)}
+.billing-coverage-head h2{font-family:var(--display);font-size:17px;margin:0 0 4px}
+.billing-coverage-head p{color:var(--muted);font-size:13px;margin:0}
+.billing-coverage-totals{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.billing-coverage-totals span{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;background:var(--surface-2);padding:7px 10px;color:var(--muted);font-size:12.5px;white-space:nowrap}
+.billing-coverage-totals span.ok{color:var(--green);border-color:color-mix(in srgb,var(--green) 25%,var(--line))}
+.billing-coverage-totals span.warn{color:var(--neg);border-color:color-mix(in srgb,var(--neg) 25%,var(--line))}
+.coverage-count{display:inline-flex;min-width:30px;height:30px;align-items:center;justify-content:center;border-radius:9px;background:var(--surface-2);font-variant-numeric:tabular-nums}
+.coverage-count.missing{background:color-mix(in srgb,var(--neg) 10%,white);color:var(--neg);font-weight:700}
+.coverage-projects{display:flex;gap:6px;flex-wrap:wrap}
+.coverage-projects span{border-radius:999px;background:color-mix(in srgb,var(--gold) 12%,white);color:#8a4e12;border:1px solid color-mix(in srgb,var(--gold) 28%,var(--line));padding:4px 8px;font-size:12px}
+.coverage-complete{color:var(--green);font-size:12.5px;font-weight:600}
 .inv-actions{display:inline-flex;gap:6px;justify-content:flex-end}
 .inv-ic{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface,#fff);color:var(--muted);cursor:pointer;transition:.15s}
 .inv-ic svg{width:16px;height:16px}
@@ -356,6 +427,9 @@ const CSS = `
   .invoice-date-filters .fdate{width:100%;min-width:0}
   .invoice-result-count{grid-column:1 / -1;margin:0;text-align:center}
   .invoice-date-filters .btn{grid-column:1 / -1;justify-content:center}
+  .billing-coverage-head{flex-direction:column;align-items:stretch;padding:16px}
+  .billing-coverage-totals{display:grid;grid-template-columns:1fr 1fr;justify-content:stretch}
+  .billing-coverage-totals span{justify-content:center;text-align:center;white-space:normal}
   .inv-actions{justify-content:flex-start}
   .inv-ic{width:40px;height:40px}
 }

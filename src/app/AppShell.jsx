@@ -45,8 +45,10 @@ const EXTRA_TITLES = [
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { session, access } = useAccess();
   const [open, setOpen] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState('');
   const navRef = useRef(null);
   const [glide, setGlide] = useState(null);
 
@@ -87,6 +89,12 @@ export default function AppShell({ children }) {
   const currentPermission = permissionForPath(pathname);
   const allowed = canAccess(access, currentPermission);
 
+  function submitGlobalSearch(event) {
+    event.preventDefault();
+    const term = globalQuery.trim();
+    router.push(term ? `/clients?q=${encodeURIComponent(term)}` : '/clients');
+  }
+
   return (
     <div className="app">
       <aside className={`sidebar${open ? ' open' : ''}`}>
@@ -125,6 +133,17 @@ export default function AppShell({ children }) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
           <div className="pt">{active.label}<small>{active.sub}</small></div>
+          {canAccess(access, permissionForPath('/clients')) && (
+            <form className="search topbar-search" role="search" onSubmit={submitGlobalSearch}>
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+              <input
+                aria-label="بحث عام في العملاء"
+                placeholder="ابحث عن عميل أو جوال أو حي…"
+                value={globalQuery}
+                onChange={(event) => setGlobalQuery(event.target.value)}
+              />
+            </form>
+          )}
         </header>
         <div className="content">{allowed ? children : <AccessDenied permission={currentPermission} />}</div>
       </div>

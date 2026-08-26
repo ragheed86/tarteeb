@@ -262,7 +262,7 @@ export default function InvoiceDetail() {
               <div className="inv2-row inv2-tr" key={it.id}>
                 <div className="c-desc">{it.description}</div>
                 <div className="c-num muted"><span dir="ltr">⃁ {fmtMoney(it.unit_price)}</span></div>
-                <div className="c-num muted">ساعة</div>
+                <div className="c-num muted">{it.unit || 'غرفة'}</div>
                 <div className="c-num muted">{fmtNum(it.qty)}</div>
                 <div className="c-num strong"><span dir="ltr">⃁ {fmtMoney(Number(it.qty) * Number(it.unit_price))}</span></div>
               </div>

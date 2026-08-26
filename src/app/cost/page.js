@@ -73,13 +73,25 @@ function buildDailyRows(project, savedRows) {
     .map((date) => normalizeDay(savedByDate.get(date) || emptyDay(date)));
 }
 
+function isOrganizersProduct(row) {
+  return /منظمات?|منظّمات?|أدوات\s*الترتيب|ادوات\s*الترتيب|التخزين/i.test(row?.product || '');
+}
+
 function calcDay(day) {
   const labor = (day.laborRows || []).reduce((s, r) => s + num(r.workerCount) * num(r.hours) * num(r.rate), 0);
-  const productsCost = (day.productRows || []).reduce((s, r) => s + num(r.purchasePrice), 0);
-  const productsSale = (day.productRows || []).reduce((s, r) => s + num(r.salePrice), 0);
+  const productRows = day.productRows || [];
+  const productsCost = productRows.reduce((s, r) => s + num(r.purchasePrice), 0);
+  const productsSale = productRows.reduce((s, r) => s + num(r.salePrice), 0);
+  const organizersCost = productRows.filter(isOrganizersProduct).reduce((s, r) => s + num(r.purchasePrice), 0);
+  const organizersSale = productRows.filter(isOrganizersProduct).reduce((s, r) => s + num(r.salePrice), 0);
   const transport = (day.transportRows || []).reduce((s, r) => s + num(r.amount), 0);
   const other = (day.otherRows || []).reduce((s, r) => s + num(r.amount), 0);
-  return { labor, productsCost, productsSale, transport, other, total: labor + productsCost + transport + other };
+  const serviceCost = labor + (productsCost - organizersCost) + transport + other;
+  return {
+    labor, productsCost, productsSale, organizersCost, organizersSale, transport, other,
+    serviceCost,
+    total: serviceCost + organizersCost,
+  };
 }
 
 function updateRow(rows, id, key, value, suppliers) {
@@ -226,9 +238,15 @@ export default function CostPage() {
 
   const dayTotals = dailyRows.map((day) => ({ date: day.date, ...calcDay(day) }));
   const total = dayTotals.reduce((s, d) => s + d.total, 0);
+  const serviceCost = dayTotals.reduce((s, d) => s + d.serviceCost, 0);
+  const organizersCost = dayTotals.reduce((s, d) => s + d.organizersCost, 0);
+  const organizersSale = dayTotals.reduce((s, d) => s + d.organizersSale, 0);
   const price = num(salePrice);
-  const profit = price - total;
-  const margin = price > 0 ? Math.round((profit / price) * 100) : 0;
+  const serviceProfit = price - serviceCost;
+  const serviceMargin = price > 0 ? Math.round((serviceProfit / price) * 100) : 0;
+  const organizersProfit = organizersSale - organizersCost;
+  const projectSale = price + organizersSale;
+  const projectProfit = serviceProfit + organizersProfit;
   const laborSummary = dailyRows.reduce((summary, day) => {
     let hasLabor = false;
     for (const row of day.laborRows || []) {
@@ -382,14 +400,16 @@ export default function CostPage() {
             </div>
             <div className="card">
               <div className="field" style={{ marginBottom: 0 }}>
-                <label>سعر البيع</label>
+                <label>سعر بيع الخدمة (بدون المنظمات)</label>
                 <input type="number" min="0" step="0.01" value={salePrice} dir="ltr" onChange={(e) => setSalePrice(e.target.value)} />
               </div>
             </div>
             <div className="result">
-              <div className="mg">صافي ربح المشروع</div>
-              <div className="big">{fmtMoney(profit)} ⃁</div>
-              <div className="mg">إجمالي التكلفة {fmtMoney(total)} ⃁ · هامش {margin}%</div>
+              <div className="mg">ربح الخدمة</div>
+              <div className="big">{fmtMoney(serviceProfit)} ⃁</div>
+              <div className="mg">تكلفة الخدمة {fmtMoney(serviceCost)} ⃁ · هامش {serviceMargin}%</div>
+              <div className="mg" style={{ marginTop: 8 }}>المنظمات: تكلفة {fmtMoney(organizersCost)} ⃁ · بيع {fmtMoney(organizersSale)} ⃁ · ربح {fmtMoney(organizersProfit)} ⃁</div>
+              <div className="mg">إجمالي المشروع: بيع {fmtMoney(projectSale)} ⃁ · تكلفة {fmtMoney(total)} ⃁ · ربح {fmtMoney(projectProfit)} ⃁</div>
             </div>
           </div>
 

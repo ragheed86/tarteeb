@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { supabase, supabaseReady } from '@/lib/supabase';
+import { clearSupabaseReadCache, supabase, supabaseReady } from '@/lib/supabase';
 import { ALL_PERMISSIONS, isPrimaryAdmin, normalizePermissions } from '@/lib/permissions';
 
 // يحمّل الجلسة وصلاحيات المستخدم مرة واحدة ويشاركهما بين AppShell وأي صفحة تحتاجهما
@@ -20,6 +20,9 @@ export function useAccess() {
     // لا يعني تغيّر هوية المستخدم، فتحديث الجلسة يمرّ بصمت دون إعادة إظهار شاشة التحميل
     // أو إعادة جلب الصلاحيات وفقدان حالة الصفحة الحالية.
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
+        clearSupabaseReadCache();
+      }
       if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         setSession((current) => (current?.user?.id === s?.user?.id ? { ...current, ...s } : s));
         return;

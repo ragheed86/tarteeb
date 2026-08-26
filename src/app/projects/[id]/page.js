@@ -6,7 +6,7 @@ import {
   getProjectTasks, createProjectTask, updateProjectTask, removeProjectTask,
   getProjectTeam, addProjectTeam, removeProjectTeam,
   getProjectMedia, uploadProjectMedia, removeProjectMedia, updateProject,
-  getProjectCosts, createProjectCost, removeProjectCost,
+  getProjectCosts, createProjectCost, removeProjectCost, removeProject,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, displayProgress } from '@/lib/format';
 import { isSupervisorLaborRow } from '@/lib/labor';
@@ -32,6 +32,7 @@ export default function ProjectDetail() {
   const router = useRouter();
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   async function loadAll() {
     setErr('');
@@ -53,6 +54,21 @@ export default function ProjectDetail() {
     setD((s) => ({ ...s, fin, costs }));
   }
 
+  async function deleteCurrentProject() {
+    if (deleting || !d?.project) return;
+    if (!confirm(`هل أنت متأكد من حذف المشروع «${d.project.title}»؟\n\nسيتم حذف المهام والفريق والتكاليف والصور والمرفقات نهائياً. ستبقى الفواتير الصادرة محفوظة كسجلات مالية ولكن بدون ربط بالمشروع.\n\nلا يمكن التراجع عن هذا الإجراء.`)) return;
+    setDeleting(true);
+    setErr('');
+    try {
+      const result = await removeProject(id);
+      if (result?.cleanupWarning) alert(`تم حذف المشروع، لكن تعذّر تنظيف بعض الملفات من التخزين: ${result.cleanupWarning}`);
+      router.replace('/projects');
+    } catch (e) {
+      setErr(e.message || 'تعذّر حذف المشروع');
+      setDeleting(false);
+    }
+  }
+
   if (err) return <ErrorBar message={err} />;
   if (!d) return <Loading />;
 
@@ -72,6 +88,9 @@ export default function ProjectDetail() {
       </button>
       <button className="btn ghost" style={{ marginInlineStart: 10, marginBottom: 16 }} onClick={() => router.push(`/projects/${id}/report`)}>
         تقرير المصاريف PDF
+      </button>
+      <button className="btn ghost" style={{ marginInlineStart: 10, marginBottom: 16, color: 'var(--neg)' }} disabled={deleting} onClick={deleteCurrentProject}>
+        {deleting ? 'جارٍ حذف المشروع…' : 'حذف المشروع'}
       </button>
 
       {/* رأس */}

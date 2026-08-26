@@ -6,7 +6,12 @@ import { fmtMoney, fmtNum, INVOICE_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill, KpiCard } from '@/components';
 
 const VAT_RATE = 15;
-const blankItem = () => ({ description: '', qty: 1, unit_price: '' });
+const ORGANIZERS_ITEM = 'منظمات و ادوات الترتيب والتخزين';
+const blankItem = () => ({ description: '', qty: 1, unit_price: '', internal_base_price: '', markup_percent: '' });
+const isOrganizersItem = (description) => {
+  const value = String(description || '').trim();
+  return value === ORGANIZERS_ITEM || value === 'ادوات ترتيب و منظمات';
+};
 function addDaysISO(value, days) {
   const date = value ? new Date(value) : new Date();
   date.setDate(date.getDate() + days);
@@ -88,7 +93,13 @@ export default function InvoicesPage() {
         issue_at: inv.issue_at ? inv.issue_at.slice(0, 10) : '', due_at: inv.due_at || '',
         vat_applicable: inv.vat_applicable, status: inv.status,
       });
-      setItems(its.length ? its.map((x) => ({ description: x.description, qty: x.qty, unit_price: x.unit_price })) : [blankItem()]);
+      setItems(its.length ? its.map((x) => ({
+        description: x.description,
+        qty: x.qty,
+        unit_price: x.unit_price,
+        internal_base_price: x.internal_base_price ?? '',
+        markup_percent: x.markup_percent ?? '',
+      })) : [blankItem()]);
       setOpen(true);
       loadInvoiceFormOptions();
     } catch { setErr('تعذّر فتح الفاتورة للتعديل'); }
@@ -114,7 +125,28 @@ export default function InvoicesPage() {
   // كتابة وصف البند: إن طابق اسم خدمة من الكتالوج يُعبَّأ سعر الوحدة تلقائياً
   function setDesc(idx, val) {
     const svc = services.find((x) => x.name === val);
-    setItems((arr) => arr.map((it, i) => (i !== idx ? it : (svc ? { ...it, description: val, unit_price: Number(svc.default_rate) || 0 } : { ...it, description: val }))));
+    setItems((arr) => arr.map((it, i) => {
+      if (i !== idx) return it;
+      if (isOrganizersItem(val)) {
+        return { ...it, description: val, internal_base_price: '', markup_percent: 25, unit_price: '' };
+      }
+      return {
+        ...it,
+        description: val,
+        unit_price: svc ? (Number(svc.default_rate) || 0) : it.unit_price,
+        internal_base_price: '',
+        markup_percent: '',
+      };
+    }));
+  }
+  function setOrganizerPricing(idx, key, value) {
+    setItems((arr) => arr.map((it, i) => {
+      if (i !== idx) return it;
+      const next = { ...it, [key]: value };
+      const base = Number(next.internal_base_price) || 0;
+      const markup = Number(next.markup_percent) || 0;
+      return { ...next, unit_price: Math.round(base * (1 + markup / 100) * 100) / 100 };
+    }));
   }
   function addItem() { setItems((arr) => [...arr, blankItem()]); }
   function rmItem(idx) { setItems((arr) => (arr.length > 1 ? arr.filter((_, i) => i !== idx) : arr)); }
@@ -138,7 +170,13 @@ export default function InvoicesPage() {
       subtotal, vat_applicable: head.vat_applicable, vat_rate: VAT_RATE, vat_amount: vatAmount, total,
       status: head.status,
     };
-    const rows = validItems.map((it) => ({ description: it.description.trim(), qty: Number(it.qty) || 1, unit_price: Number(it.unit_price) || 0 }));
+    const rows = validItems.map((it) => ({
+      description: it.description.trim(),
+      qty: Number(it.qty) || 1,
+      unit_price: Number(it.unit_price) || 0,
+      internal_base_price: isOrganizersItem(it.description) && it.internal_base_price !== '' ? Number(it.internal_base_price) : null,
+      markup_percent: isOrganizersItem(it.description) && it.markup_percent !== '' ? Number(it.markup_percent) : null,
+    }));
     try {
       if (editId) {
         await updateInvoiceWithItems(editId, invoice, rows);
@@ -377,12 +415,24 @@ export default function InvoicesPage() {
         <div style={{ marginTop: 6 }}>
           <label className="field" style={{ marginBottom: 8 }}>البنود</label>
           {items.map((it, idx) => (
-            <div className="inline-add" key={idx} style={{ marginTop: 8 }}>
-              <input list="inv-svclist" placeholder="الوصف" value={it.description} onChange={(e) => setDesc(idx, e.target.value)} style={{ flex: 2 }} />
-              <input type="number" min="0" step="1" placeholder="الكمية" dir="ltr" style={{ maxWidth: 90 }} value={it.qty} onChange={(e) => setItem(idx, 'qty', e.target.value)} />
-              <input type="number" min="0" step="0.01" placeholder="سعر الوحدة" dir="ltr" style={{ maxWidth: 120 }} value={it.unit_price} onChange={(e) => setItem(idx, 'unit_price', e.target.value)} />
-              <span className="amt" style={{ minWidth: 90, alignSelf: 'center', color: 'var(--muted)' }}>{fmtMoney((Number(it.qty) || 0) * (Number(it.unit_price) || 0))} ⃁</span>
-              <button type="button" className="x-btn" onClick={() => rmItem(idx)} aria-label="حذف البند">✕</button>
+            <div className={`invoice-item-editor${isOrganizersItem(it.description) ? ' organizer-item' : ''}`} key={idx}>
+              <div className="inline-add" style={{ marginTop: 8 }}>
+                <input list="inv-svclist" placeholder="الوصف" value={it.description} onChange={(e) => setDesc(idx, e.target.value)} style={{ flex: 2 }} />
+                <input type="number" min="0" step="1" placeholder="الكمية" dir="ltr" style={{ maxWidth: 90 }} value={it.qty} onChange={(e) => setItem(idx, 'qty', e.target.value)} />
+                {!isOrganizersItem(it.description) && (
+                  <input type="number" min="0" step="0.01" placeholder="سعر الوحدة" dir="ltr" style={{ maxWidth: 120 }} value={it.unit_price} onChange={(e) => setItem(idx, 'unit_price', e.target.value)} />
+                )}
+                <span className="amt" style={{ minWidth: 90, alignSelf: 'center', color: 'var(--muted)' }}>{fmtMoney((Number(it.qty) || 0) * (Number(it.unit_price) || 0))} ⃁</span>
+                <button type="button" className="x-btn" onClick={() => rmItem(idx)} aria-label="حذف البند">✕</button>
+              </div>
+              {isOrganizersItem(it.description) && (
+                <div className="organizer-pricing" aria-label="تسعير داخلي للمنظمات">
+                  <label>سعر المنظمات<input type="number" min="0" step="0.01" dir="ltr" value={it.internal_base_price} onChange={(e) => setOrganizerPricing(idx, 'internal_base_price', e.target.value)} /></label>
+                  <label>نسبة الزيادة %<input type="number" min="0" step="0.01" dir="ltr" value={it.markup_percent} onChange={(e) => setOrganizerPricing(idx, 'markup_percent', e.target.value)} /></label>
+                  <label>الإجمالي<input type="number" readOnly dir="ltr" value={it.unit_price || 0} /></label>
+                  <small>هذه التفاصيل داخلية ولا تظهر للعميل.</small>
+                </div>
+              )}
             </div>
           ))}
           <button type="button" className="btn ghost sm" style={{ marginTop: 10 }} onClick={addItem}>+ بند</button>
@@ -410,6 +460,13 @@ const CSS = `
 .invoice-date-filters label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:13px}
 .invoice-date-filters .fdate{min-width:145px}
 .invoice-result-count{color:var(--muted);font-size:13px;margin-inline-start:auto}
+.invoice-item-editor{margin-top:8px}
+.organizer-item{padding:10px;border:1px solid color-mix(in srgb,var(--teal-500) 24%,var(--line));border-radius:12px;background:color-mix(in srgb,var(--teal-500) 4%,var(--surface))}
+.organizer-pricing{display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:10px;margin-top:10px}
+.organizer-pricing label{display:grid;gap:5px;color:var(--muted);font-size:12px}
+.organizer-pricing input{width:100%}
+.organizer-pricing input[readonly]{background:var(--surface-2);font-weight:700;color:var(--ink)}
+.organizer-pricing small{grid-column:1 / -1;color:var(--faint)}
 .billing-coverage{padding:0;margin-bottom:18px;overflow:hidden}
 .billing-coverage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:18px 20px;border-bottom:1px solid var(--line)}
 .billing-coverage-head h2{font-family:var(--display);font-size:17px;margin:0 0 4px}
@@ -431,6 +488,8 @@ const CSS = `
 .inv-ic:disabled{opacity:.4;cursor:not-allowed}
 .inv-refunded{opacity:.62}
 @media(max-width:768px){
+  .organizer-pricing{grid-template-columns:1fr}
+  .organizer-pricing small{grid-column:auto}
   .invoice-search{order:1;width:100%;min-width:0;min-height:48px}
   .invoice-status-filter{order:1;width:100%;min-height:48px;font-size:16px}
   .invoice-date-filters{display:grid;grid-template-columns:1fr 1fr;align-items:end}

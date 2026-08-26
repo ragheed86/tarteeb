@@ -3,7 +3,7 @@
 //  تستخدم العميل المشترك من ./supabase وتعتمد المخطط النظيف
 //  (supabase/migrations/0001_init.sql)
 // ============================================================
-import { supabase } from './supabase';
+import { cachedSupabaseRead, clearSupabaseReadCache, supabase } from './supabase';
 import { isSupervisorLaborRow } from './labor';
 import { signStoredFile, signStoredFiles } from './storage';
 
@@ -11,11 +11,13 @@ const isRefundedInvoice = (invoice) => invoice?.status === 'refunded';
 
 // ---------- العملاء ----------
 export async function getClients() {
-  const { data, error } = await supabase
-    .from('clients')
-    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
-    .order('created_at', { ascending: false });
-  if (error) throw error; return data;
+  return cachedSupabaseRead('clients', async () => {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
+      .order('created_at', { ascending: false });
+    if (error) throw error; return data;
+  });
 }
 export async function getClient(id) {
   const { data, error } = await supabase.from('clients').select('*').eq('id', id).single();
@@ -48,7 +50,9 @@ export async function createClient(input) {
     .insert(payload)
     .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
     .single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  clearSupabaseReadCache('clients');
+  return data;
 }
 export async function updateClient(id, input) {
   // تحديث جزئي آمن: يبني فقط الحقول الموجودة فعلياً بـinput (مثلاً تغيير الحالة وحدها من القائمة السريعة)
@@ -68,11 +72,14 @@ export async function updateClient(id, input) {
     .eq('id', id)
     .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
     .single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  clearSupabaseReadCache('clients');
+  return data;
 }
 export async function removeClient(id) {
   const { error } = await supabase.from('clients').delete().eq('id', id);
   if (error) throw error;
+  clearSupabaseReadCache('clients', 'projects', 'invoices');
 }
 // مشاريع وفواتير عميل بعينه — لملف العميل 360
 export async function getProjectsByClient(clientId) {
@@ -90,11 +97,13 @@ export async function getInvoicesByClient(clientId) {
 
 // ---------- المشاريع ----------
 export async function getProjects() {
-  const { data, error } = await supabase
-    .from('projects')
-    .select('id,client_id,title,service_type,sale_price,status,supervisor_id,start_date,due_date,progress,created_at,updated_at')
-    .order('updated_at', { ascending: false });
-  if (error) throw error; return data;
+  return cachedSupabaseRead('projects', async () => {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id,client_id,title,service_type,sale_price,status,supervisor_id,start_date,due_date,progress,created_at,updated_at')
+      .order('updated_at', { ascending: false });
+    if (error) throw error; return data;
+  });
 }
 export async function getProject(id) {
   const { data, error } = await supabase.from('projects').select('*').eq('id', id).single();
@@ -471,9 +480,11 @@ export async function getProductDemand() {
 // ---------- الموردون / الموظفون / الجهات / الإعدادات ----------
 export async function getSuppliers()        { const { data, error } = await supabase.from('suppliers').select('*');            if (error) throw error; return data; }
 export async function getEmployees() {
-  const { data, error } = await supabase.from('employees').select('*');
-  if (error) throw error;
-  return signStoredFiles(data, 'employee-photos', 'photo_path', 'photo_url');
+  return cachedSupabaseRead('employees', async () => {
+    const { data, error } = await supabase.from('employees').select('*');
+    if (error) throw error;
+    return signStoredFiles(data, 'employee-photos', 'photo_path', 'photo_url');
+  });
 }
 export async function getGovernmentAccounts() {
   const { data, error } = await supabase.from('government_accounts').select('*');
@@ -484,28 +495,32 @@ export async function getCompanySettings()  { const { data, error } = await supa
 
 // ---------- كتالوج الخدمات ----------
 export async function getServices() {
-  const { data, error } = await supabase.from('services').select('*').order('sort_order').order('name');
-  if (error) throw error; return data;
+  return cachedSupabaseRead('services', async () => {
+    const { data, error } = await supabase.from('services').select('*').order('sort_order').order('name');
+    if (error) throw error; return data;
+  });
 }
 export async function createService(p) {
   const { data, error } = await supabase.from('services').insert(p).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('services'); return data;
 }
 export async function updateService(id, p) {
   const { data, error } = await supabase.from('services').update({ ...p, updated_at: new Date().toISOString() }).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('services'); return data;
 }
 export async function removeService(id) {
   const { error } = await supabase.from('services').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throw error; clearSupabaseReadCache('services');
 }
 
 // ---------- الفواتير + الشركاء ----------
 export async function getInvoices() {
-  const { data, error } = await supabase.from('invoices')
-    .select('id,number,project_id,client_id,issue_at,due_at,subtotal,vat_applicable,vat_rate,vat_amount,total,status,paid_at,zatca_qr')
-    .order('issue_at', { ascending: false });
-  if (error) throw error; return attachInvoiceSummaries(data);
+  return cachedSupabaseRead('invoices', async () => {
+    const { data, error } = await supabase.from('invoices')
+      .select('id,number,project_id,client_id,issue_at,due_at,subtotal,vat_applicable,vat_rate,vat_amount,total,status,paid_at,zatca_qr')
+      .order('issue_at', { ascending: false });
+    if (error) throw error; return attachInvoiceSummaries(data);
+  });
 }
 export async function getProjectInvoices(projectId) {
   const { data, error } = await supabase.from('invoices')
@@ -558,11 +573,11 @@ export async function createCommunication(p) {
 const PROJECT_COLS = 'id,client_id,title,service_type,sale_price,status,supervisor_id,start_date,due_date,progress,created_at,updated_at';
 export async function createProject(p) {
   const { data, error } = await supabase.from('projects').insert(p).select(PROJECT_COLS).single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('projects'); return data;
 }
 export async function updateProject(id, p) {
   const { data, error } = await supabase.from('projects').update(p).eq('id', id).select(PROJECT_COLS).single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('projects'); return data;
 }
 export async function removeProject(id) {
   // احتفظ بمسارات الملفات قبل أن يحذف ON DELETE CASCADE سجلاتها.
@@ -584,6 +599,7 @@ export async function removeProject(id) {
     .maybeSingle();
   if (error) throw error;
   if (!deleted) throw new Error('لم يتم حذف المشروع. تحقق من صلاحية الحذف ثم حاول مجدداً.');
+  clearSupabaseReadCache('projects', 'invoices');
 
   // حذف الملفات الفعلية من Storage بعد نجاح حذف قاعدة البيانات. فشل تنظيف
   // ملف لا يعيد المشروع المحذوف، لكنه يُعاد كتحذير واضح للمستخدم.
@@ -799,16 +815,19 @@ export async function uploadEmployeePhoto(file) {
 export async function createEmployee(p) {
   const { data, error } = await supabase.from('employees').insert(p).select('*').single();
   if (error) throw error;
+  clearSupabaseReadCache('employees');
   return signStoredFile(data, EMPLOYEE_PHOTOS_BUCKET, 'photo_path', 'photo_url');
 }
 export async function updateEmployee(id, p) {
   const { data, error } = await supabase.from('employees').update(p).eq('id', id).select('*').single();
   if (error) throw error;
+  clearSupabaseReadCache('employees');
   return signStoredFile(data, EMPLOYEE_PHOTOS_BUCKET, 'photo_path', 'photo_url');
 }
 export async function removeEmployee(id) {
   const { error } = await supabase.from('employees').delete().eq('id', id);
   if (error) throw error;
+  clearSupabaseReadCache('employees', 'projects');
 }
 export async function getEmployeeDocuments(employeeId) {
   const { data, error } = await supabase.from('employee_documents')
@@ -889,17 +908,20 @@ export async function createInvoice(invoice, items) {
     p_items: items || [],
   });
   if (error) throw error;
+  clearSupabaseReadCache('invoices');
   return data;
 }
 export async function updateInvoice(id, p) {
   const { data, error } = await supabase.from('invoices').update(p).eq('id', id).select(INVOICE_COLS).single();
   if (error) throw error;
+  clearSupabaseReadCache('invoices');
   const [invoice] = await attachInvoiceSummaries([data]);
   return invoice;
 }
 export async function removeInvoice(id) {
   const { error } = await supabase.from('invoices').delete().eq('id', id);
   if (error) throw error;
+  clearSupabaseReadCache('invoices');
 }
 // تعديل الفاتورة مع استبدال بنودها. items=[{description,qty,unit_price}]
 export async function updateInvoiceWithItems(id, invoice, items) {
@@ -909,6 +931,7 @@ export async function updateInvoiceWithItems(id, invoice, items) {
     p_items: items || [],
   });
   if (error) throw error;
+  clearSupabaseReadCache('invoices');
   const [updated] = await attachInvoiceSummaries([data]);
   return updated;
 }
@@ -936,11 +959,12 @@ export async function createInvoicePayment(p) {
     note: p.note?.trim() || null,
   };
   const { data, error } = await supabase.from('invoice_payments').insert(payload).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('invoices'); return data;
 }
 export async function removeInvoicePayment(id) {
   const { error } = await supabase.from('invoice_payments').delete().eq('id', id);
   if (error) throw error;
+  clearSupabaseReadCache('invoices');
 }
 
 // ============================================================
@@ -1046,14 +1070,16 @@ function itemRows(quoteId, items) {
 }
 
 export async function getQuotes() {
-  const { data: quotes, error } = await supabase.from('quotes').select(QUOTE_COLS).order('updated_at', { ascending: false });
-  if (error) throw error;
-  if (!quotes.length) return [];
-  const { data: items, error: e2 } = await supabase.from('quote_items').select('*').in('quote_id', quotes.map((q) => q.id));
-  if (e2) throw e2;
-  const byQuote = {};
-  for (const it of items || []) (byQuote[it.quote_id] = byQuote[it.quote_id] || []).push(it);
-  return quotes.map((q) => mapQuoteRow(q, byQuote[q.id] || []));
+  return cachedSupabaseRead('quotes', async () => {
+    const { data: quotes, error } = await supabase.from('quotes').select(QUOTE_COLS).order('updated_at', { ascending: false });
+    if (error) throw error;
+    if (!quotes.length) return [];
+    const { data: items, error: e2 } = await supabase.from('quote_items').select('*').in('quote_id', quotes.map((q) => q.id));
+    if (e2) throw e2;
+    const byQuote = {};
+    for (const it of items || []) (byQuote[it.quote_id] = byQuote[it.quote_id] || []).push(it);
+    return quotes.map((q) => mapQuoteRow(q, byQuote[q.id] || []));
+  });
 }
 
 export async function getQuote(id) {
@@ -1072,6 +1098,7 @@ export async function createQuote(app) {
     const { error: e2 } = await supabase.from('quote_items').insert(rows);
     if (e2) { await supabase.from('quotes').delete().eq('id', row.id); throw e2; }
   }
+  clearSupabaseReadCache('quotes');
   return getQuote(row.id);
 }
 
@@ -1084,6 +1111,7 @@ export async function updateQuote(id, app) {
     const { error: e2 } = await supabase.from('quote_items').insert(rows);
     if (e2) throw e2;
   }
+  clearSupabaseReadCache('quotes');
   return getQuote(id);
 }
 
@@ -1091,6 +1119,7 @@ export async function removeQuote(id) {
   await supabase.from('quote_items').delete().eq('quote_id', id);
   const { error } = await supabase.from('quotes').delete().eq('id', id);
   if (error) throw error;
+  clearSupabaseReadCache('quotes');
 }
 
 // ترقيم تلقائي Q-YYYY-NNN اعتماداً على أكبر رقم في السنة الحالية

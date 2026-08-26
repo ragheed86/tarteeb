@@ -119,7 +119,8 @@ export async function getProjectCosts(projectId) {
 }
 // كل بنود التكلفة لكل المشاريع دفعة واحدة — لحساب الربح الإجمالي بلوحة التحكم
 export async function getAllProjectCosts() {
-  const { data, error } = await supabase.from('project_costs').select('project_id,amount,work_date,created_at');
+  const { data, error } = await supabase.from('project_costs')
+    .select('project_id,amount,work_date,created_at,kind,label,note,product_name,sale_price,markup_percent');
   if (error) throw error; return data;
 }
 // تكاليف مفصّلة لكل المشاريع — لتقارير التصدير (تفريق الخدمة عن المنظمات/المواد)
@@ -949,6 +950,13 @@ export async function getAllInvoicePayments() {
     .order('paid_at', { ascending: false });
   if (error) throw error;
   return (data || []).map(({ invoices: _invoice, ...payment }) => payment);
+}
+export async function getAllInvoiceItems() {
+  const { data, error } = await supabase.from('invoice_items')
+    .select('invoice_id,description,qty,unit_price,internal_base_price,markup_percent,invoices!inner(status,issue_at)')
+    .neq('invoices.status', 'refunded');
+  if (error) throw error;
+  return data || [];
 }
 export async function createInvoicePayment(p) {
   const payload = {

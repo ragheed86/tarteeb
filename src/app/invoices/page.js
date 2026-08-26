@@ -40,15 +40,24 @@ export default function InvoicesPage() {
 
   async function load() {
     try {
-      const [invoices, clients, projects, quotes] = await Promise.all([getInvoices(), getClients(), getProjects(), getQuotes()]);
+      const [invoices, clients, projects] = await Promise.all([getInvoices(), getClients(), getProjects()]);
       const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
-      setState({ invoices, clients, projects, quotes, byId });
+      setState((current) => ({ invoices, clients, projects, quotes: current?.quotes || [], byId }));
     } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => {
     load();
-    getServices().then((r) => setServices((r || []).filter((s) => s.active !== false))).catch(() => {});
   }, []);
+
+  async function loadInvoiceFormOptions() {
+    try {
+      const [quotes, serviceRows] = await Promise.all([getQuotes(), getServices()]);
+      setState((current) => (current ? { ...current, quotes: quotes || [] } : current));
+      setServices((serviceRows || []).filter((service) => service.active !== false));
+    } catch {
+      // بيانات العروض والخدمات مساعدة ولا تمنع إنشاء الفاتورة يدوياً.
+    }
+  }
 
   // يحوّل بنود عرض السعر إلى بنود فاتورة (svc→الوصف، days→الكمية، ويطوي الخصم في سعر الوحدة)
   function importQuoteItems(quote) {
@@ -66,6 +75,7 @@ export default function InvoicesPage() {
     setEditId(null);
     setHead({ client_id: state?.clients[0]?.id || '', project_id: '', number: '', issue_at: issue, due_at: addDaysISO(issue, 14), vat_applicable: true, status: 'unpaid' });
     setItems([blankItem()]); setFormErr(''); setOpen(true);
+    loadInvoiceFormOptions();
   }
   async function openEdit(inv, e) {
     e.stopPropagation();
@@ -80,6 +90,7 @@ export default function InvoicesPage() {
       });
       setItems(its.length ? its.map((x) => ({ description: x.description, qty: x.qty, unit_price: x.unit_price })) : [blankItem()]);
       setOpen(true);
+      loadInvoiceFormOptions();
     } catch { setErr('تعذّر فتح الفاتورة للتعديل'); }
   }
   async function del(inv, e) {

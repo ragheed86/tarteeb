@@ -26,6 +26,7 @@ const NAV = [
     { href: '/invoices', label: 'الفواتير', icon: IconDoc, sub: 'الفواتير والمدفوعات' },
     { href: '/company-expenses', label: 'مصاريف الشركة', icon: IconCost, sub: 'النفقات التشغيلية بعيداً عن المشاريع' },
     { href: '/bank-reconciliation', label: 'المطابقة البنكية', icon: IconDoc, sub: 'مطابقة كشف البنك مع السجلات المالية' },
+    { href: '/reports', label: 'التقارير', icon: IconDash, sub: 'تقارير مالية وتشغيلية وتحليلية' },
   ] },
   { group: 'النظام', items: [
     { href: '/settings', label: 'الإعدادات', icon: IconGear, sub: 'بيانات الشركة والموردون والرخص والصلاحيات' },

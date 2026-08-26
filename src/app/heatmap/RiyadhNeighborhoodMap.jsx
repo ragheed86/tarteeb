@@ -18,7 +18,6 @@ function ensureRtlPlugin() {
 // حتى تُرسم مضلّعات الأحياء دوماً حتى لو فشل تحميل البلاطات.
 const STYLE = {
   version: 8,
-  glyphs: 'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',
   sources: {
     basemap: {
       type: 'raster',
@@ -105,19 +104,6 @@ export default function RiyadhNeighborhoodMap({ geojson, statsById, metric, scal
           'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 2, 0.6],
         },
       });
-      map.addLayer({
-        id: 'nh-label',
-        type: 'symbol',
-        source: 'neighborhoods',
-        minzoom: 11,
-        layout: {
-          'text-field': ['get', 'name_ar'],
-          'text-size': 11,
-          'text-font': ['Noto Sans Arabic Regular', 'Open Sans Regular'],
-        },
-        paint: { 'text-color': '#272140', 'text-halo-color': '#fff', 'text-halo-width': 1.2 },
-      });
-
       map.on('mousemove', 'nh-fill', (e) => {
         if (!e.features?.length) return;
         const id = e.features[0].id;

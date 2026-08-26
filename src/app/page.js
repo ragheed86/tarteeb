@@ -5,8 +5,8 @@ import {
   getClients, getProjects, getInvoices, getInventory, getAllProjectCosts,
   getAllInvoicePayments, getDashboardMedia, uploadDashboardMedia, removeDashboardMedia, getCompanyExpenses,
 } from '@/lib/data';
-import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, displayProgress, OPEN_DELIVERY_STATUSES } from '@/lib/format';
-import { Loading, Empty, ErrorBar, DataTable, StatusPill, KpiCard } from '@/components';
+import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, OPEN_DELIVERY_STATUSES } from '@/lib/format';
+import { Loading, Empty, ErrorBar, KpiCard } from '@/components';
 import AnimatedNumber from './AnimatedNumber';
 
 const ACTIVE = ['quote', 'preparing', 'in_progress'];
@@ -238,26 +238,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* أحدث المشاريع */}
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="sec-head"><h2>أحدث المشاريع</h2><span className="more">{fmtNum(data.projects.length)} مشروع</span></div>
-        {data.projects.length === 0 ? (
-          <Empty title="لا توجد مشاريع بعد" desc="ابدأ بإضافة أول مشروع لعميل." />
-        ) : (
-          <DataTable
-            rows={data.projects.slice(0, 6)}
-            onRowClick={(p) => router.push(`/projects/${p.id}`)}
-            columns={[
-              { key: 'title', label: 'المشروع', primary: true, render: (p) => <span className="nm">{p.title}</span> },
-              { key: 'service_type', label: 'الخدمة', render: (p) => p.service_type || '—' },
-              { key: 'sale_price', label: 'قيمة العقد', render: (p) => <span className="amt">{fmtMoney(p.sale_price)} ⃁</span> },
-              { key: 'progress', label: 'التقدّم', render: (p) => <div className="prog" style={{ width: 90 }}><i style={{ width: `${displayProgress(p)}%` }} /></div> },
-              { key: 'status', label: 'الحالة', render: (p) => <StatusPill status={p.status} map={PROJECT_STATUS} /> },
-            ]}
-          />
-        )}
       </div>
 
       {/* المرفقات والوسائط */}

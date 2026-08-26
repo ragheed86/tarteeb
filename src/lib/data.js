@@ -565,8 +565,41 @@ export async function updateProject(id, p) {
   if (error) throw error; return data;
 }
 export async function removeProject(id) {
-  const { error } = await supabase.from('projects').delete().eq('id', id);
+  // احتفظ بمسارات الملفات قبل أن يحذف ON DELETE CASCADE سجلاتها.
+  const [{ data: media, error: mediaReadError }, { data: attachments, error: attachmentsReadError }] = await Promise.all([
+    supabase.from('project_media').select('file_path').eq('project_id', id),
+    supabase.from('project_cost_attachments').select('file_path').eq('project_id', id),
+  ]);
+  if (mediaReadError) throw mediaReadError;
+  if (attachmentsReadError) throw attachmentsReadError;
+
+  // العلاقات التابعة (الفريق، المهام، التكاليف، الوسائط والمرفقات) تُحذف
+  // تلقائياً بواسطة مفاتيح ON DELETE CASCADE. الفواتير تبقى كسجل مالي
+  // ويصبح project_id فيها null وفق تعريف قاعدة البيانات.
+  const { data: deleted, error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
   if (error) throw error;
+  if (!deleted) throw new Error('لم يتم حذف المشروع. تحقق من صلاحية الحذف ثم حاول مجدداً.');
+
+  // حذف الملفات الفعلية من Storage بعد نجاح حذف قاعدة البيانات. فشل تنظيف
+  // ملف لا يعيد المشروع المحذوف، لكنه يُعاد كتحذير واضح للمستخدم.
+  const cleanupErrors = [];
+  const mediaPaths = (media || []).map((row) => row.file_path).filter(Boolean);
+  const attachmentPaths = (attachments || []).map((row) => row.file_path).filter(Boolean);
+  if (mediaPaths.length) {
+    const { error: storageError } = await supabase.storage.from(PROJECT_MEDIA_BUCKET).remove(mediaPaths);
+    if (storageError) cleanupErrors.push(storageError.message);
+  }
+  if (attachmentPaths.length) {
+    const { error: storageError } = await supabase.storage.from(COST_ATTACHMENTS_BUCKET).remove(attachmentPaths);
+    if (storageError) cleanupErrors.push(storageError.message);
+  }
+
+  return { cleanupWarning: cleanupErrors.length ? cleanupErrors.join('، ') : '' };
 }
 
 // الفريق (project_team — مفتاح مركّب) — مع أسماء الموظفين

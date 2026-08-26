@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getInvoices, getClients, getProjects, createInvoice, getQuotes, getInvoiceItems, updateInvoiceWithItems, updateInvoice, removeInvoice, getServices } from '@/lib/data';
+import { getInvoices, getClients, getProjects, getProjectCosts, createInvoice, getQuotes, getInvoiceItems, updateInvoiceWithItems, updateInvoice, removeInvoice, getServices } from '@/lib/data';
 import { fmtMoney, fmtNum, INVOICE_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill, KpiCard } from '@/components';
 
@@ -12,6 +12,22 @@ const isOrganizersItem = (description) => {
   const value = String(description || '').trim();
   return value === ORGANIZERS_ITEM || value === 'ادوات ترتيب و منظمات';
 };
+function organizerPricingFromCosts(rows) {
+  const materials = (rows || []).filter((row) => row.kind === 'materials' && Number(row.amount) > 0);
+  const named = materials.filter((row) => /منظم|ترتيب|ادوات|أدوات/.test(`${row.product_name || ''} ${row.label || ''} ${row.note || ''}`));
+  const row = named.find((item) => item.markup_percent != null)
+    || named[0]
+    || (materials.filter((item) => item.markup_percent != null).length === 1
+      ? materials.find((item) => item.markup_percent != null)
+      : null);
+  if (!row) return null;
+  const base = Number(row.amount) || 0;
+  const sale = Number(row.sale_price) || 0;
+  const markup = row.markup_percent != null
+    ? Number(row.markup_percent)
+    : (base > 0 && sale > 0 ? Math.round(((sale / base) - 1) * 10000) / 100 : 25);
+  return { base, markup, sourceLabel: row.product_name || row.label || 'تكلفة المشروع' };
+}
 function addDaysISO(value, days) {
   const date = value ? new Date(value) : new Date();
   date.setDate(date.getDate() + days);
@@ -42,6 +58,10 @@ export default function InvoicesPage() {
   const [head, setHead] = useState({ client_id: '', project_id: '', number: '', issue_at: '', due_at: '', vat_applicable: true, status: 'unpaid' });
   const [items, setItems] = useState([blankItem()]);
   const [services, setServices] = useState([]); // كتالوج الخدمات لاقتراحات البنود
+  const [projectPricing, setProjectPricing] = useState(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingNotice, setPricingNotice] = useState('');
+  const pricingRequest = useRef(0);
 
   async function load() {
     try {
@@ -79,7 +99,7 @@ export default function InvoicesPage() {
     const issue = new Date().toISOString().slice(0, 10);
     setEditId(null);
     setHead({ client_id: state?.clients[0]?.id || '', project_id: '', number: '', issue_at: issue, due_at: addDaysISO(issue, 14), vat_applicable: true, status: 'unpaid' });
-    setItems([blankItem()]); setFormErr(''); setOpen(true);
+    setItems([blankItem()]); setProjectPricing(null); setPricingNotice(''); setFormErr(''); setOpen(true);
     loadInvoiceFormOptions();
   }
   async function openEdit(inv, e) {
@@ -100,6 +120,7 @@ export default function InvoicesPage() {
         internal_base_price: x.internal_base_price ?? '',
         markup_percent: x.markup_percent ?? '',
       })) : [blankItem()]);
+      setProjectPricing(null); setPricingNotice('');
       setOpen(true);
       loadInvoiceFormOptions();
     } catch { setErr('تعذّر فتح الفاتورة للتعديل'); }
@@ -122,13 +143,64 @@ export default function InvoicesPage() {
   function close() { if (!saving) setOpen(false); }
   function setH(k, v) { setHead((h) => ({ ...h, [k]: v })); }
   function setItem(idx, k, v) { setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, [k]: v } : it))); }
+  function applyOrganizerPricing(pricing) {
+    setItems((arr) => arr.map((it) => {
+      if (!isOrganizersItem(it.description)) return it;
+      const unitPrice = Math.round(pricing.base * (1 + pricing.markup / 100) * 100) / 100;
+      return { ...it, internal_base_price: pricing.base, markup_percent: pricing.markup, unit_price: unitPrice };
+    }));
+  }
+  async function loadProjectOrganizerPricing(projectId, apply = true) {
+    const requestId = ++pricingRequest.current;
+    if (!projectId) {
+      setProjectPricing(null); setPricingNotice(''); setPricingLoading(false);
+      return;
+    }
+    setPricingLoading(true); setPricingNotice('');
+    try {
+      const pricing = organizerPricingFromCosts(await getProjectCosts(projectId));
+      if (requestId !== pricingRequest.current) return;
+      if (pricing) {
+        const value = { ...pricing, projectId };
+        setProjectPricing(value);
+        setPricingNotice(`تم استيراد التسعير من المشروع: ${pricing.sourceLabel}`);
+        if (apply) applyOrganizerPricing(value);
+      } else {
+        setProjectPricing(null);
+        setPricingNotice('لا توجد تكلفة منظمات مسجلة في المشروع؛ يمكنك إدخال السعر والنسبة يدوياً.');
+      }
+    } catch {
+      if (requestId === pricingRequest.current) {
+        setProjectPricing(null);
+        setPricingNotice('تعذّر استيراد تكلفة المنظمات؛ يمكنك إدخالها يدوياً.');
+      }
+    } finally {
+      if (requestId === pricingRequest.current) setPricingLoading(false);
+    }
+  }
+  function handleProjectChange(projectId) {
+    setH('project_id', projectId);
+    loadProjectOrganizerPricing(projectId);
+  }
+  function handleClientChange(clientId) {
+    pricingRequest.current += 1;
+    setH('client_id', clientId);
+    setH('project_id', '');
+    setProjectPricing(null);
+    setPricingNotice('');
+    setPricingLoading(false);
+  }
   // كتابة وصف البند: إن طابق اسم خدمة من الكتالوج يُعبَّأ سعر الوحدة تلقائياً
   function setDesc(idx, val) {
     const svc = services.find((x) => x.name === val);
     setItems((arr) => arr.map((it, i) => {
       if (i !== idx) return it;
       if (isOrganizersItem(val)) {
-        return { ...it, description: val, internal_base_price: '', markup_percent: 25, unit_price: '' };
+        const pricing = projectPricing?.projectId === head.project_id ? projectPricing : null;
+        const base = pricing?.base ?? '';
+        const markup = pricing?.markup ?? 25;
+        const unitPrice = pricing ? Math.round(base * (1 + markup / 100) * 100) / 100 : '';
+        return { ...it, description: val, internal_base_price: base, markup_percent: markup, unit_price: unitPrice };
       }
       return {
         ...it,
@@ -386,11 +458,11 @@ export default function InvoicesPage() {
       >
         {formErr && <div className="errbar">{formErr}</div>}
         <div className="form-grid">
-          <Select label="العميل" value={head.client_id} onChange={(e) => { setH('client_id', e.target.value); setH('project_id', ''); }} required>
+          <Select label="العميل" value={head.client_id} onChange={(e) => handleClientChange(e.target.value)} required>
             <option value="" disabled>اختر عميلاً…</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
-          <Select label="المشروع (اختياري)" value={head.project_id} onChange={(e) => setH('project_id', e.target.value)}>
+          <Select label="المشروع (اختياري)" value={head.project_id} onChange={(e) => handleProjectChange(e.target.value)}>
             <option value="">— بدون —</option>
             {clientProjects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
           </Select>
@@ -404,6 +476,11 @@ export default function InvoicesPage() {
           <Select label="الضريبة (15%)" value={head.vat_applicable ? '1' : '0'} onChange={(e) => setH('vat_applicable', e.target.value === '1')}
             options={[{ value: '1', label: 'خاضعة للضريبة' }, { value: '0', label: 'معفاة' }]} />
         </div>
+        {(pricingLoading || pricingNotice) && (
+          <div className={`pricing-import-note${pricingNotice.startsWith('تم ') ? ' success' : ''}`}>
+            {pricingLoading ? 'جارٍ استيراد تكلفة المنظمات من المشروع…' : pricingNotice}
+          </div>
+        )}
 
         {clientQuote && !editing && (
           <div className="quote-import">
@@ -467,6 +544,8 @@ const CSS = `
 .organizer-pricing input{width:100%}
 .organizer-pricing input[readonly]{background:var(--surface-2);font-weight:700;color:var(--ink)}
 .organizer-pricing small{grid-column:1 / -1;color:var(--faint)}
+.pricing-import-note{margin-top:10px;padding:9px 11px;border-radius:9px;background:var(--surface-2);color:var(--muted);font-size:12.5px}
+.pricing-import-note.success{background:color-mix(in srgb,var(--green) 9%,var(--surface));color:var(--green)}
 .billing-coverage{padding:0;margin-bottom:18px;overflow:hidden}
 .billing-coverage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:18px 20px;border-bottom:1px solid var(--line)}
 .billing-coverage-head h2{font-family:var(--display);font-size:17px;margin:0 0 4px}

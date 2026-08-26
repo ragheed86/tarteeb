@@ -7,11 +7,12 @@ import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateT
 
 const VAT_RATE = 15;
 const ORGANIZERS_ITEM = 'منظمات و ادوات الترتيب والتخزين';
-const blankItem = () => ({ description: '', qty: 1, unit_price: '', internal_base_price: '', markup_percent: '' });
+const blankItem = () => ({ description: '', qty: 1, unit: 'غرفة', unit_price: '', internal_base_price: '', markup_percent: '' });
 const isOrganizersItem = (description) => {
   const value = String(description || '').trim();
   return value === ORGANIZERS_ITEM || value === 'ادوات ترتيب و منظمات';
 };
+const unitForDescription = (description) => (isOrganizersItem(description) ? 'مجموعة' : 'غرفة');
 function organizerPricingFromCosts(rows) {
   const materials = (rows || []).filter((row) => row.kind === 'materials' && Number(row.amount) > 0);
   const named = materials.filter((row) => /منظم|ترتيب|ادوات|أدوات/.test(`${row.product_name || ''} ${row.label || ''} ${row.note || ''}`));
@@ -88,8 +89,8 @@ export default function InvoicesPage() {
   function importQuoteItems(quote) {
     const rows = (quote.items || []).map((it) => {
       const cost = Number(it.cost) || 0, days = Number(it.days) || 0, discount = Number(it.discount) || 0;
-      if (days > 0) return { description: it.svc || '', qty: days, unit_price: Math.round((cost - discount / days) * 100) / 100 };
-      return { description: it.svc || '', qty: 1, unit_price: cost - discount };
+      if (days > 0) return { description: it.svc || '', qty: days, unit: unitForDescription(it.svc), unit_price: Math.round((cost - discount / days) * 100) / 100 };
+      return { description: it.svc || '', qty: 1, unit: unitForDescription(it.svc), unit_price: cost - discount };
     });
     setItems(rows.length ? rows : [blankItem()]);
     setFormErr('');
@@ -116,6 +117,7 @@ export default function InvoicesPage() {
       setItems(its.length ? its.map((x) => ({
         description: x.description,
         qty: x.qty,
+        unit: x.unit || unitForDescription(x.description),
         unit_price: x.unit_price,
         internal_base_price: x.internal_base_price ?? '',
         markup_percent: x.markup_percent ?? '',
@@ -200,11 +202,12 @@ export default function InvoicesPage() {
         const base = pricing?.base ?? '';
         const markup = pricing?.markup ?? 25;
         const unitPrice = pricing ? Math.round(base * (1 + markup / 100) * 100) / 100 : '';
-        return { ...it, description: val, internal_base_price: base, markup_percent: markup, unit_price: unitPrice };
+        return { ...it, description: val, unit: 'مجموعة', internal_base_price: base, markup_percent: markup, unit_price: unitPrice };
       }
       return {
         ...it,
         description: val,
+        unit: 'غرفة',
         unit_price: svc ? (Number(svc.default_rate) || 0) : it.unit_price,
         internal_base_price: '',
         markup_percent: '',
@@ -245,6 +248,7 @@ export default function InvoicesPage() {
     const rows = validItems.map((it) => ({
       description: it.description.trim(),
       qty: Number(it.qty) || 1,
+      unit: unitForDescription(it.description),
       unit_price: Number(it.unit_price) || 0,
       internal_base_price: isOrganizersItem(it.description) && it.internal_base_price !== '' ? Number(it.internal_base_price) : null,
       markup_percent: isOrganizersItem(it.description) && it.markup_percent !== '' ? Number(it.markup_percent) : null,
@@ -496,6 +500,7 @@ export default function InvoicesPage() {
               <div className="inline-add" style={{ marginTop: 8 }}>
                 <input list="inv-svclist" placeholder="الوصف" value={it.description} onChange={(e) => setDesc(idx, e.target.value)} style={{ flex: 2 }} />
                 <input type="number" min="0" step="1" placeholder="الكمية" dir="ltr" style={{ maxWidth: 90 }} value={it.qty} onChange={(e) => setItem(idx, 'qty', e.target.value)} />
+                <span className="invoice-unit" title="الوحدة">{it.unit || unitForDescription(it.description)}</span>
                 {!isOrganizersItem(it.description) && (
                   <input type="number" min="0" step="0.01" placeholder="سعر الوحدة" dir="ltr" style={{ maxWidth: 120 }} value={it.unit_price} onChange={(e) => setItem(idx, 'unit_price', e.target.value)} />
                 )}
@@ -544,6 +549,7 @@ const CSS = `
 .organizer-pricing input{width:100%}
 .organizer-pricing input[readonly]{background:var(--surface-2);font-weight:700;color:var(--ink)}
 .organizer-pricing small{grid-column:1 / -1;color:var(--faint)}
+.invoice-unit{display:inline-flex;align-items:center;justify-content:center;min-width:66px;padding:7px 9px;border-radius:9px;background:var(--surface-2);color:var(--muted);font-size:12.5px;font-weight:600}
 .pricing-import-note{margin-top:10px;padding:9px 11px;border-radius:9px;background:var(--surface-2);color:var(--muted);font-size:12.5px}
 .pricing-import-note.success{background:color-mix(in srgb,var(--green) 9%,var(--surface));color:var(--green)}
 .billing-coverage{padding:0;margin-bottom:18px;overflow:hidden}

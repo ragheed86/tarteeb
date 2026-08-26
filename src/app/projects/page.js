@@ -107,6 +107,7 @@ export default function ProjectsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [formErr, setFormErr] = useState('');
   // محفوظة عبر sessionStorage — تنجو من إعادة تركيب الصفحة (Splash عند تجديد الجلسة)
   // ومن أي إعادة تحميل حقيقية لنفس التبويب، فلا يُفاجأ المستخدم بعودة الفلاتر لوضعها الافتراضي
@@ -190,9 +191,17 @@ export default function ProjectsPage() {
 
   async function del(p, e) {
     e.stopPropagation();
-    if (!confirm(`حذف المشروع «${p.title}»؟`)) return;
-    try { await removeProject(p.id); setState((s) => ({ ...s, projects: s.projects.filter((x) => x.id !== p.id) })); }
+    if (deletingId) return;
+    if (!confirm(`هل أنت متأكد من حذف المشروع «${p.title}»؟\n\nسيتم حذف المهام والفريق والتكاليف والصور والمرفقات نهائياً. ستبقى الفواتير الصادرة محفوظة كسجلات مالية ولكن بدون ربط بالمشروع.\n\nلا يمكن التراجع عن هذا الإجراء.`)) return;
+    setDeletingId(p.id);
+    setErr('');
+    try {
+      const result = await removeProject(p.id);
+      setState((s) => ({ ...s, projects: s.projects.filter((x) => x.id !== p.id) }));
+      if (result?.cleanupWarning) alert(`تم حذف المشروع، لكن تعذّر تنظيف بعض الملفات من التخزين: ${result.cleanupWarning}`);
+    }
     catch (e2) { setErr(e2.message || 'تعذّر الحذف'); }
+    finally { setDeletingId(null); }
   }
 
   async function moveToStatus(projectId, status) {
@@ -364,6 +373,17 @@ export default function ProjectsPage() {
                     </span>
                   ),
                 },
+                {
+                  key: 'actions', label: 'الإجراءات',
+                  render: (p) => (
+                    <span style={{ display: 'inline-flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                      <button className="btn ghost sm" onClick={() => openEdit(p)}>تعديل</button>
+                      <button className="btn ghost sm" style={{ color: 'var(--neg)' }} disabled={deletingId === p.id} onClick={(e) => del(p, e)}>
+                        {deletingId === p.id ? 'جارٍ الحذف…' : 'حذف'}
+                      </button>
+                    </span>
+                  ),
+                },
               ]}
             />
           </div>
@@ -404,7 +424,7 @@ export default function ProjectsPage() {
                   )}
                   <div className="row" style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
                     <button className="btn ghost sm" onClick={() => openEdit(p)}>تعديل</button>
-                    <button className="btn ghost sm" style={{ color: 'var(--neg)' }} onClick={(e) => del(p, e)}>حذف</button>
+                    <button className="btn ghost sm" style={{ color: 'var(--neg)' }} disabled={deletingId === p.id} onClick={(e) => del(p, e)}>{deletingId === p.id ? 'جارٍ الحذف…' : 'حذف'}</button>
                   </div>
                 </div>
               </div>

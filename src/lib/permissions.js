@@ -51,6 +51,14 @@ export const ROLE_LABELS = {
   viewer: 'مشاهدة فقط',
 };
 
+export const ROLE_LABELS_EN = {
+  admin: 'Full Administrator',
+  manager: 'Operations Manager',
+  accountant: 'Accountant',
+  operations: 'Operations',
+  viewer: 'View Only',
+};
+
 export function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }

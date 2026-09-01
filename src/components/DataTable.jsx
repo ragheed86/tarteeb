@@ -4,6 +4,7 @@
 // تُعنوَن كل خلية تلقائياً عبر data-label + ::before فلا تظهر قيم مكدسة بلا سياق.
 import { useState } from 'react';
 import { Ltr } from './format';
+import { useLanguage } from '@/i18n/LanguageProvider';
 
 export default function DataTable({
   columns,        // [{ key, label, render?, align?, ltr?, width?, hideMobile?, className?, primary? }]
@@ -17,6 +18,7 @@ export default function DataTable({
   className = '',
   pageSize,       // اختياري: يعرض أول pageSize صفاً + زر «عرض المزيد»
 }) {
+  const { t } = useLanguage();
   const [limit, setLimit] = useState(pageSize || Infinity);
   if (!rows?.length) return empty || null;
   const visible = Number.isFinite(limit) ? rows.slice(0, limit) : rows;
@@ -63,9 +65,9 @@ export default function DataTable({
       {rows.length > visible.length && (
         <div className="pagination">
           <button type="button" className="btn ghost sm" onClick={() => setLimit((l) => l + pageSize)}>
-            عرض المزيد
+            {t('common.showMore')}
           </button>
-          <span><span className="amt" dir="ltr">{visible.length}</span> من <span className="amt" dir="ltr">{rows.length}</span></span>
+          <span><span className="amt" dir="ltr">{visible.length}</span> {t('common.of')} <span className="amt" dir="ltr">{rows.length}</span></span>
         </div>
       )}
     </>

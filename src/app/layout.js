@@ -1,5 +1,6 @@
 import './globals.css';
 import AppShell from './AppShell';
+import { LanguageProvider } from '@/i18n/LanguageProvider';
 
 export const metadata = {
   title: 'ترتيب · نظام إدارة الأعمال',
@@ -41,7 +42,9 @@ export default function RootLayout({ children }) {
         <link rel="preload" href="/fonts/saudi-riyal-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <LanguageProvider>
+          <AppShell>{children}</AppShell>
+        </LanguageProvider>
       </body>
     </html>
   );

@@ -1,8 +1,10 @@
 'use client';
+import { useLanguage } from '@/i18n/LanguageProvider';
 // مكوّنات حالة مشتركة (تحميل / فارغ / خطأ)
 export function Loading() {
+  const { t } = useLanguage();
   return (
-    <div className="skeleton" aria-busy="true" aria-label="جارٍ التحميل">
+    <div className="skeleton" aria-busy="true" aria-label={t('state.loading')}>
       <div className="sk-bar" style={{ width: '38%' }} />
       <div className="sk-bar" />
       <div className="sk-bar" style={{ width: '82%' }} />
@@ -11,7 +13,8 @@ export function Loading() {
   );
 }
 export function ErrorBar({ message }) {
-  return <div className="errbar">خطأ: {message}</div>;
+  const { t } = useLanguage();
+  return <div className="errbar">{t('state.error', { message })}</div>;
 }
 export function Empty({ title, desc }) {
   return (

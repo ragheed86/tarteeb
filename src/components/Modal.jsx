@@ -4,6 +4,7 @@
 // ويستبدل النسخ اليدوية المكررة في الصفحات مع سلوك موحّد:
 // إغلاق بالنقر على الخلفية + Escape + قفل تمرير الصفحة + إدارة التركيز.
 import { useEffect, useRef } from 'react';
+import { useLanguage } from '@/i18n/LanguageProvider';
 
 const SIZE_CLASS = { sm: 'modal-sm', md: '', lg: 'project-modal' };
 
@@ -19,6 +20,7 @@ export default function Modal({
   footer,
   children,
 }) {
+  const { t } = useLanguage();
   const cardRef = useRef(null);
   const lastFocused = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -81,7 +83,7 @@ export default function Modal({
               {title && <h2>{title}</h2>}
               {subtitle && <p>{subtitle}</p>}
             </div>
-            <button type="button" className="icon-close" onClick={onClose} aria-label="إغلاق">
+            <button type="button" className="icon-close" onClick={onClose} aria-label={t('common.close')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6 6 18" /></svg>
             </button>
           </div>

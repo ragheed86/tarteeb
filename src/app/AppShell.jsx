@@ -4,32 +4,33 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Toaster } from './toast';
 import { supabase, supabaseReady } from '@/lib/supabase';
-import { ROLE_LABELS, canAccess, permissionForPath } from '@/lib/permissions';
+import { ROLE_LABELS, ROLE_LABELS_EN, canAccess, permissionForPath } from '@/lib/permissions';
 import { useAccess } from '@/lib/useAccess';
 import { useRouteMemory } from '@/lib/useRouteMemory';
+import { LanguageToggle, useLanguage } from '@/i18n/LanguageProvider';
 
 // ---------- خريطة التنقّل والعناوين ----------
 const NAV = [
-  { group: null, items: [{ href: '/', label: 'لوحة المعلومات', icon: IconDash, sub: 'نظرة عامة على الأداء' }] },
-  { group: 'العمليات', items: [
-    { href: '/clients', label: 'العملاء', icon: IconUsers, sub: 'قاعدة العملاء وملفاتهم' },
-    { href: '/projects', label: 'المشاريع', icon: IconBox, sub: 'مشاريع التنظيم الجارية' },
-    { href: '/cost', label: 'تكلفة المشاريع', icon: IconCost, sub: 'ابحث عن مشروع وأضف تكاليفه' },
-    { href: '/warehouse', label: 'المستودع', icon: IconWarehouse, sub: 'الأصناف والمخزون' },
-    { href: '/employees', label: 'الموظفون', icon: IconBadge, sub: 'الفريق ومستنداتهم' },
+  { groupKey: null, items: [{ href: '/', labelKey: 'nav.dashboard', icon: IconDash, subKey: 'nav.dashboardSub' }] },
+  { groupKey: 'nav.operations', items: [
+    { href: '/clients', labelKey: 'nav.clients', icon: IconUsers, subKey: 'nav.clientsSub' },
+    { href: '/projects', labelKey: 'nav.projects', icon: IconBox, subKey: 'nav.projectsSub' },
+    { href: '/cost', labelKey: 'nav.cost', icon: IconCost, subKey: 'nav.costSub' },
+    { href: '/warehouse', labelKey: 'nav.warehouse', icon: IconWarehouse, subKey: 'nav.warehouseSub' },
+    { href: '/employees', labelKey: 'nav.employees', icon: IconBadge, subKey: 'nav.employeesSub' },
   ] },
-  { group: 'التسويق', items: [
-    { href: '/heatmap', label: 'الخريطة الحرارية', icon: IconPin, sub: 'كثافة الطلبات حسب أحياء الرياض' },
+  { groupKey: 'nav.marketing', items: [
+    { href: '/heatmap', labelKey: 'nav.heatmap', icon: IconPin, subKey: 'nav.heatmapSub' },
   ] },
-  { group: 'المالية', items: [
-    { href: '/quotes', label: 'عروض الأسعار', icon: IconQuote, sub: 'إنشاء وطباعة عروض الأسعار' },
-    { href: '/invoices', label: 'الفواتير', icon: IconDoc, sub: 'الفواتير والمدفوعات' },
-    { href: '/company-expenses', label: 'مصاريف الشركة', icon: IconCost, sub: 'النفقات التشغيلية بعيداً عن المشاريع' },
-    { href: '/bank-reconciliation', label: 'المطابقة البنكية', icon: IconDoc, sub: 'مطابقة كشف البنك مع السجلات المالية' },
-    { href: '/reports', label: 'التقارير', icon: IconDash, sub: 'تقارير مالية وتشغيلية وتحليلية' },
+  { groupKey: 'nav.finance', items: [
+    { href: '/quotes', labelKey: 'nav.quotes', icon: IconQuote, subKey: 'nav.quotesSub' },
+    { href: '/invoices', labelKey: 'nav.invoices', icon: IconDoc, subKey: 'nav.invoicesSub' },
+    { href: '/company-expenses', labelKey: 'nav.expenses', icon: IconCost, subKey: 'nav.expensesSub' },
+    { href: '/bank-reconciliation', labelKey: 'nav.bank', icon: IconDoc, subKey: 'nav.bankSub' },
+    { href: '/reports', labelKey: 'nav.reports', icon: IconDash, subKey: 'nav.reportsSub' },
   ] },
-  { group: 'النظام', items: [
-    { href: '/settings', label: 'الإعدادات', icon: IconGear, sub: 'بيانات الشركة والموردون والرخص والصلاحيات' },
+  { groupKey: 'nav.system', items: [
+    { href: '/settings', labelKey: 'nav.settings', icon: IconGear, subKey: 'nav.settingsSub' },
   ] },
 ];
 
@@ -37,14 +38,15 @@ const ALL = NAV.flatMap((g) => g.items);
 const MOBILE_NAV = ['/', '/clients', '/projects', '/quotes', '/warehouse'];
 // عناوين المسارات غير الظاهرة في القائمة (تفاصيل وصفحات فرعية) — كي لا يظهر عنوان خاطئ في الشريط العلوي
 const EXTRA_TITLES = [
-  { prefix: '/clients/', label: 'ملف العميل', sub: 'بيانات العميل وسجله' },
-  { prefix: '/projects/', label: 'تفاصيل المشروع', sub: 'المهام والفريق والتكاليف' },
-  { prefix: '/invoices/', label: 'الفاتورة', sub: 'تفاصيل الفاتورة والدفعات' },
-  { prefix: '/suppliers', label: 'الموردون', sub: 'موردو المواد والمنظمات' },
-  { prefix: '/government', label: 'الحسابات الحكومية', sub: 'الرخص والاشتراكات' },
+  { prefix: '/clients/', labelKey: 'nav.clientFile', subKey: 'nav.clientFileSub' },
+  { prefix: '/projects/', labelKey: 'nav.projectDetails', subKey: 'nav.projectDetailsSub' },
+  { prefix: '/invoices/', labelKey: 'nav.invoice', subKey: 'nav.invoiceSub' },
+  { prefix: '/suppliers', labelKey: 'nav.suppliers', subKey: 'nav.suppliersSub' },
+  { prefix: '/government', labelKey: 'nav.government', subKey: 'nav.governmentSub' },
 ];
 
 export default function AppShell({ children }) {
+  const { t, language } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const { session, access } = useAccess();
@@ -107,13 +109,13 @@ export default function AppShell({ children }) {
           {glide && <span className="nav-glider" style={{ top: glide.top, height: glide.height }} aria-hidden="true" />}
           {visibleNav.map((g, gi) => (
             <div key={gi}>
-              {g.group && <div className="nav-label">{g.group}</div>}
+              {g.groupKey && <div className="nav-label">{t(g.groupKey)}</div>}
               {g.items.map((it) => {
                 const Icon = it.icon;
                 const isActive = it.href === pathname || (it.href !== '/' && pathname.startsWith(it.href + '/'));
                 return (
                   <Link key={it.href} href={it.href} className={isActive ? 'active' : ''}>
-                    <Icon /> {it.label}
+                    <Icon /> {t(it.labelKey)}
                   </Link>
                 );
               })}
@@ -122,40 +124,41 @@ export default function AppShell({ children }) {
         </nav>
         <div className="side-foot">
           <div className="avatar">{initial}</div>
-          <div>{ROLE_LABELS[access?.role] || 'مستخدم'}<br /><small>{email}</small></div>
-          <button className="logout" onClick={() => supabase.auth.signOut()}>خروج</button>
+          <div>{(language === 'en' ? ROLE_LABELS_EN : ROLE_LABELS)[access?.role] || t('app.user')}<br /><small>{email}</small></div>
+          <button className="logout" onClick={() => supabase.auth.signOut()}>{t('app.logout')}</button>
         </div>
       </aside>
       <div className={`scrim${open ? ' show' : ''}`} onClick={() => setOpen(false)} />
 
       <div className="main">
         <header className="topbar">
-          <button className="hamburger" onClick={() => setOpen((v) => !v)} aria-label="القائمة">
+          <button className="hamburger" onClick={() => setOpen((v) => !v)} aria-label={t('app.menu')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
-          <div className="pt">{active.label}<small>{active.sub}</small></div>
+          <div className="pt">{t(active.labelKey)}<small>{t(active.subKey)}</small></div>
           {canAccess(access, permissionForPath('/clients')) && (
             <form className="search topbar-search" role="search" onSubmit={submitGlobalSearch}>
               <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
               <input
-                aria-label="بحث عام في العملاء"
-                placeholder="ابحث عن عميل أو جوال أو حي…"
+                aria-label={t('app.globalSearch')}
+                placeholder={t('app.searchPlaceholder')}
                 value={globalQuery}
                 onChange={(event) => setGlobalQuery(event.target.value)}
               />
             </form>
           )}
+          <LanguageToggle compact />
         </header>
         <div className="content">{allowed ? children : <AccessDenied permission={currentPermission} />}</div>
       </div>
-      <nav className="bottom-nav" aria-label="التنقل الرئيسي">
+      <nav className="bottom-nav" aria-label={t('app.mainNavigation')}>
         {visibleAll.filter((it) => MOBILE_NAV.includes(it.href)).map((it) => {
           const Icon = it.icon;
           const isActive = it.href === pathname || (it.href !== '/' && pathname.startsWith(it.href + '/'));
           return (
             <Link key={it.href} href={it.href} className={isActive ? 'active' : ''}>
               <Icon />
-              <span>{it.label}</span>
+              <span>{t(it.labelKey)}</span>
             </Link>
           );
         })}
@@ -167,11 +170,12 @@ export default function AppShell({ children }) {
 }
 
 function AccessDenied() {
+  const { t } = useLanguage();
   return (
     <div className="card access-denied">
       <div className="mark"><span /><span /><span /><span /></div>
-      <h2>لا تملك صلاحية الوصول</h2>
-      <p>اطلب من الأدمن الأساسي تعديل صلاحيات حسابك من الإعدادات.</p>
+      <h2>{t('access.title')}</h2>
+      <p>{t('access.description')}</p>
     </div>
   );
 }
@@ -179,6 +183,7 @@ function AccessDenied() {
 // ---------- شاشة البدء (splash) ----------
 // ---------- بانر إضافة للشاشة الرئيسية (iPhone فقط، بلا beforeinstallprompt) ----------
 function IOSInstallBanner() {
+  const { t } = useLanguage();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
@@ -200,14 +205,13 @@ function IOSInstallBanner() {
     <div className="a2hs-banner">
       <div className="mark"><span /><span /><span /><span /></div>
       <div className="a2hs-txt">
-        <b>ثبّت ترتيب كتطبيق على شاشتك الرئيسية</b>
+        <b>{t('install.title')}</b>
         <span>
-          اضغط
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 15V3m0 0-4 4m4-4 4 4" /><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" /></svg>
-          مشاركة، ثم «إضافة إلى الشاشة الرئيسية»
+          {t('install.instructions')}
         </span>
       </div>
-      <button className="a2hs-close" onClick={dismiss} aria-label="إغلاق">✕</button>
+      <button className="a2hs-close" onClick={dismiss} aria-label={t('common.close')}>✕</button>
     </div>
   );
 }
@@ -225,6 +229,7 @@ function Splash() {
 
 // ---------- شاشة الدخول ----------
 function Login() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [forgotPassword, setForgotPassword] = useState(false);
@@ -239,7 +244,7 @@ function Login() {
     }
     setBusy(true); setErr('');
     const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
-    if (error) setErr('بيانات الدخول غير صحيحة، حاول مجدداً');
+    if (error) setErr(t('auth.invalidCredentials'));
     setBusy(false);
   }
 
@@ -251,7 +256,7 @@ function Login() {
     const redirectTo = `${window.location.origin}/reset-password`;
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) {
-      setErr('تعذر إرسال رابط الاستعادة الآن. حاول مجدداً بعد قليل');
+      setErr(t('auth.resetFailed'));
     } else {
       setSent(true);
     }
@@ -270,36 +275,37 @@ function Login() {
         <div className="lhead">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/tarteeb-logo.png" alt="ترتيب" className="login-logo" />
-          <small>{forgotPassword ? 'أدخل بريدك وسنرسل لك رابطاً لتعيين كلمة مرور جديدة' : 'سجّل الدخول للوصول إلى نظام إدارة الأعمال'}</small>
+          <small>{forgotPassword ? t('auth.resetHelp') : t('auth.loginHelp')}</small>
         </div>
-        {!supabaseReady && <div className="errbar">إعدادات Supabase غير مكتملة في بيئة التشغيل</div>}
+        <div className="login-language"><LanguageToggle /></div>
+        {!supabaseReady && <div className="errbar">{t('auth.supabaseMissing')}</div>}
         {err && <div className="errbar">{err}</div>}
         {sent && (
           <div className="login-success" role="status">
-            إذا كان البريد مسجلاً، أرسلنا إليه رابط الاستعادة. افحص صندوق الوارد والرسائل غير المرغوب فيها.
+            {t('auth.resetSent')}
           </div>
         )}
         <div className="field">
-          <label>البريد الإلكتروني</label>
+          <label>{t('auth.email')}</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required dir="ltr" autoComplete="username" />
         </div>
         {!forgotPassword && (
           <div className="field">
             <div className="login-field-head">
-              <label>كلمة المرور</label>
+              <label>{t('auth.password')}</label>
               <button className="login-link" type="button" onClick={() => { setForgotPassword(true); setErr(''); }}>
-                نسيت كلمة المرور؟
+                {t('auth.forgotPassword')}
               </button>
             </div>
             <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required dir="ltr" autoComplete="current-password" />
           </div>
         )}
         <button className="btn btn-full" type="submit" disabled={busy || !supabaseReady}>
-          {busy ? (forgotPassword ? 'جارٍ الإرسال…' : 'جارٍ الدخول…') : (forgotPassword ? 'إرسال رابط الاستعادة' : 'دخول')}
+          {busy ? (forgotPassword ? t('auth.sending') : t('auth.signingIn')) : (forgotPassword ? t('auth.sendReset') : t('auth.signIn'))}
         </button>
         {forgotPassword && (
           <button className="login-link login-back" type="button" onClick={showLogin}>
-            العودة إلى تسجيل الدخول
+            {t('auth.backToLogin')}
           </button>
         )}
       </form>
@@ -308,6 +314,7 @@ function Login() {
 }
 
 function ResetPassword() {
+  const { t } = useLanguage();
   const router = useRouter();
   const [status, setStatus] = useState('checking');
   const [pw, setPw] = useState('');
@@ -340,18 +347,18 @@ function ResetPassword() {
     e.preventDefault();
     setErr('');
     if (pw.length < 8) {
-      setErr('يجب أن تتكون كلمة المرور من 8 أحرف على الأقل');
+      setErr(t('auth.passwordMin'));
       return;
     }
     if (pw !== confirmPw) {
-      setErr('كلمتا المرور غير متطابقتين');
+      setErr(t('auth.passwordMismatch'));
       return;
     }
 
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password: pw });
     if (error) {
-      setErr('تعذر تحديث كلمة المرور. أعد فتح رابط الاستعادة أو اطلب رابطاً جديداً');
+      setErr(t('auth.updateFailed'));
     } else {
       window.history.replaceState({}, '', '/reset-password');
       setStatus('done');
@@ -367,20 +374,20 @@ function ResetPassword() {
         <div className="lhead">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/tarteeb-logo.png" alt="ترتيب" className="login-logo" />
-          <small>{status === 'done' ? 'اكتملت استعادة الحساب بنجاح' : 'اختر كلمة مرور جديدة لحسابك'}</small>
+          <small>{status === 'done' ? t('auth.resetComplete') : t('auth.choosePassword')}</small>
         </div>
 
         {status === 'invalid' && (
           <>
-            <div className="errbar">رابط الاستعادة غير صالح أو انتهت صلاحيته. اطلب رابطاً جديداً من شاشة الدخول.</div>
-            <button className="btn btn-full" type="button" onClick={() => router.push('/')}>العودة إلى تسجيل الدخول</button>
+            <div className="errbar">{t('auth.invalidReset')}</div>
+            <button className="btn btn-full" type="button" onClick={() => router.push('/')}>{t('auth.backToLogin')}</button>
           </>
         )}
 
         {status === 'done' && (
           <>
-            <div className="login-success" role="status">تم تحديث كلمة المرور. يمكنك الآن متابعة استخدام التطبيق.</div>
-            <button className="btn btn-full" type="button" onClick={() => router.push('/')}>متابعة إلى التطبيق</button>
+            <div className="login-success" role="status">{t('auth.passwordUpdated')}</div>
+            <button className="btn btn-full" type="button" onClick={() => router.push('/')}>{t('auth.continue')}</button>
           </>
         )}
 
@@ -388,16 +395,16 @@ function ResetPassword() {
           <form onSubmit={updatePassword}>
             {err && <div className="errbar">{err}</div>}
             <div className="field">
-              <label>كلمة المرور الجديدة</label>
+              <label>{t('auth.newPassword')}</label>
               <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} required minLength={8} dir="ltr" autoComplete="new-password" />
             </div>
             <div className="field">
-              <label>تأكيد كلمة المرور الجديدة</label>
+              <label>{t('auth.confirmPassword')}</label>
               <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} required minLength={8} dir="ltr" autoComplete="new-password" />
             </div>
-            <p className="login-help">استخدم 8 أحرف على الأقل، ويفضل الجمع بين الحروف والأرقام والرموز.</p>
+            <p className="login-help">{t('auth.passwordTip')}</p>
             <button className="btn btn-full" type="submit" disabled={busy}>
-              {busy ? 'جارٍ التحديث…' : 'تحديث كلمة المرور'}
+              {busy ? t('auth.updating') : t('auth.updatePassword')}
             </button>
           </form>
         )}

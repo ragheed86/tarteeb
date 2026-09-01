@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Modal from './Modal';
+import { useLanguage } from '@/i18n/LanguageProvider';
 
 export default function KpiCard({
   label,
@@ -21,15 +22,16 @@ export default function KpiCard({
   actionLabel,
   onAction,
 }) {
+  const { t } = useLanguage();
   const [open, setOpen] = useState(false);
-  const explain = definition || 'يعرض هذا المؤشر القيمة المحسوبة من بيانات النظام الحالية.';
+  const explain = definition || t('kpi.defaultExplanation');
 
   return (
     <>
       <button
         type="button"
         className={`${baseClass} kpi-interactive ${tone} ${className}`.trim()}
-        aria-label={`عرض تفاصيل مؤشر ${label}`}
+        aria-label={t('kpi.openDetails', { label })}
         onClick={() => setOpen(true)}
       >
         <span className="kpi-info-badge" aria-hidden="true">i</span>
@@ -43,21 +45,21 @@ export default function KpiCard({
         open={open}
         onClose={() => setOpen(false)}
         title={label}
-        subtitle="شرح المؤشر وطريقة احتسابه"
+        subtitle={t('kpi.subtitle')}
         size="sm"
-        footer={<>{actionLabel && onAction && <button type="button" className="btn ghost" onClick={() => { setOpen(false); onAction(); }}>{actionLabel}</button>}<button type="button" className="btn" onClick={() => setOpen(false)}>حسنًا</button></>}
+        footer={<>{actionLabel && onAction && <button type="button" className="btn ghost" onClick={() => { setOpen(false); onAction(); }}>{actionLabel}</button>}<button type="button" className="btn" onClick={() => setOpen(false)}>{t('common.ok')}</button></>}
       >
         <div className="kpi-detail-value">{value}</div>
         <p className="kpi-detail-definition">{explain}</p>
         {(period || formula) && (
           <div className="kpi-detail-meta">
-            {period && <div><span>النطاق</span><b>{period}</b></div>}
-            {formula && <div><span>طريقة الحساب</span><b>{formula}</b></div>}
+            {period && <div><span>{t('kpi.scope')}</span><b>{period}</b></div>}
+            {formula && <div><span>{t('kpi.formula')}</span><b>{formula}</b></div>}
           </div>
         )}
         {breakdown.length > 0 && (
           <div className="kpi-breakdown">
-            <h3>تفاصيل الرقم</h3>
+            <h3>{t('kpi.breakdown')}</h3>
             {breakdown.map((item, index) => (
               <div className="kpi-breakdown-row" key={`${item.label}-${index}`}>
                 <span>{item.label}</span><b>{item.value}</b>

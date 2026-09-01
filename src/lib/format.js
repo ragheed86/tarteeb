@@ -33,18 +33,18 @@ export function fmtRelative(d) {
 
 // خرائط الحالات → أصناف الـ pill والتسميات العربية
 export const CLIENT_STATUS = {
-  lead: { label: 'عميل محتمل', cls: 'p-quote' },
-  active: { label: 'عميل نشط', cls: 'p-prog' },
-  completed: { label: 'مكتمل', cls: 'p-done' },
-  waiting: { label: 'بانتظار رد', cls: 'p-wait' },
+  lead: { label: 'عميل محتمل', labelEn: 'Lead', cls: 'p-quote' },
+  active: { label: 'عميل نشط', labelEn: 'Active Client', cls: 'p-prog' },
+  completed: { label: 'مكتمل', labelEn: 'Completed', cls: 'p-done' },
+  waiting: { label: 'بانتظار رد', labelEn: 'Awaiting Response', cls: 'p-wait' },
 };
 export const PROJECT_STATUS = {
-  quote: { label: 'عرض سعر', cls: 'p-quote' },
-  preparing: { label: 'قيد التحضير', cls: 'p-wait' },
-  in_progress: { label: 'قيد التنفيذ', cls: 'p-prog' },
-  delivered: { label: 'تم التسليم', cls: 'p-done' },
-  completed: { label: 'مكتمل', cls: 'p-done' },
-  cancelled: { label: 'ملغي', cls: 'p-cancel' },
+  quote: { label: 'عرض سعر', labelEn: 'Quotation', cls: 'p-quote' },
+  preparing: { label: 'قيد التحضير', labelEn: 'Preparing', cls: 'p-wait' },
+  in_progress: { label: 'قيد التنفيذ', labelEn: 'In Progress', cls: 'p-prog' },
+  delivered: { label: 'تم التسليم', labelEn: 'Delivered', cls: 'p-done' },
+  completed: { label: 'مكتمل', labelEn: 'Completed', cls: 'p-done' },
+  cancelled: { label: 'ملغي', labelEn: 'Cancelled', cls: 'p-cancel' },
 };
 
 // الحالات التي تعني أن العمل انتهى فعلياً — الحالة هي مصدر الحقيقة لاكتمال التقدّم
@@ -68,12 +68,12 @@ export function progressForStatus(status, currentProgress) {
   return clampProgress(currentProgress);
 }
 export const INVOICE_STATUS = {
-  draft: { label: 'مسودة', cls: 'p-wait' },
-  unpaid: { label: 'غير مدفوعة', cls: 'p-quote' },
-  partial: { label: 'مدفوعة جزئياً', cls: 'p-prog' },
-  paid: { label: 'مدفوعة', cls: 'p-done' },
-  overdue: { label: 'متأخرة', cls: 'p-cancel' },
-  refunded: { label: 'مرتجعة', cls: 'p-cancel' },
+  draft: { label: 'مسودة', labelEn: 'Draft', cls: 'p-wait' },
+  unpaid: { label: 'غير مدفوعة', labelEn: 'Unpaid', cls: 'p-quote' },
+  partial: { label: 'مدفوعة جزئياً', labelEn: 'Partially Paid', cls: 'p-prog' },
+  paid: { label: 'مدفوعة', labelEn: 'Paid', cls: 'p-done' },
+  overdue: { label: 'متأخرة', labelEn: 'Overdue', cls: 'p-cancel' },
+  refunded: { label: 'مرتجعة', labelEn: 'Refunded', cls: 'p-cancel' },
 };
 export const SOURCE_LABEL = {
   instagram: 'انستقرام',
@@ -83,3 +83,17 @@ export const SOURCE_LABEL = {
   employee_referral: 'عن طريق موظف',
   other: 'أخرى',
 };
+
+export const SOURCE_LABEL_EN = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  referral: 'Friend Referral',
+  client_referral: 'Client Referral',
+  employee_referral: 'Employee Referral',
+  other: 'Other',
+};
+
+export function localizedLabel(entry, language = 'ar') {
+  if (!entry) return '';
+  return language === 'en' ? (entry.labelEn || entry.label || '') : (entry.label || '');
+}

@@ -1196,6 +1196,30 @@ export async function approvePricing(pricingRequestId, price, notes) {
   return data; // { ok, message_id, reply } أو { error }
 }
 
+// ---------- واتساب · موافقة الحجوزات (Booking Approval) ----------
+export async function getBookingRequests() {
+  const { data, error } = await supabase
+    .from('booking_requests')
+    .select('id,status,requested_date,requested_time,requested_datetime,suggested_datetime,notes,created_at,conversation_id,client:client_id(id,name,phone,district,status)')
+    .in('status', ['WAITING_APPROVAL', 'RESCHEDULE_SUGGESTED'])
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+// قرار الحجز: confirm | reject | reschedule (محكوم بصلاحية whatsapp_booking)
+export async function decideBooking(bookingId, decision, { suggested = null, notes = null, calendarEventId = null } = {}) {
+  const { data, error } = await supabase.rpc('wa_decide_booking', {
+    p_booking_id: bookingId,
+    p_decision: decision,
+    p_calendar_event_id: calendarEventId,
+    p_suggested: suggested,
+    p_notes: notes,
+  });
+  if (error) throw error;
+  return data;
+}
+
 // الاستلام البشري / العودة للأتمتة (Human Takeover)
 export async function setConversationTakeover(conversationId, paused) {
   const { data, error } = await supabase

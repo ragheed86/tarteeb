@@ -96,6 +96,7 @@ export function permissionForPath(pathname) {
   const path = pathname || '/';
   if (path === '/') return 'dashboard';
   if (path.startsWith('/pricing')) return 'whatsapp_pricing';
+  if (path.startsWith('/bookings')) return 'whatsapp_booking';
   if (path.startsWith('/inbox')) return 'whatsapp';
   if (path.startsWith('/clients')) return 'clients';
   if (path.startsWith('/projects')) return 'projects';

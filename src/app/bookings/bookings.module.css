@@ -1,0 +1,38 @@
+/* موافقة الحجوزات — عمودان: قائمة + بطاقة قرار */
+.wrap { display: grid; grid-template-columns: 320px minmax(0,1fr); gap: 14px; height: calc(100vh - 150px); min-height: 460px; }
+.list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-card); }
+.listHead { padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 700; color: var(--ink); font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+.count { background: var(--gold-bg); color: #b54708; border-radius: 999px; font-size: 12px; padding: 1px 9px; font-weight: 700; }
+.listScroll { overflow-y: auto; flex: 1; }
+.item { display: block; width: 100%; text-align: start; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 14px; cursor: pointer; font-family: inherit; }
+.item:hover { background: var(--surface-2); }
+.item.active { background: var(--sage-bg); }
+.itemName { font-weight: 600; font-size: 14px; color: var(--ink); }
+.itemMeta { font-size: 12.3px; color: var(--muted); margin-top: 3px; }
+.tagResched { color: #b54708; }
+
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; overflow-y: auto; box-shadow: var(--shadow-card); }
+.placeholder { display: grid; place-items: center; height: 100%; min-height: 200px; color: var(--muted); font-size: 14px; }
+.dName { font-weight: 700; font-size: 17px; color: var(--ink); }
+.dPhone { direction: ltr; text-align: start; color: var(--muted); font-size: 13px; margin-top: 2px; }
+.when { margin: 16px 0; background: var(--sage-bg); border-radius: 12px; padding: 12px 14px; }
+.whenLabel { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.whenValue { font-size: 18px; color: var(--ink); font-weight: 700; margin-top: 3px; }
+
+.section { margin-top: 16px; }
+.sectionTitle { font-size: 12.5px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.msgs { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.msg { font-size: 13px; line-height: 1.6; }
+.msgIn { color: var(--ink); }
+.msgOut { color: var(--green); }
+.msgTag { font-size: 10.5px; color: var(--muted); }
+
+.actions { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; }
+.notesInput { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; width: 100%; background: var(--surface); color: var(--ink); font-family: inherit; box-sizing: border-box; margin-bottom: 12px; }
+.btnRow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.reschedRow { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.dt { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 13.5px; background: var(--surface); color: var(--ink); font-family: inherit; }
+.btnConfirm { background: var(--green); }
+.btnReject { background: var(--surface); color: #b42318; border: 1px solid #f2b8b5; }
+.btnReject:hover { background: #fef3f2; }
+.calNote { font-size: 12px; color: var(--muted); margin-top: 12px; }

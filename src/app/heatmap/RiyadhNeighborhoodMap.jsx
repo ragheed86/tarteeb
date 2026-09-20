@@ -14,20 +14,20 @@ function ensureRtlPlugin() {
   );
 }
 
-// نمط مكتفٍ ذاتياً (لون خلفية + بلاطات CARTO) بدل ملف style.json خارجي،
+// نمط مكتفٍ ذاتياً (لون خلفية + بلاطات رمادية فاتحة) بدل ملف style.json خارجي،
 // حتى تُرسم مضلّعات الأحياء دوماً حتى لو فشل تحميل البلاطات.
+// نستخدم Esri World Light Gray (بلا مفتاح API) — بلاطات CARTO صارت تتطلب مفتاحاً
+// وتضع علامة «API KEY REQUIRED» المائلة بدونه.
 const STYLE = {
   version: 8,
   sources: {
     basemap: {
       type: 'raster',
       tiles: [
-        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
       ],
       tileSize: 256,
-      attribution: '© OpenStreetMap © CARTO',
+      attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
     },
   },
   layers: [

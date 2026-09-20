@@ -32,6 +32,26 @@ const SUPPLEMENTAL_FEATURES = [
       ]],
     },
   },
+  // الدرعية محافظة منفصلة (city_id ≠ 3) فلا تظهر في مصدر أحياء الرياض؛
+  // نضيف منطقتها العمرانية (الطريف/البجيري/بوابة الدرعية) غرب وادي حنيفة يدوياً.
+  {
+    type: 'Feature',
+    properties: {
+      district_id: 'manual-diriyah',
+      name_ar: 'حي الدرعية',
+      name_en: 'Ad Diriyah',
+      match_key: 'درعيه',
+      source: 'manual — Diriyah urban area',
+    },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [46.532, 24.760], [46.570, 24.756], [46.574, 24.734],
+        [46.566, 24.714], [46.538, 24.711], [46.526, 24.736],
+        [46.532, 24.760],
+      ]],
+    },
+  },
 ];
 
 function round(n) { return Math.round(n * 1e5) / 1e5; }

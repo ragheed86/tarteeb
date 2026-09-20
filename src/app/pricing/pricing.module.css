@@ -1,0 +1,38 @@
+/* مراجعة واعتماد الأسعار — عمودان: قائمة الطلبات + بطاقة المراجعة */
+.wrap { display: grid; grid-template-columns: 320px minmax(0,1fr); gap: 14px; height: calc(100vh - 150px); min-height: 460px; }
+
+.list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-card); }
+.listHead { padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 700; color: var(--ink); font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+.count { background: var(--gold-bg); color: #b54708; border-radius: 999px; font-size: 12px; padding: 1px 9px; font-weight: 700; }
+.listScroll { overflow-y: auto; flex: 1; }
+.item { display: block; width: 100%; text-align: start; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 12px 14px; cursor: pointer; font-family: inherit; }
+.item:hover { background: var(--surface-2); }
+.item.active { background: var(--sage-bg); }
+.itemName { font-weight: 600; font-size: 14px; color: var(--ink); }
+.itemMeta { font-size: 12.3px; color: var(--muted); margin-top: 3px; }
+
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; overflow-y: auto; box-shadow: var(--shadow-card); }
+.placeholder { display: grid; place-items: center; height: 100%; min-height: 200px; color: var(--muted); font-size: 14px; }
+.dName { font-weight: 700; font-size: 17px; color: var(--ink); }
+.dPhone { direction: ltr; text-align: start; color: var(--muted); font-size: 13px; margin-top: 2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 10px; margin: 16px 0; }
+.cell { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.cellLabel { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+.cellValue { font-size: 14px; color: var(--ink); font-weight: 600; margin-top: 3px; }
+
+.section { margin-top: 18px; }
+.sectionTitle { font-size: 12.5px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.msgs { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.msg { font-size: 13px; line-height: 1.6; }
+.msgIn { color: var(--ink); }
+.msgOut { color: var(--green); }
+.msgTag { font-size: 10.5px; color: var(--muted); }
+
+.approve { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px; }
+.priceRow { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.fieldGroup { display: flex; flex-direction: column; gap: 5px; }
+.fieldGroup label { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.priceInput { border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; font-size: 16px; font-weight: 700; width: 160px; background: var(--surface); color: var(--ink); font-family: inherit; }
+.notesInput { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; width: 100%; background: var(--surface); color: var(--ink); font-family: inherit; margin-top: 10px; box-sizing: border-box; }
+.preview { margin-top: 12px; background: var(--sage-bg); border-radius: 12px; padding: 11px 13px; font-size: 13.5px; color: var(--ink); white-space: pre-wrap; }
+.guardNote { font-size: 12px; color: var(--muted); margin-top: 10px; }

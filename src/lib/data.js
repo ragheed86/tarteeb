@@ -1174,6 +1174,28 @@ export async function getWaConversationContext(conversationId) {
   return { pricing: pricing || null, booking: booking || null };
 }
 
+// ---------- واتساب · مراجعة واعتماد الأسعار (Pricing Review) ----------
+export async function getPricingRequests(status = 'NEEDS_PRICING') {
+  const { data, error } = await supabase
+    .from('pricing_requests')
+    .select('id,status,service_type,district,media_summary,notes,approved_price,currency,created_at,conversation_id,client:client_id(id,name,phone,district,source,status),conversation:conversation_id(id,summary,state,pipeline_stage)')
+    .eq('status', status)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+// اعتماد السعر وإرساله (محصور بصلاحية whatsapp_pricing عبر دالة قاعدة البيانات)
+export async function approvePricing(pricingRequestId, price, notes) {
+  const { data, error } = await supabase.rpc('wa_approve_pricing', {
+    p_pricing_request_id: pricingRequestId,
+    p_price: price,
+    p_notes: notes || null,
+  });
+  if (error) throw error;
+  return data; // { ok, message_id, reply } أو { error }
+}
+
 // الاستلام البشري / العودة للأتمتة (Human Takeover)
 export async function setConversationTakeover(conversationId, paused) {
   const { data, error } = await supabase

@@ -1138,3 +1138,50 @@ export async function nextQuoteNumber() {
   const max = (data || []).reduce((m, r) => { const mm = (r.number || '').match(/-(\d+)$/); return mm ? Math.max(m, parseInt(mm[1], 10)) : m; }, 0);
   return `Q-${yr}-${String(max + 1).padStart(3, '0')}`;
 }
+
+// ---------- واتساب · صندوق الوارد (WhatsApp Inbox) ----------
+// المحادثات مع بيانات العميل ومعاينة آخر رسالة (استعلام واحد عبر التضمين)
+export async function getWaConversations() {
+  const { data, error } = await supabase
+    .from('wa_conversations')
+    .select('id,state,pipeline_stage,automation_paused,intent,summary,phone,wa_id,last_message_at,last_inbound_at,created_at,client:client_id(id,name,phone,district,status,service_type,source),messages:communications(body,direction,message_type,occurred_at)')
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .order('occurred_at', { ascending: false, referencedTable: 'messages' })
+    .limit(1, { referencedTable: 'messages' });
+  if (error) throw error;
+  return data || [];
+}
+
+// رسائل محادثة واحدة مرتّبة زمنياً
+export async function getWaMessages(conversationId) {
+  const { data, error } = await supabase
+    .from('communications')
+    .select('id,direction,body,message_type,media_id,media_url,media_path,transcript,status,occurred_at,wa_message_id')
+    .eq('conversation_id', conversationId)
+    .order('occurred_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+// آخر طلب تسعير وحجز للمحادثة (لبطاقة السياق)
+export async function getWaConversationContext(conversationId) {
+  const [pricing, booking] = await Promise.all([
+    supabase.from('pricing_requests').select('id,status,approved_price,currency,service_type,created_at')
+      .eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(1).maybeSingle().then((r) => r.data),
+    supabase.from('booking_requests').select('id,status,requested_date,requested_time,created_at')
+      .eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(1).maybeSingle().then((r) => r.data),
+  ]);
+  return { pricing: pricing || null, booking: booking || null };
+}
+
+// الاستلام البشري / العودة للأتمتة (Human Takeover)
+export async function setConversationTakeover(conversationId, paused) {
+  const { data, error } = await supabase
+    .from('wa_conversations')
+    .update({ automation_paused: paused, state: paused ? 'HUMAN_TAKEOVER' : 'AI_ACTIVE' })
+    .eq('id', conversationId)
+    .select('id,state,automation_paused')
+    .single();
+  if (error) throw error;
+  return data;
+}

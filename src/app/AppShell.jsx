@@ -12,6 +12,9 @@ import { LanguageToggle, useLanguage } from '@/i18n/LanguageProvider';
 // ---------- خريطة التنقّل والعناوين ----------
 const NAV = [
   { groupKey: null, items: [{ href: '/', labelKey: 'nav.dashboard', icon: IconDash, subKey: 'nav.dashboardSub' }] },
+  { groupKey: 'nav.whatsapp', items: [
+    { href: '/inbox', labelKey: 'nav.inbox', icon: IconChat, subKey: 'nav.inboxSub' },
+  ] },
   { groupKey: 'nav.operations', items: [
     { href: '/clients', labelKey: 'nav.clients', icon: IconUsers, subKey: 'nav.clientsSub' },
     { href: '/projects', labelKey: 'nav.projects', icon: IconBox, subKey: 'nav.projectsSub' },
@@ -35,7 +38,7 @@ const NAV = [
 ];
 
 const ALL = NAV.flatMap((g) => g.items);
-const MOBILE_NAV = ['/', '/clients', '/projects', '/quotes', '/warehouse'];
+const MOBILE_NAV = ['/', '/inbox', '/clients', '/projects', '/quotes'];
 // عناوين المسارات غير الظاهرة في القائمة (تفاصيل وصفحات فرعية) — كي لا يظهر عنوان خاطئ في الشريط العلوي
 const EXTRA_TITLES = [
   { prefix: '/clients/', labelKey: 'nav.clientFile', subKey: 'nav.clientFileSub' },
@@ -416,6 +419,7 @@ function ResetPassword() {
 // ---------- الأيقونات ----------
 function IconDash() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></svg>; }
 function IconUsers() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M16 6.2a3 3 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-3-4.9" /></svg>; }
+function IconChat() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9A1.5 1.5 0 0 1 18.5 16H9l-4 3.5V16H5.5A1.5 1.5 0 0 1 4 14.5z" /><path d="M8 8.5h8M8 11.5h5" /></svg>; }
 function IconBox() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M3 8.5h16.5a1.5 1.5 0 0 1 1.48 1.76l-1.2 7A1.5 1.5 0 0 1 18.3 18.5H5.7a1.5 1.5 0 0 1-1.48-1.24l-1.2-7A1.5 1.5 0 0 1 3 8.5Z" /><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h7" /></svg>; }
 function IconCost() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8 7h8M8 11h3M8 15h3" /><circle cx="15.5" cy="13.5" r="2" /></svg>; }
 function IconDoc() { return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></svg>; }

@@ -31,13 +31,21 @@ export const PERMISSION_GROUPS = [
       { key: 'government', label: 'الجهات الحكومية', description: 'الحسابات والرخص والتنبيهات' },
     ],
   },
+  {
+    group: 'واتساب',
+    items: [
+      { key: 'whatsapp', label: 'محادثات واتساب', description: 'صندوق الوارد وسياق العملاء والاستلام البشري' },
+      { key: 'whatsapp_pricing', label: 'اعتماد الأسعار', description: 'مراجعة واعتماد أسعار طلبات واتساب (رغد/دلال فقط)' },
+      { key: 'whatsapp_booking', label: 'اعتماد الحجوزات', description: 'تأكيد أو رفض مواعيد الحجز' },
+    ],
+  },
 ];
 
 export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.items.map((item) => item.key));
 
 export const ROLE_PRESETS = {
   admin: ALL_PERMISSIONS,
-  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap', 'quotes', 'invoices', 'expenses'],
+  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap', 'quotes', 'invoices', 'expenses', 'whatsapp'],
   accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation'],
   operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees'],
   viewer: ['dashboard', 'clients', 'projects'],
@@ -87,6 +95,7 @@ export function canAccess(access, permission) {
 export function permissionForPath(pathname) {
   const path = pathname || '/';
   if (path === '/') return 'dashboard';
+  if (path.startsWith('/inbox')) return 'whatsapp';
   if (path.startsWith('/clients')) return 'clients';
   if (path.startsWith('/projects')) return 'projects';
   if (path.startsWith('/cost')) return 'cost';

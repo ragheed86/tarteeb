@@ -14,11 +14,13 @@ function ensureRtlPlugin() {
   );
 }
 
-// نمط مكتفٍ ذاتياً (لون خلفية + بلاطات رمادية فاتحة) بدل ملف style.json خارجي،
-// حتى تُرسم مضلّعات الأحياء دوماً حتى لو فشل تحميل البلاطات.
-// نستخدم Esri World Light Gray (بلا مفتاح API) — بلاطات CARTO صارت تتطلب مفتاحاً
-// وتضع علامة «API KEY REQUIRED» المائلة بدونه.
-const STYLE = {
+// مزوّد الخريطة: MapTiler (احترافي، مفتاح عام مقيّد بالنطاق عبر متغيّر بيئة
+// NEXT_PUBLIC_MAPTILER_KEY). نمط dataviz-light رمادي هادئ مناسب للخريطة الحرارية
+// ويُظهر السعودية والدول والمسمّيات على كل مستويات التكبير.
+// عند غياب المفتاح نسقط إلى بلاطات Esri الرمادية (بلا مفتاح) حتى لا تفرغ الخريطة.
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+
+const FALLBACK_STYLE = {
   version: 8,
   sources: {
     basemap: {
@@ -35,6 +37,10 @@ const STYLE = {
     { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-opacity': 0.9 } },
   ],
 };
+
+const STYLE = MAPTILER_KEY
+  ? `https://api.maptiler.com/maps/dataviz-light/style.json?key=${MAPTILER_KEY}`
+  : FALLBACK_STYLE;
 
 const RIYADH_CENTER = [46.6753, 24.7136];
 

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { getWaConversations, getWaMessages, getWaConversationContext, setConversationTakeover } from '@/lib/data';
+import { getWaConversations, getWaMessages, getWaConversationContext, setConversationTakeover, addConversationToCrm } from '@/lib/data';
 import { Loading, Empty, ErrorBar } from '@/components';
 import { useLanguage } from '@/i18n/LanguageProvider';
 import { toast } from '../toast';
@@ -24,6 +24,8 @@ const L = {
     state: 'حالة الأتمتة', pipeline: 'مرحلة المسار', pricing: 'التسعير', booking: 'الحجز',
     none: '—', aiOn: 'الأتمتة تعمل', human: 'استلام بشري', lead: 'عميل محتمل', existing: 'عميل حالي',
     priceNone: 'لا يوجد طلب تسعير', bookNone: 'لا يوجد طلب حجز',
+    crmSection: 'إدارة العميل', notInCrm: 'لم يُضف للـCRM بعد', inCrm: 'مضاف للـCRM',
+    addLead: 'أضف كعميل محتمل', addActive: 'أضف كعميل حالي', addedToCrm: 'تمت الإضافة للـCRM',
   },
   en: {
     search: 'Search by name or phone…',
@@ -40,6 +42,8 @@ const L = {
     state: 'Automation', pipeline: 'Pipeline', pricing: 'Pricing', booking: 'Booking',
     none: '—', aiOn: 'AI active', human: 'Human takeover', lead: 'Lead', existing: 'Existing',
     priceNone: 'No pricing request', bookNone: 'No booking request',
+    crmSection: 'Client management', notInCrm: 'Not in CRM yet', inCrm: 'In CRM',
+    addLead: 'Add as lead', addActive: 'Add as active client', addedToCrm: 'Added to CRM',
   },
 };
 
@@ -97,7 +101,7 @@ export default function InboxPage() {
     const term = q.trim().toLowerCase();
     if (!term) return list;
     return list.filter((c) => {
-      const name = (c.client?.name || '').toLowerCase();
+      const name = (c.client?.name || c.contact_name || '').toLowerCase();
       const phone = (c.client?.phone || c.phone || '').toLowerCase();
       return name.includes(term) || phone.includes(term);
     });
@@ -113,6 +117,21 @@ export default function InboxPage() {
       toast(next ? (language === 'ar' ? 'تم استلام المحادثة — الأتمتة متوقفة' : 'Taken over — automation paused') : (language === 'ar' ? 'أُعيدت للأتمتة' : 'Returned to AI'));
     } catch (e) {
       toast(e.message || 'تعذّر التحديث', 'err');
+    } finally { setBusy(false); }
+  }
+
+  async function addToCrm(status) {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const res = await addConversationToCrm(selected.id, status);
+      if (res?.error) throw new Error(res.error);
+      setConversations((list) => (list || []).map((c) => (c.id === selected.id
+        ? { ...c, client: { ...(c.client || {}), id: res.client_id, name: c.client?.name || c.contact_name || c.phone, in_crm: true, status } }
+        : c)));
+      toast(t.addedToCrm);
+    } catch (e) {
+      toast(e.message || 'تعذّر الإضافة', 'err');
     } finally { setBusy(false); }
   }
 
@@ -144,9 +163,9 @@ export default function InboxPage() {
         <div className={styles.listScroll}>
           {filtered.map((c) => (
             <button key={c.id} type="button" className={`${styles.item} ${c.id === selectedId ? styles.active : ''}`} onClick={() => setSelectedId(c.id)}>
-              <span className={styles.avatar}>{(c.client?.name || c.phone || '؟').trim().charAt(0)}</span>
+              <span className={styles.avatar}>{(c.client?.name || c.contact_name || c.phone || '؟').trim().charAt(0)}</span>
               <span className={styles.itemMain}>
-                <span className={styles.itemName}>{c.client?.name || c.phone || c.wa_id}</span>
+                <span className={styles.itemName}>{c.client?.name || c.contact_name || c.phone || c.wa_id}</span>
                 <span className={styles.itemPreview}>{previewText(c)}</span>
               </span>
               <span className={styles.itemMeta}>
@@ -167,7 +186,7 @@ export default function InboxPage() {
             <div className={styles.threadHead}>
               <button type="button" className={styles.back} onClick={() => setSelectedId(null)} aria-label="back">→</button>
               <div>
-                <div className={styles.threadTitle}>{client?.name || selected.phone || selected.wa_id}</div>
+                <div className={styles.threadTitle}>{client?.name || selected.contact_name || selected.phone || selected.wa_id}</div>
                 <div className={styles.threadSub} dir="ltr">{client?.phone || selected.phone || ''}</div>
               </div>
               <div className={styles.threadActions}>
@@ -209,20 +228,33 @@ export default function InboxPage() {
           <div className={styles.placeholder}>{t.context}</div>
         ) : (
           <>
-            <div className={styles.ctxName}>{client?.name || selected.phone || selected.wa_id}</div>
+            <div className={styles.ctxName}>{client?.name || selected.contact_name || selected.phone || selected.wa_id}</div>
             <div className={styles.ctxPhone}>{client?.phone || selected.phone || ''}</div>
-            <div style={{ marginTop: 8 }}>
-              {client?.status === 'lead'
-                ? <span className={`${styles.badge} ${styles.bLead}`}>{t.lead}</span>
-                : <span className={`${styles.badge} ${styles.bMuted}`}>{t.existing}</span>}
-            </div>
+
+            {(!client || client.in_crm === false) ? (
+              <div className={styles.ctxSection}>
+                <div className={styles.ctxLabel}>{t.crmSection}</div>
+                <div style={{ marginBottom: 8 }}><span className={`${styles.badge} ${styles.bMuted}`}>{t.notInCrm}</span></div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" className="btn sm" onClick={() => addToCrm('lead')} disabled={busy}>{t.addLead}</button>
+                  <button type="button" className="btn sm ghost" onClick={() => addToCrm('active')} disabled={busy}>{t.addActive}</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className={`${styles.badge} ${styles.bAI}`}>{t.inCrm}</span>
+                {client?.status === 'lead'
+                  ? <span className={`${styles.badge} ${styles.bLead}`}>{t.lead}</span>
+                  : <span className={`${styles.badge} ${styles.bMuted}`}>{t.existing}</span>}
+              </div>
+            )}
 
             <div className={styles.ctxSection}>
               <div className={styles.ctxLabel}>{t.customer}</div>
               <div className={styles.ctxRow}><span>{t.district}</span><span>{client?.district || t.none}</span></div>
               <div className={styles.ctxRow}><span>{t.service}</span><span>{client?.service_type ? label(SERVICE, client.service_type) : t.none}</span></div>
               <div className={styles.ctxRow}><span>{t.source}</span><span>{client?.source || t.none}</span></div>
-              {client?.id && <Link href={`/clients/${client.id}`} className={styles.ctxLink}>{t.profile} ←</Link>}
+              {client?.id && client.in_crm !== false && <Link href={`/clients/${client.id}`} className={styles.ctxLink}>{t.profile} ←</Link>}
             </div>
 
             <div className={styles.ctxSection}>

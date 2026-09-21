@@ -15,6 +15,7 @@ export async function getClients() {
     const { data, error } = await supabase
       .from('clients')
       .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
+      .eq('in_crm', true) // جهات الواتساب غير المصنّفة تبقى في الصندوق فقط حتى تُضاف للـCRM يدوياً
       .order('created_at', { ascending: false });
     if (error) throw error; return data;
   });
@@ -1144,7 +1145,7 @@ export async function nextQuoteNumber() {
 export async function getWaConversations() {
   const { data, error } = await supabase
     .from('wa_conversations')
-    .select('id,state,pipeline_stage,automation_paused,intent,summary,phone,wa_id,last_message_at,last_inbound_at,created_at,client:client_id(id,name,phone,district,status,service_type,source),messages:communications(body,direction,message_type,occurred_at)')
+    .select('id,state,pipeline_stage,automation_paused,intent,summary,phone,wa_id,contact_name,last_message_at,last_inbound_at,created_at,client:client_id(id,name,phone,district,status,service_type,source,in_crm),messages:communications(body,direction,message_type,occurred_at)')
     .order('last_message_at', { ascending: false, nullsFirst: false })
     .order('occurred_at', { ascending: false, referencedTable: 'messages' })
     .limit(1, { referencedTable: 'messages' });
@@ -1218,6 +1219,17 @@ export async function decideBooking(bookingId, decision, { suggested = null, not
   });
   if (error) throw error;
   return data;
+}
+
+// نقل جهة واتساب إلى الـCRM بتصنيف (عميل محتمل=lead / عميل حالي=active ...) — محكوم بصلاحية whatsapp
+export async function addConversationToCrm(conversationId, status = 'lead') {
+  const { data, error } = await supabase.rpc('wa_conversation_to_crm', {
+    p_conversation_id: conversationId,
+    p_status: status,
+  });
+  if (error) throw error;
+  clearSupabaseReadCache('clients');
+  return data; // { ok, client_id, name, status } أو { error }
 }
 
 // الاستلام البشري / العودة للأتمتة (Human Takeover)

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { getWaConversations, getWaMessages, getWaConversationContext, setConversationTakeover, addConversationToCrm } from '@/lib/data';
+import { getWaConversations, getWaMessages, getWaConversationContext, setConversationTakeover, addConversationToCrm, sendManualReply } from '@/lib/data';
 import { Loading, Empty, ErrorBar } from '@/components';
 import { useLanguage } from '@/i18n/LanguageProvider';
 import { toast } from '../toast';
@@ -17,8 +17,10 @@ const L = {
     noMessages: 'لا توجد رسائل في هذه المحادثة',
     takeOver: 'استلام المحادثة',
     returnToAI: 'إعادة للأتمتة',
-    composer: 'الرد المباشر يتوفّر بعد ربط WhatsApp API',
-    hint: 'الرسائل تُحفظ تلقائياً. إرسال الردود سيُفعّل في مرحلة بوابة الإرسال (WF-06).',
+    composer: 'اكتب رسالة…',
+    send: 'إرسال',
+    sent: 'أُرسلت الرسالة',
+    hint: 'إرسالك اليدوي يوقف الأتمتة ويحوّل المحادثة لك. الردود تصل العميل عبر واتساب مباشرة.',
     customer: 'العميل', context: 'السياق', profile: 'فتح ملف العميل',
     district: 'الحي', service: 'الخدمة', source: 'المصدر', status: 'الحالة',
     state: 'حالة الأتمتة', pipeline: 'مرحلة المسار', pricing: 'التسعير', booking: 'الحجز',
@@ -35,8 +37,10 @@ const L = {
     noMessages: 'No messages in this conversation',
     takeOver: 'Take over',
     returnToAI: 'Return to AI',
-    composer: 'Direct replies available after WhatsApp API is connected',
-    hint: 'Messages are saved automatically. Sending replies activates in the outbound gateway (WF-06).',
+    composer: 'Type a message…',
+    send: 'Send',
+    sent: 'Message sent',
+    hint: 'Sending manually pauses automation and assigns the chat to you. Replies reach the customer on WhatsApp.',
     customer: 'Customer', context: 'Context', profile: 'Open client profile',
     district: 'District', service: 'Service', source: 'Source', status: 'Status',
     state: 'Automation', pipeline: 'Pipeline', pricing: 'Pricing', booking: 'Booking',
@@ -79,6 +83,8 @@ export default function InboxPage() {
   const [messages, setMessages] = useState(null);
   const [ctx, setCtx] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
     getWaConversations().then(setConversations).catch((e) => setErr(e.message || 'تعذّر التحميل'));
@@ -86,7 +92,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (!selectedId) { setMessages(null); setCtx(null); return; }
-    setMessages(null); setCtx(null);
+    setMessages(null); setCtx(null); setDraft('');
     getWaMessages(selectedId).then(setMessages).catch((e) => setErr(e.message || 'تعذّر التحميل'));
     getWaConversationContext(selectedId).then(setCtx).catch(() => setCtx({ pricing: null, booking: null }));
   }, [selectedId]);
@@ -118,6 +124,22 @@ export default function InboxPage() {
     } catch (e) {
       toast(e.message || 'تعذّر التحديث', 'err');
     } finally { setBusy(false); }
+  }
+
+  async function sendReply() {
+    if (!selected || !draft.trim() || sending) return;
+    const text = draft.trim();
+    setSending(true);
+    try {
+      const res = await sendManualReply(selected.id, text);
+      if (res?.error) throw new Error(res.error);
+      const now = new Date().toISOString();
+      setMessages((list) => [...(list || []), { id: res.message_id, direction: 'out', body: text, message_type: 'text', status: 'pending_send', occurred_at: now }]);
+      setConversations((list) => (list || []).map((c) => (c.id === selected.id ? { ...c, automation_paused: true, state: 'HUMAN_TAKEOVER', last_message_at: now } : c)));
+      setDraft('');
+    } catch (e) {
+      toast(e.message || 'تعذّر الإرسال', 'err');
+    } finally { setSending(false); }
   }
 
   async function addToCrm(status) {
@@ -215,7 +237,15 @@ export default function InboxPage() {
             </div>
 
             <div className={styles.composer}>
-              <input type="text" disabled placeholder={t.composer} />
+              <input
+                type="text"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
+                placeholder={t.composer}
+                disabled={sending}
+              />
+              <button type="button" className="btn sm" onClick={sendReply} disabled={sending || !draft.trim()}>{t.send}</button>
             </div>
             <div className={styles.hint}>{t.hint}</div>
           </>

@@ -1232,6 +1232,16 @@ export async function addConversationToCrm(conversationId, status = 'lead') {
   return data; // { ok, client_id, name, status } أو { error }
 }
 
+// إرسال رد يدوي من الصندوق (رغد/دلال) — يمرّ عبر بوابة الإرسال WF-06؛ يوقف الأتمتة تلقائياً
+export async function sendManualReply(conversationId, text) {
+  const { data, error } = await supabase.rpc('wa_send_manual_reply', {
+    p_conversation_id: conversationId,
+    p_text: text,
+  });
+  if (error) throw error;
+  return data; // { ok, message_id } أو { error }
+}
+
 // الاستلام البشري / العودة للأتمتة (Human Takeover)
 export async function setConversationTakeover(conversationId, paused) {
   const { data, error } = await supabase

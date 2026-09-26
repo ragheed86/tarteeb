@@ -1,6 +1,6 @@
 // عميل Supabase — Tarteeb SaaS App
 // القيم تُقرأ من متغيّرات البيئة (.env.local). لا تكتب المفاتيح هنا مباشرة.
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const url  = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -11,7 +11,8 @@ if (missingEnv) {
   console.warn('Supabase env vars missing — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local');
 }
 
-export const supabase = createClient(
+// عبر كوكيز لا localStorage: كي يقرأ middleware.js الجلسة على الخادم (تدقيق M-1).
+export const supabase = createBrowserClient(
   url || 'https://placeholder.supabase.co',
   anon || 'placeholder-anon-key'
 );

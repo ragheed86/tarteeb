@@ -9,6 +9,15 @@ import { signStoredFile, signStoredFiles } from './storage';
 
 const isRefundedInvoice = (invoice) => invoice?.status === 'refunded';
 
+// ---------- لوحة التحكم ----------
+// مؤشّرات لوحة التحكم لفترة محدَّدة — صفّ واحد مجمَّع في Postgres بدل 9 استعلامات
+// تجلب جداول كاملة وتُجمَّع في JavaScript (تدقيق H-3).
+export async function getDashboardMetrics(from, to) {
+  const { data, error } = await supabase.rpc('dashboard_metrics', { p_from: from, p_to: to });
+  if (error) throw error;
+  return data;
+}
+
 // ---------- العملاء ----------
 export async function getClients() {
   return cachedSupabaseRead('clients', async () => {

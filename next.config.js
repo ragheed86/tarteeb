@@ -1,4 +1,10 @@
 /** @type {import('next').NextConfig} */
+// React DevMode/HMR يحتاج eval() لإعادة بناء call stacks عند التصحيح؛ لن يُستخدم أبداً
+// في بناء الإنتاج (Vercel)، لذا نسمح به محلياً فقط كي لا تظهر تحذيرات لا علاقة لها بالإنتاج.
+const scriptSrc = process.env.NODE_ENV === 'development'
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com"
+  : "script-src 'self' 'unsafe-inline' https://unpkg.com";
+
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -12,7 +18,7 @@ const securityHeaders = [
       "form-action 'self'",
       "frame-ancestors 'none'",
       "object-src 'none'",
-      "script-src 'self' 'unsafe-inline' https://unpkg.com",
+      scriptSrc,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com https://fonts.openmaptiles.org",
       "img-src 'self' data: blob: https://*.supabase.co https://api.maptiler.com https://server.arcgisonline.com",

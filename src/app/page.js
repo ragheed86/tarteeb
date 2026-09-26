@@ -2,9 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  getClients, getProjects, getInvoices, getInventory, getAllProjectCosts,
-  getAllInvoicePayments, getAllInvoiceItems, getDashboardMedia, uploadDashboardMedia, removeDashboardMedia, getCompanyExpenses,
-  getBankAccounts, getBankTransactions,
+  getClients, getProjects, getInventory, getAllInvoicePayments,
+  getDashboardMedia, uploadDashboardMedia, removeDashboardMedia, getDashboardMetrics,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, PROJECT_STATUS, SOURCE_LABEL, OPEN_DELIVERY_STATUSES } from '@/lib/format';
 import { Loading, Empty, ErrorBar, KpiCard } from '@/components';
@@ -17,15 +16,8 @@ const PERIOD_LABEL = { day: 'إيرادات اليوم', week: 'إيرادات �
 const PERIOD_SCOPE = { day: 'آخر يوم', week: 'آخر 7 أيام', month: 'آخر 30 يومًا', year: 'آخر 365 يومًا' };
 const ARABIC_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const SOURCE_COLORS = ['var(--gold)', 'var(--sage)', 'var(--green)', 'var(--faint)', 'var(--pine)', 'var(--neg)'];
-const isOrganizersDescription = (value) => /منظمات?|منظّمات?|أدوات\s*الترتيب|ادوات\s*الترتيب|التخزين/i.test(String(value || ''));
 
 function daysUntil(d) { return d ? Math.ceil((new Date(d).getTime() - Date.now()) / 86400000) : null; }
-// ضمن آخر «days» يوماً فقط (نافذة ماضية مغلقة الطرفين) — لا تُدخل التواريخ المستقبلية
-function withinDays(date, days) {
-  if (!date) return false;
-  const diff = (Date.now() - new Date(date).getTime()) / 86400000;
-  return diff >= 0 && diff <= days;
-}
 // صيغة مختصرة للقيم على أعمدة المخطط: 13229 → «13.2K»، 950 → «950»
 function compactMoney(n) {
   const v = Number(n) || 0;
@@ -38,19 +30,20 @@ const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // حد Supabase الافتراضي 50
 export default function Dashboard() {
   const router = useRouter();
   const [data, setData] = useState(null);
+  const [metrics, setMetrics] = useState(null);
   const [err, setErr] = useState('');
   const [period, setPeriod] = useState('month');
   const [media, setMedia] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [mediaErr, setMediaErr] = useState('');
 
+  // بيانات القوائم والمخطط — لا تتأثر بفلتر الفترة، تُجلب مرّة واحدة فقط
   useEffect(() => {
     (async () => {
       try {
-        const [clients, projects, invoices, payments, invoiceItems, inventory, costs, companyExpenses, bankAccounts] = await Promise.all([
-          getClients(), getProjects(), getInvoices(), getAllInvoicePayments(), getAllInvoiceItems(), getInventory(), getAllProjectCosts(), getCompanyExpenses().catch(() => []), getBankAccounts().catch(() => []),
+        const [clients, projects, inventory, payments] = await Promise.all([
+          getClients(), getProjects(), getInventory(), getAllInvoicePayments(),
         ]);
-        const bankTransactions = (await Promise.all((bankAccounts || []).map((account) => getBankTransactions(account.id).catch(() => [])))).flat();
         const activeProjects = projects.filter((p) => ACTIVE.includes(p.status)).length;
         const lowStock = inventory.filter((it) => Number(it.quantity) < Number(it.reorder_level));
         const clientsById = Object.fromEntries(clients.map((client) => [client.id, client]));
@@ -59,16 +52,31 @@ export default function Dashboard() {
           .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
           .map((project) => ({ ...project, client: clientsById[project.client_id] || null }));
 
-        const costByProject = {};
-        for (const c of costs) costByProject[c.project_id] = (costByProject[c.project_id] || 0) + Number(c.amount || 0);
-
-        setData({ clients, projects, invoices, payments, invoiceItems, costs, companyExpenses, bankAccounts, bankTransactions, activeProjects, lowStock, upcoming, costByProject });
+        setData({ clients, projects, payments, activeProjects, lowStock, upcoming });
       } catch (e) {
         setErr(e.message || 'تعذّر تحميل البيانات');
       }
     })();
     getDashboardMedia().then(setMedia).catch(() => {});
   }, []);
+
+  // مؤشّرات لوحة التحكم المالية — صفّ واحد من Postgres، يُعاد جلبه عند تغيّر الفترة
+  // (تدقيق H-3: بدلاً من تجميع 9 جداول كاملة في JavaScript)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const days = PERIOD_DAYS[period];
+        const to = new Date();
+        const from = new Date(Date.now() - days * 86400000);
+        const row = await getDashboardMetrics(from.toISOString(), to.toISOString());
+        if (!cancelled) setMetrics(row);
+      } catch (e) {
+        if (!cancelled) setErr(e.message || 'تعذّر تحميل المؤشرات');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [period]);
 
   async function onPickMedia(e) {
     const files = Array.from(e.target.files || []);
@@ -103,50 +111,30 @@ export default function Dashboard() {
   }
 
   if (err) return <ErrorBar message={err} />;
-  if (!data) return <Loading />;
+  if (!data || !metrics) return <Loading />;
 
-  const days = PERIOD_DAYS[period];
-  const periodRevenue = data.payments
-    .filter((payment) => withinDays(payment.paid_at, days))
-    .reduce((s, payment) => s + Number(payment.amount || 0), 0);
-  const periodProjectCosts = data.costs.filter((c) => withinDays(c.work_date || c.created_at, days)).reduce((s, c) => s + Number(c.amount || 0), 0);
-  const periodCompanyExpenses = data.companyExpenses.filter((e) => e.payment_status === 'paid' && withinDays(e.expense_date, days)).reduce((s, e) => s + Number(e.amount || 0), 0);
+  const periodRevenue = Number(metrics.period_revenue) || 0;
+  const periodProjectCosts = Number(metrics.period_project_costs) || 0;
+  const periodCompanyExpenses = Number(metrics.period_company_expenses) || 0;
   const periodProfit = periodRevenue - periodProjectCosts - periodCompanyExpenses;
   const periodMargin = periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0;
-  // يفضَّل تاريخ أول تواصل الحقيقي؛ created_at يعكس تاريخ الإدخال لا اكتساب العميل
-  const periodNewClients = data.clients.filter((c) => withinDays(c.first_contact_at || c.created_at, days)).length;
-  const periodInvoices = data.invoices.filter((invoice) => invoice.status !== 'refunded' && withinDays(invoice.issue_at, days));
-  const periodClientIds = new Set(periodInvoices.map((invoice) => invoice.client_id).filter(Boolean));
-  const periodBilled = periodInvoices.reduce((sum, invoice) => sum + Number(invoice.total || 0), 0);
-  const averageClientValue = periodClientIds.size ? periodBilled / periodClientIds.size : 0;
-  const allInvoicesByClient = data.invoices.reduce((counts, invoice) => {
-    if (invoice.status !== 'refunded' && invoice.client_id) counts[invoice.client_id] = (counts[invoice.client_id] || 0) + 1;
-    return counts;
-  }, {});
-  const allProjectsByClient = data.projects.reduce((counts, project) => {
-    if (project.client_id) counts[project.client_id] = (counts[project.client_id] || 0) + 1;
-    return counts;
-  }, {});
-  const returningClients = [...periodClientIds].filter((id) => (allInvoicesByClient[id] || 0) > 1 || (allProjectsByClient[id] || 0) > 1);
-  const returningClientRate = periodClientIds.size ? Math.round((returningClients.length / periodClientIds.size) * 100) : 0;
-  const periodInvoiceItems = data.invoiceItems.filter((item) => withinDays(item.invoices?.issue_at, days));
-  const organizersSales = periodInvoiceItems.filter((item) => isOrganizersDescription(item.description))
-    .reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unit_price || 0), 0);
-  const serviceSales = periodInvoiceItems.filter((item) => !isOrganizersDescription(item.description))
-    .reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unit_price || 0), 0);
-  const periodCosts = data.costs.filter((cost) => withinDays(cost.work_date || cost.created_at, days));
-  const organizersCosts = periodCosts.filter((cost) => isOrganizersDescription(`${cost.product_name || ''} ${cost.label || ''} ${cost.note || ''}`))
-    .reduce((sum, cost) => sum + Number(cost.amount || 0), 0);
-  const serviceCosts = periodCosts.reduce((sum, cost) => sum + Number(cost.amount || 0), 0) - organizersCosts;
+  const periodNewClients = Number(metrics.period_new_clients) || 0;
+  const periodBilled = Number(metrics.period_billed) || 0;
+  const periodClientCount = Number(metrics.period_client_count) || 0;
+  const averageClientValue = periodClientCount ? periodBilled / periodClientCount : 0;
+  const returningClients = Number(metrics.returning_clients) || 0;
+  const returningClientRate = periodClientCount ? Math.round((returningClients / periodClientCount) * 100) : 0;
+  const organizersSales = Number(metrics.organizers_sales) || 0;
+  const serviceSales = Number(metrics.service_sales) || 0;
+  const organizersCosts = Number(metrics.organizers_costs) || 0;
+  const serviceCosts = Number(metrics.service_costs) || 0;
   const serviceProfit = serviceSales - serviceCosts;
   const organizersProfit = organizersSales - organizersCosts;
   const serviceMargin = serviceSales > 0 ? Math.round((serviceProfit / serviceSales) * 100) : 0;
   const organizersMargin = organizersSales > 0 ? Math.round((organizersProfit / organizersSales) * 100) : 0;
   const partnerShare = periodProfit / 2;
-  const bankBalance = data.bankAccounts.reduce((sum, account) => sum + Number(account.opening_balance || 0), 0)
-    + data.bankTransactions.reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
-  const periodBankFlow = data.bankTransactions.filter((transaction) => withinDays(transaction.transaction_date, days))
-    .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  const bankBalance = Number(metrics.bank_balance) || 0;
+  const periodBankFlow = Number(metrics.period_bank_flow) || 0;
 
   // إيرادات الفواتير المدفوعة لآخر 6 أشهر تقويمية
   const now = new Date();
@@ -202,7 +190,7 @@ export default function Dashboard() {
         </div>
       </div>
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))' }}>
-        <KpiCard label={PERIOD_LABEL[period]} value={<><AnimatedNumber value={periodRevenue} format={fmtMoney} /> ⃁</>} trend="فواتير مدفوعة خلال الفترة" definition="مجموع الدفعات المسجلة على الفواتير غير المرتجعة خلال الفترة المختارة." period={PERIOD_SCOPE[period]} formula="جمع مبالغ دفعات الفواتير بتاريخ الدفع" breakdown={[{ label: 'عدد الدفعات', value: fmtNum(data.payments.filter((p) => withinDays(p.paid_at, days)).length) }, { label: 'إجمالي المحصّل', value: `${fmtMoney(periodRevenue)} ⃁` }]} />
+        <KpiCard label={PERIOD_LABEL[period]} value={<><AnimatedNumber value={periodRevenue} format={fmtMoney} /> ⃁</>} trend="فواتير مدفوعة خلال الفترة" definition="مجموع الدفعات المسجلة على الفواتير غير المرتجعة خلال الفترة المختارة." period={PERIOD_SCOPE[period]} formula="جمع مبالغ دفعات الفواتير بتاريخ الدفع" breakdown={[{ label: 'عدد الدفعات', value: fmtNum(metrics.period_payments_count) }, { label: 'إجمالي المحصّل', value: `${fmtMoney(periodRevenue)} ⃁` }]} />
         <KpiCard tone="pos" label="صافي الربح النقدي" value={<><AnimatedNumber value={periodProfit} format={fmtMoney} /> ⃁</>} trend="المحصّل بعد تكاليف المشاريع والشركة" definition="ما تبقّى من الإيرادات المحصّلة فعليًا بعد خصم المصاريف المدفوعة في الفترة نفسها." period={PERIOD_SCOPE[period]} formula="الإيرادات المحصّلة − تكاليف المشاريع − مصاريف الشركة المدفوعة" breakdown={[{ label: 'الإيرادات المحصّلة', value: `${fmtMoney(periodRevenue)} ⃁` }, { label: 'تكاليف المشاريع', value: `− ${fmtMoney(periodProjectCosts)} ⃁` }, { label: 'مصاريف الشركة', value: `− ${fmtMoney(periodCompanyExpenses)} ⃁` }]} note="قد يختلف عن الربح المحاسبي إذا كانت هناك فواتير أو مصاريف لم تُدفع بعد." />
         <KpiCard label="هامش الربح" value={<><AnimatedNumber value={periodMargin} format={fmtNum} />%</>} trend="من الإيرادات المحصّلة" definition="نسبة صافي الربح النقدي إلى الإيرادات المحصّلة خلال الفترة." period={PERIOD_SCOPE[period]} formula="صافي الربح النقدي ÷ الإيرادات المحصّلة × 100" breakdown={[{ label: 'صافي الربح', value: `${fmtMoney(periodProfit)} ⃁` }, { label: 'الإيرادات', value: `${fmtMoney(periodRevenue)} ⃁` }]} />
         <KpiCard label="العملاء الجدد" value={<AnimatedNumber value={periodNewClients} format={fmtNum} />} trend="خلال الفترة المختارة" definition="عدد العملاء الذين كان أول تواصل معهم أو تاريخ إضافتهم ضمن الفترة المختارة." period={PERIOD_SCOPE[period]} formula="عدّ سجلات العملاء ضمن الفترة" breakdown={[{ label: 'العملاء الجدد', value: fmtNum(periodNewClients) }, { label: 'إجمالي العملاء', value: fmtNum(data.clients.length) }]} />
@@ -216,11 +204,11 @@ export default function Dashboard() {
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(6,minmax(0,1fr))' }}>
         <KpiCard tone="pos" label="هامش ربح الخدمة" value={`${fmtNum(serviceMargin)}%`} trend={`ربح ${fmtMoney(serviceProfit)} ⃁`} definition="هامش بنود الخدمات في الفواتير بعد خصم تكاليف المشروع غير المصنّفة كمنظمات." period={PERIOD_SCOPE[period]} formula="(مبيعات الخدمة − تكلفتها) ÷ مبيعات الخدمة × 100" breakdown={[{ label: 'مبيعات الخدمة', value: `${fmtMoney(serviceSales)} ⃁` }, { label: 'تكلفة الخدمة', value: `− ${fmtMoney(serviceCosts)} ⃁` }, { label: 'ربح الخدمة', value: `${fmtMoney(serviceProfit)} ⃁` }]} />
         <KpiCard tone="pos" label="هامش ربح المنظمات" value={`${fmtNum(organizersMargin)}%`} trend={`ربح ${fmtMoney(organizersProfit)} ⃁`} definition="هامش بند المنظمات وأدوات الترتيب والتخزين بعد خصم تكلفة شرائها." period={PERIOD_SCOPE[period]} formula="(بيع المنظمات − تكلفتها) ÷ بيع المنظمات × 100" breakdown={[{ label: 'بيع المنظمات', value: `${fmtMoney(organizersSales)} ⃁` }, { label: 'تكلفة المنظمات', value: `− ${fmtMoney(organizersCosts)} ⃁` }, { label: 'ربح المنظمات', value: `${fmtMoney(organizersProfit)} ⃁` }]} />
-        <KpiCard label="متوسط قيمة العميل" value={`${fmtMoney(averageClientValue)} ⃁`} trend={`${fmtNum(periodClientIds.size)} عميل مفوتر`} definition="متوسط قيمة الفواتير الصادرة للعملاء ضمن الفترة المختارة." period={PERIOD_SCOPE[period]} formula="إجمالي الفواتير غير المرتجعة ÷ العملاء ذوو الفواتير" breakdown={[{ label: 'إجمالي المفوتر', value: `${fmtMoney(periodBilled)} ⃁` }, { label: 'العملاء المفوترون', value: fmtNum(periodClientIds.size) }]} />
-        <KpiCard label="معدل عودة العملاء" value={`${fmtNum(returningClientRate)}%`} trend={`${fmtNum(returningClients.length)} عميل عائد`} definition="نسبة العملاء المفوترين في الفترة ولديهم أكثر من فاتورة أو مشروع واحد في النظام." period={PERIOD_SCOPE[period]} formula="العملاء العائدون ÷ العملاء المفوترون × 100" breakdown={[{ label: 'عملاء عائدون', value: fmtNum(returningClients.length) }, { label: 'عملاء مفوترون', value: fmtNum(periodClientIds.size) }]} />
-        <KpiCard tone="alert" label="مصاريف الشركة" value={`${fmtMoney(periodCompanyExpenses)} ⃁`} trend="مصروفات مدفوعة" definition="إجمالي مصاريف الشركة التي تم دفعها فعلياً خلال الفترة المختارة." period={PERIOD_SCOPE[period]} formula="جمع المصاريف المدفوعة بتاريخ المصروف" breakdown={[{ label: 'مصاريف مدفوعة', value: `${fmtMoney(periodCompanyExpenses)} ⃁` }, { label: 'مصاريف معلقة', value: `${fmtMoney(data.companyExpenses.filter((expense) => expense.payment_status === 'pending' && withinDays(expense.expense_date, days)).reduce((sum, expense) => sum + Number(expense.amount || 0), 0))} ⃁` }]} />
+        <KpiCard label="متوسط قيمة العميل" value={`${fmtMoney(averageClientValue)} ⃁`} trend={`${fmtNum(periodClientCount)} عميل مفوتر`} definition="متوسط قيمة الفواتير الصادرة للعملاء ضمن الفترة المختارة." period={PERIOD_SCOPE[period]} formula="إجمالي الفواتير غير المرتجعة ÷ العملاء ذوو الفواتير" breakdown={[{ label: 'إجمالي المفوتر', value: `${fmtMoney(periodBilled)} ⃁` }, { label: 'العملاء المفوترون', value: fmtNum(periodClientCount) }]} />
+        <KpiCard label="معدل عودة العملاء" value={`${fmtNum(returningClientRate)}%`} trend={`${fmtNum(returningClients)} عميل عائد`} definition="نسبة العملاء المفوترين في الفترة ولديهم أكثر من فاتورة أو مشروع واحد في النظام." period={PERIOD_SCOPE[period]} formula="العملاء العائدون ÷ العملاء المفوترون × 100" breakdown={[{ label: 'عملاء عائدون', value: fmtNum(returningClients) }, { label: 'عملاء مفوترون', value: fmtNum(periodClientCount) }]} />
+        <KpiCard tone="alert" label="مصاريف الشركة" value={`${fmtMoney(periodCompanyExpenses)} ⃁`} trend="مصروفات مدفوعة" definition="إجمالي مصاريف الشركة التي تم دفعها فعلياً خلال الفترة المختارة." period={PERIOD_SCOPE[period]} formula="جمع المصاريف المدفوعة بتاريخ المصروف" breakdown={[{ label: 'مصاريف مدفوعة', value: `${fmtMoney(periodCompanyExpenses)} ⃁` }, { label: 'مصاريف معلقة', value: `${fmtMoney(Number(metrics.pending_company_expenses) || 0)} ⃁` }]} />
         <KpiCard tone={partnerShare >= 0 ? 'pos' : 'alert'} label="حصة كل شريك" value={`${fmtMoney(partnerShare)} ⃁`} trend="صافي الربح ÷ 2" definition="نصف صافي الربح النقدي للفترة، على افتراض وجود شريكين بحصص متساوية." period={PERIOD_SCOPE[period]} formula="(الإيرادات المحصّلة − تكاليف المشاريع − مصاريف الشركة) ÷ 2" breakdown={[{ label: 'صافي الربح النقدي', value: `${fmtMoney(periodProfit)} ⃁` }, { label: 'حصة الشريك الأول', value: `${fmtMoney(partnerShare)} ⃁` }, { label: 'حصة الشريك الثاني', value: `${fmtMoney(partnerShare)} ⃁` }]} note="هذا مؤشر ربحي وليس سجل سحوبات الشركاء الفعلية." />
-        <KpiCard label="الرصيد الحالي بالبنك" value={`${fmtMoney(bankBalance)} ⃁`} trend={`حركة الفترة ${fmtMoney(periodBankFlow)} ⃁`} definition="مجموع الأرصدة الافتتاحية لكل الحسابات البنكية مضافاً إليه صافي الحركات المستوردة." period="الحالة الحالية للحسابات البنكية" formula="الأرصدة الافتتاحية + جميع الإيداعات − جميع المسحوبات" breakdown={[{ label: 'عدد الحسابات', value: fmtNum(data.bankAccounts.length) }, { label: 'صافي حركة الفترة', value: `${fmtMoney(periodBankFlow)} ⃁` }, { label: 'الرصيد الحالي', value: `${fmtMoney(bankBalance)} ⃁` }]} note="الرصيد الحالي لا يتغير مع فلتر المدة، أما صافي حركة البنك الظاهر أسفله فيتغير معه." />
+        <KpiCard label="الرصيد الحالي بالبنك" value={`${fmtMoney(bankBalance)} ⃁`} trend={`حركة الفترة ${fmtMoney(periodBankFlow)} ⃁`} definition="مجموع الأرصدة الافتتاحية لكل الحسابات البنكية مضافاً إليه صافي الحركات المستوردة." period="الحالة الحالية للحسابات البنكية" formula="الأرصدة الافتتاحية + جميع الإيداعات − جميع المسحوبات" breakdown={[{ label: 'عدد الحسابات', value: fmtNum(metrics.bank_accounts_count) }, { label: 'صافي حركة الفترة', value: `${fmtMoney(periodBankFlow)} ⃁` }, { label: 'الرصيد الحالي', value: `${fmtMoney(bankBalance)} ⃁` }]} note="الرصيد الحالي لا يتغير مع فلتر المدة، أما صافي حركة البنك الظاهر أسفله فيتغير معه." />
       </div>
 
       <div className="grid2">

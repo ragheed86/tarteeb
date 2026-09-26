@@ -44,23 +44,38 @@ function cleanUserPayload(input) {
   };
 }
 
+// perPage:1000 مع page:1 فقط كان يبتر بصمت بعد أول 1000 مستخدم. نلفّ الصفحات
+// حتى تنتهي (آخر صفحة أقصر من perPage) بدل الاكتفاء بأول نداء.
+async function listAllAuthUsers() {
+  const perPage = 1000;
+  let page = 1;
+  const users = [];
+  for (;;) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const batch = data?.users || [];
+    users.push(...batch);
+    if (batch.length < perPage) break;
+    page += 1;
+  }
+  return users;
+}
+
 async function findAuthUserByEmail(email) {
-  const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  if (error) throw error;
-  return (data?.users || []).find((user) => normalizeEmail(user.email) === email) || null;
+  const users = await listAllAuthUsers();
+  return users.find((user) => normalizeEmail(user.email) === email) || null;
 }
 
 async function listRowsWithAuth() {
-  const [{ data: rows, error: rowsError }, { data: authData, error: authError }] = await Promise.all([
+  const [{ data: rows, error: rowsError }, authUsers] = await Promise.all([
     supabaseAdmin
       .from('app_user_access')
       .select('user_id,email,display_name,role,permissions,active,created_at,updated_at')
       .order('created_at', { ascending: false }),
-    supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    listAllAuthUsers(),
   ]);
   if (rowsError) throw rowsError;
-  if (authError) throw authError;
-  const byId = Object.fromEntries((authData?.users || []).map((user) => [user.id, user]));
+  const byId = Object.fromEntries(authUsers.map((user) => [user.id, user]));
   return (rows || []).map((row) => ({
     ...row,
     auth_email: byId[row.user_id]?.email || row.email,

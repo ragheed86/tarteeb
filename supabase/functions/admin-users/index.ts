@@ -6,13 +6,14 @@ const PERMISSION_GROUPS = [
   ['dashboard', 'settings'],
   ['clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap'],
   ['quotes', 'invoices', 'expenses', 'bank_reconciliation', 'government'],
+  ['whatsapp', 'whatsapp_pricing', 'whatsapp_booking'],
 ];
 
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flat();
 
 const ROLE_PRESETS: Record<string, string[]> = {
   admin: ALL_PERMISSIONS,
-  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap', 'quotes', 'invoices', 'expenses'],
+  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap', 'quotes', 'invoices', 'expenses', 'whatsapp'],
   accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation'],
   operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees'],
   viewer: ['dashboard', 'clients', 'projects'],

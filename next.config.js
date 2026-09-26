@@ -1,11 +1,27 @@
 /** @type {import('next').NextConfig} */
-// ملاحظة: Content-Security-Policy لم يعد يُضبط هنا — ينتقل الآن إلى src/middleware.js
-// لأن إغلاق 'unsafe-inline' يتطلّب nonce مختلفاً لكل طلب (لا يمكن ضبطه كرأس ثابت).
 const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(self), payment=(), usb=()' },
+  {
+    key: 'Content-Security-Policy',
+    value: [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "object-src 'none'",
+      "script-src 'self' 'unsafe-inline' https://unpkg.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com https://fonts.openmaptiles.org",
+      "img-src 'self' data: blob: https://*.supabase.co https://api.maptiler.com https://server.arcgisonline.com",
+      "media-src 'self' blob: https://*.supabase.co",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.maptiler.com https://server.arcgisonline.com https://fonts.openmaptiles.org",
+      "worker-src 'self' blob:",
+      'upgrade-insecure-requests',
+    ].join('; '),
+  },
 ];
 
 const nextConfig = {

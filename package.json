@@ -11,8 +11,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:e2e": "playwright test",
-    "test:e2e:update": "playwright test --update-snapshots",
-    "check:permissions": "node scripts/check-permission-drift.mjs"
+    "test:e2e:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.0",

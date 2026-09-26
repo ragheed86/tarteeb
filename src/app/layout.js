@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import './globals.css';
 import AppShell from './AppShell';
 import { LanguageProvider } from '@/i18n/LanguageProvider';
@@ -28,9 +29,12 @@ export const viewport = {
   themeColor: '#FAFAFA',
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  // القراءة نفسها (بصرف النظر عن استخدام القيمة) هي ما يجعل Next.js يُضمّن
+  // نفس الـnonce تلقائياً في سكربتاته الداخلية (hydration/RSC) — تدقيق M-4.
+  const nonce = (await headers()).get('x-nonce');
   return (
-    <html lang="ar" dir="rtl">
+    <html lang="ar" dir="rtl" data-csp-nonce={nonce}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />

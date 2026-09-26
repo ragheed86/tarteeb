@@ -33,11 +33,12 @@ export default function ReportsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts] = await Promise.all([
+        const [clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts, bankTransactions] = await Promise.all([
           getClients(), getProjects(), getInvoices(), getAllInvoicePayments(), getAllInvoiceItems(),
           getAllProjectCosts(), getInventory(), getCompanyExpenses().catch(() => []), getSuppliers().catch(() => []), getBankAccounts().catch(() => []),
+          // كل الحسابات باستعلام واحد بدل حلقة N+1 (بلا accountId تجلب كل الحركات دفعة واحدة).
+          getBankTransactions().catch(() => []),
         ]);
-        const bankTransactions = (await Promise.all(bankAccounts.map((account) => getBankTransactions(account.id).catch(() => [])))).flat();
         setData({ clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts, bankTransactions });
       } catch (loadError) {
         setError(loadError.message || 'تعذّر تحميل التقارير');

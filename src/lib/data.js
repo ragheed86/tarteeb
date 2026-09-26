@@ -204,9 +204,10 @@ export async function createBankAccount(p) {
   const { data, error } = await supabase.from('bank_accounts').insert(p).select('*').single();
   if (error) throw error; return data;
 }
-export async function getBankTransactions(accountId) {
+export async function getBankTransactions(accountId, since) {
   let query = supabase.from('bank_transactions').select('*').order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
   if (accountId) query = query.eq('account_id', accountId);
+  if (since) query = query.gte('transaction_date', since);
   const { data, error } = await query;
   if (error) throw error; return data;
 }

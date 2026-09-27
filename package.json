@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test:e2e": "playwright test",
-    "test:e2e:update": "playwright test --update-snapshots"
+    "test:e2e:update": "playwright test --update-snapshots",
+    "test:rls": "psql \"$DATABASE_URL\" -f tests/rls_permissions_test.sql"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.110.0",

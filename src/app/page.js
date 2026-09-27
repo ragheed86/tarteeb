@@ -50,7 +50,8 @@ export default function Dashboard() {
         const [clients, projects, invoices, payments, invoiceItems, inventory, costs, companyExpenses, bankAccounts] = await Promise.all([
           getClients(), getProjects(), getInvoices(), getAllInvoicePayments(), getAllInvoiceItems(), getInventory(), getAllProjectCosts(), getCompanyExpenses().catch(() => []), getBankAccounts().catch(() => []),
         ]);
-        const bankTransactions = (await Promise.all((bankAccounts || []).map((account) => getBankTransactions(account.id).catch(() => [])))).flat();
+        // استعلام واحد لكل الحركات البنكية بدل طلب لكل حساب (إزالة N+1).
+        const bankTransactions = (bankAccounts || []).length ? await getBankTransactions().catch(() => []) : [];
         const activeProjects = projects.filter((p) => ACTIVE.includes(p.status)).length;
         const lowStock = inventory.filter((it) => Number(it.quantity) < Number(it.reorder_level));
         const clientsById = Object.fromEntries(clients.map((client) => [client.id, client]));

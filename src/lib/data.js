@@ -958,15 +958,16 @@ export async function getAllInvoiceItems() {
   if (error) throw error;
   return data || [];
 }
+// إضافة دفعة عبر RPC ذرية تقفل صف الفاتورة وتتحقق من المتبقي داخل معاملة واحدة،
+// فلا يمكن لطلبين متزامنين تجاوز إجمالي الفاتورة (بدل الإدخال المباشر غير الآمن).
 export async function createInvoicePayment(p) {
-  const payload = {
-    invoice_id: p.invoice_id,
-    amount: Number(p.amount) || 0,
-    paid_at: p.paid_at || new Date().toISOString(),
-    method: p.method || 'cash',
-    note: p.note?.trim() || null,
-  };
-  const { data, error } = await supabase.from('invoice_payments').insert(payload).select('*').single();
+  const { data, error } = await supabase.rpc('add_invoice_payment', {
+    p_invoice_id: p.invoice_id,
+    p_amount: Number(p.amount) || 0,
+    p_paid_at: p.paid_at || new Date().toISOString(),
+    p_method: p.method || 'cash',
+    p_note: p.note?.trim() || null,
+  });
   if (error) throw error; clearSupabaseReadCache('invoices'); return data;
 }
 export async function removeInvoicePayment(id) {

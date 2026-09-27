@@ -73,6 +73,22 @@ export function normalizePermissions(permissions, email = '') {
   return [...new Set(permissions || [])].filter((permission) => allowed.has(permission));
 }
 
+// الأدوار التي تقتصر على القراءة فقط — يجب أن تبقى متطابقة مع can_write() في RLS.
+export const READ_ONLY_ROLES = ['viewer'];
+
+// هل يملك المستخدم صلاحية الكتابة (إضافة/تعديل) عمومًا؟ القراءة تبقى محكومة بـ canAccess.
+// المصدر الموثوق للحماية هو RLS في قاعدة البيانات؛ هذه لإخفاء/تعطيل أزرار الكتابة في الواجهة.
+export function canWrite(access) {
+  if (!access?.active) return false;
+  if (access.isPrimaryAdmin || access.role === 'admin') return true;
+  return !READ_ONLY_ROLES.includes(access.role);
+}
+
+// صلاحية الحذف — حاليًا مطابقة لصلاحية الكتابة (يمنعها دور المشاهدة فقط).
+export function canDelete(access) {
+  return canWrite(access);
+}
+
 export function canAccess(access, permission) {
   if (!permission) return true;
   if (!access?.active) return false;

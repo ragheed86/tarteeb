@@ -4,6 +4,7 @@ import {
   ALL_PERMISSIONS, ROLE_PRESETS, isPrimaryAdmin, normalizeEmail, normalizePermissions,
 } from '@/lib/permissions';
 import { apiError, requireAdmin } from '../../_auth';
+import { enforceRateLimit } from '../../_rateLimit';
 
 async function proxyToSupabaseAdminUsers(request) {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -70,6 +71,8 @@ async function listRowsWithAuth() {
 }
 
 export async function GET(request) {
+  const limited = enforceRateLimit(request, { scope: 'admin-users-read', limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
   if (!supabaseAdminReady) return proxyToSupabaseAdminUsers(request);
   const admin = await requireAdmin(request);
   if (admin.response) return admin.response;
@@ -82,6 +85,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  // حد أشد على الكتابة (إنشاء/تعديل مستخدمين) لتقليل خطر الإساءة.
+  const limited = enforceRateLimit(request, { scope: 'admin-users-write', limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
   if (!supabaseAdminReady) return proxyToSupabaseAdminUsers(request);
   const admin = await requireAdmin(request);
   if (admin.response) return admin.response;
@@ -127,6 +133,8 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
+  const limited = enforceRateLimit(request, { scope: 'admin-users-write', limit: 20, windowMs: 60_000 });
+  if (limited) return limited;
   if (!supabaseAdminReady) return proxyToSupabaseAdminUsers(request);
   const admin = await requireAdmin(request);
   if (admin.response) return admin.response;

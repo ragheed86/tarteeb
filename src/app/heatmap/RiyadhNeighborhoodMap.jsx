@@ -8,8 +8,9 @@ let rtlPluginLoaded = false;
 function ensureRtlPlugin() {
   if (rtlPluginLoaded || typeof window === 'undefined') return;
   rtlPluginLoaded = true;
+  // مستضاف محليًا (public/vendor) بدل unpkg — حتى لا يحتاج CSP للسماح بنطاق خارجي.
   maplibregl.setRTLTextPlugin(
-    'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.2.3/mapbox-gl-rtl-text.js',
+    '/vendor/mapbox-gl-rtl-text.js',
     true,
   );
 }

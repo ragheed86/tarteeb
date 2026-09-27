@@ -4,6 +4,11 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(self), payment=(), usb=()' },
+  // HSTS: يفرض HTTPS لمدة سنتين لكل النطاقات الفرعية (سارٍ فقط عبر HTTPS في الإنتاج).
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  // عزل سياق التصفح ومنع تحميل موارد الموقع من أصول أخرى.
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
   {
     key: 'Content-Security-Policy',
     value: [
@@ -12,7 +17,10 @@ const securityHeaders = [
       "form-action 'self'",
       "frame-ancestors 'none'",
       "object-src 'none'",
-      "script-src 'self' 'unsafe-inline' https://unpkg.com",
+      // أُزيل unpkg (سكربت RTL صار مستضافاً محلياً في public/vendor).
+      // ملاحظة: إزالة 'unsafe-inline' من script-src تتطلب nonce عبر middleware
+      // واختبار تشغيل على staging (ترطيب Next + عامل RTL في الخريطة) — متابعة منفصلة.
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com https://fonts.openmaptiles.org",
       "img-src 'self' data: blob: https://*.supabase.co https://*.basemaps.cartocdn.com",

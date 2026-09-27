@@ -1,3 +1,9 @@
+// إدارة المستخدمين — المسار الأساسي (canonical) عند توفّر SUPABASE_SERVICE_ROLE_KEY.
+// Edge Function (supabase/functions/admin-users) يُستخدم كبديل فقط حين لا يكون
+// المفتاح متاحًا في بيئة Next. للتخلص من الازدواج نهائيًا يُوصى باعتماد هذا المسار
+// وإزالة البديل بعد تأكيد أن الإنتاج يضبط المفتاح (متابعة موثّقة).
+// idempotency: إنشاء المستخدم يبحث أولًا عن حساب موجود بالبريد، وعند فشل إنشاء صف
+// الصلاحيات بعد إنشاء حساب جديد يُحذف الحساب تعويضيًا كي لا يبقى معلّقًا.
 import { NextResponse } from 'next/server';
 import { supabaseAdmin, supabaseAdminReady } from '@/lib/supabaseAdmin';
 import {
@@ -80,7 +86,8 @@ export async function GET(request) {
     const users = await listRowsWithAuth();
     return NextResponse.json({ users });
   } catch (error) {
-    return apiError(error.message || 'تعذّر تحميل المستخدمين', 500);
+    console.error('admin/users GET failed:', error);
+    return apiError('تعذّر تحميل المستخدمين', 500);
   }
 }
 
@@ -97,6 +104,7 @@ export async function POST(request) {
     if (!payload.email) return apiError('البريد الإلكتروني مطلوب');
 
     let authUser = body.user_id ? { id: body.user_id, email: payload.email } : await findAuthUserByEmail(payload.email);
+    let createdAuthUser = false;
     if (!authUser) {
       const password = String(body.password || '').trim();
       if (password.length < 6) return apiError('كلمة المرور مطلوبة ويجب ألا تقل عن 6 أحرف');
@@ -108,6 +116,7 @@ export async function POST(request) {
       });
       if (error) throw error;
       authUser = data.user;
+      createdAuthUser = true;
     } else if (body.password) {
       const { error } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, {
         password: String(body.password),
@@ -125,10 +134,18 @@ export async function POST(request) {
       .upsert(row, { onConflict: 'user_id' })
       .select('user_id,email,display_name,role,permissions,active,created_at,updated_at')
       .single();
-    if (error) throw error;
+    if (error) {
+      // تعويض: لو أنشأنا مستخدم مصادقة جديدًا للتو ثم فشل إنشاء صف الصلاحيات،
+      // نحذف المستخدم كي لا يبقى معلّقًا بلا صلاحيات (idempotency).
+      if (createdAuthUser) {
+        await supabaseAdmin.auth.admin.deleteUser(authUser.id).catch(() => {});
+      }
+      throw error;
+    }
     return NextResponse.json({ user: data });
   } catch (error) {
-    return apiError(error.message || 'تعذّر حفظ المستخدم', 500);
+    console.error('admin/users POST failed:', error);
+    return apiError('تعذّر حفظ المستخدم', 500);
   }
 }
 
@@ -158,6 +175,7 @@ export async function DELETE(request) {
     if (error) throw error;
     return NextResponse.json({ user: data });
   } catch (error) {
-    return apiError(error.message || 'تعذّر تعطيل المستخدم', 500);
+    console.error('admin/users DELETE failed:', error);
+    return apiError('تعذّر تعطيل المستخدم', 500);
   }
 }

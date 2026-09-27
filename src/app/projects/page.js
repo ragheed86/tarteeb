@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  getProjects, getClients, getInvoices, getEmployees, createProject, updateProject, removeProject,
+  getProjects, getClients, getInvoices, getEmployeesBasic, createProject, updateProject, removeProject,
 } from '@/lib/data';
 import { GREGORIAN_DATE_LOCALE, fmtMoney, fmtNum, fmtDate, fmtRelative, PROJECT_STATUS, displayProgress, progressForStatus, DONE_STATUSES } from '@/lib/format';
 import { usePersistedState } from '@/lib/usePersistedState';
@@ -124,7 +124,7 @@ export default function ProjectsPage() {
   async function load() {
     try {
       const [projects, clients, invoices, employees] = await Promise.all([
-        getProjects(), getClients(), getInvoices().catch(() => []), getEmployees().catch(() => []),
+        getProjects(), getClients(), getInvoices().catch(() => []), getEmployeesBasic().catch(() => []),
       ]);
       const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
       const employeesById = Object.fromEntries((employees || []).map((em) => [em.id, em]));

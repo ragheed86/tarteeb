@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { createClient, updateClient, removeClient, getClients, getEmployees } from '@/lib/data';
+import { createClient, updateClient, removeClient, getClients, getEmployeesBasic } from '@/lib/data';
 import { fmtNum, CLIENT_STATUS, SOURCE_LABEL } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Ltr, KpiCard } from '@/components';
 import { toast } from '../toast';
@@ -85,7 +85,7 @@ function ClientsPageInner() {
   const [popped, setPopped] = useState(null); // آخر عميل تغيّرت حالته — لنبضة الـpill
 
   useEffect(() => {
-    Promise.all([getClients(), getEmployees()])
+    Promise.all([getClients(), getEmployeesBasic()])
       .then(([clientsData, employeesData]) => {
         setClients(clientsData);
         setEmployees(employeesData);

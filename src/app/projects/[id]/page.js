@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  getProject, getClient, getEmployees, getProjectFinancials,
+  getProject, getClient, getEmployeesBasic, getProjectFinancials,
   getProjectTasks, createProjectTask, updateProjectTask, removeProjectTask,
   getProjectTeam, addProjectTeam, removeProjectTeam,
   getProjectMedia, uploadProjectMedia, removeProjectMedia, updateProject,
@@ -40,7 +40,7 @@ export default function ProjectDetail() {
       const project = await getProject(id);
       const [client, employees, fin, tasks, team, media, costs] = await Promise.all([
         project.client_id ? getClient(project.client_id) : Promise.resolve(null),
-        getEmployees(),
+        getEmployeesBasic(),
         getProjectFinancials(id).catch(() => null),
         getProjectTasks(id), getProjectTeam(id), getProjectMedia(id), getProjectCosts(id),
       ]);

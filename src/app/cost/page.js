@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  getProjects, getClients, getSuppliers, getEmployees, updateProject,
+  getProjects, getClients, getSuppliers, getEmployeesBasic, updateProject,
   getProjectCosts, getProjectInvoices, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
   getProjectCostAttachments, uploadProjectCostAttachment, removeProjectCostAttachment,
 } from '@/lib/data';
@@ -142,7 +142,7 @@ export default function CostPage() {
   const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
-    Promise.all([getProjects(), getClients(), getSuppliers(), getEmployees().catch(() => [])])
+    Promise.all([getProjects(), getClients(), getSuppliers(), getEmployeesBasic().catch(() => [])])
       .then(([projects, clients, suppliers, employees]) => {
         const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
         setState({ projects, suppliers, employees: employees || [], byId });

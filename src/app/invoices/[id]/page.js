@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import {
-  getInvoice, getInvoiceItems, getInvoicePayments, getClient, getCompanySettings,
+  getInvoice, getInvoiceItemsForView, getInvoicePayments, getClient, getCompanySettings,
   updateInvoice, createInvoicePayment, removeInvoicePayment,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS } from '@/lib/format';
@@ -80,7 +80,7 @@ export default function InvoiceDetail() {
     try {
       const invoice = await getInvoice(id);
       const [items, payments, client, company] = await Promise.all([
-        getInvoiceItems(id),
+        getInvoiceItemsForView(id),
         getInvoicePayments(id),
         invoice.client_id ? getClient(invoice.client_id) : Promise.resolve(null),
         getCompanySettings().catch(() => null),

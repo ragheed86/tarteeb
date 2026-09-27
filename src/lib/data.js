@@ -383,6 +383,14 @@ export async function getEmployees() {
     return signStoredFiles(data, 'employee-photos', 'photo_path', 'photo_url');
   });
 }
+// لقوائم الإسناد (اختيار موظف لمشروع/تكلفة) التي لا تحتاج إلا الاسم — بلا
+// السجل الشخصي الكامل (رقم الهوية، الجنسية، الأجر...) الذي يعرضه getEmployees.
+export async function getEmployeesBasic() {
+  return cachedSupabaseRead('employees-basic', async () => {
+    const { data, error } = await supabase.from('employees').select('id,name');
+    if (error) throw error; return data;
+  });
+}
 export async function getGovernmentAccounts() {
   const { data, error } = await supabase.from('government_accounts').select('*');
   if (error) throw error;
@@ -430,6 +438,14 @@ export async function getInvoiceItems(invoiceId) {
   const { data, error } = await supabase.from('invoice_items').select('*').eq('invoice_id', invoiceId);
   if (error) throw error; return data;
 }
+// لعرض/طباعة الفاتورة — بلا سعر التكلفة الداخلي ونسبة الزيادة (internal_base_price/
+// markup_percent) اللذين لا يحتاجهما إلا نموذج تحرير الفاتورة (getInvoiceItems).
+export async function getInvoiceItemsForView(invoiceId) {
+  const { data, error } = await supabase.from('invoice_items')
+    .select('id,invoice_id,description,qty,unit_price,unit')
+    .eq('invoice_id', invoiceId);
+  if (error) throw error; return data;
+}
 async function attachInvoiceSummaries(invoices) {
   const rows = invoices || [];
   if (rows.length === 0) return rows;
@@ -455,7 +471,9 @@ async function attachInvoiceSummaries(invoices) {
 }
 // ---------- الوارد الموحّد / 360 ----------
 export async function getCommunications(clientId) {
-  const q = supabase.from('communications').select('*').order('occurred_at', { ascending: false });
+  const q = supabase.from('communications')
+    .select('id,client_id,channel,direction,body,occurred_at')
+    .order('occurred_at', { ascending: false });
   const { data, error } = clientId ? await q.eq('client_id', clientId) : await q;
   if (error) throw error; return data;
 }

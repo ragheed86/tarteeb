@@ -52,15 +52,23 @@ export default function HeatmapPage() {
     [statsById, metric],
   );
 
+  // الإجماليات الحقيقية تُحسب من كامل السجلات، لا من الأحياء المطابَقة فقط،
+  // حتى لا يختفي العملاء/المشاريع الذين ليس لعميلهم حي معروف من الأرقام العامة.
+  // «mapped*» تُبقي شفافية كم منها أمكن توزيعه فعلياً على الخريطة.
   const totals = useMemo(() => {
     const rows = [...statsById.values()];
+    const allClients = clients || [];
+    const allProjects = projects || [];
     return {
       activeDistricts: rows.length,
-      clients: rows.reduce((s, r) => s + r.clients, 0),
-      projects: rows.reduce((s, r) => s + r.projects, 0),
-      revenue: rows.reduce((s, r) => s + r.revenue, 0),
+      clients: allClients.length,
+      projects: allProjects.length,
+      revenue: allProjects.reduce((s, p) => s + Number(p.sale_price || 0), 0),
+      mappedClients: rows.reduce((s, r) => s + r.clients, 0),
+      mappedProjects: rows.reduce((s, r) => s + r.projects, 0),
+      mappedRevenue: rows.reduce((s, r) => s + r.revenue, 0),
     };
-  }, [statsById]);
+  }, [statsById, clients, projects]);
 
   const selected = selectedId ? { id: selectedId, ...(statsById.get(selectedId) || { nameAr: geojson?.features.find((f) => f.properties.district_id === selectedId)?.properties.name_ar, clients: 0, projects: 0, revenue: 0, avgContract: 0 }) } : null;
 
@@ -80,9 +88,9 @@ export default function HeatmapPage() {
 
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
         <KpiCard label="أحياء فيها نشاط" value={fmtNum(totals.activeDistricts)} definition="عدد أحياء الرياض التي ارتبط بها عميل أو مشروع في البيانات الحالية." period="الحالة الحالية للخريطة" formula="عدّ الأحياء ذات السجلات المرتبطة" breakdown={topDistricts.slice(0, 5).map((d) => ({ label: d.nameAr, value: `${fmtNum(d.clients)} عميل` }))} />
-        <KpiCard tone="pos" label="إجمالي العملاء" value={fmtNum(totals.clients)} definition="عدد العملاء الذين أمكن ربطهم بأحياء الرياض على الخريطة." period="كل بيانات الخريطة" formula="جمع عدد العملاء في جميع الأحياء" note="العملاء بلا حي معروف لا يدخلون في هذا الرقم." />
-        <KpiCard label="إجمالي المشاريع" value={fmtNum(totals.projects)} definition="عدد المشاريع المرتبطة بعملاء موزعين على أحياء الخريطة." period="كل بيانات الخريطة" formula="جمع عدد المشاريع في جميع الأحياء" />
-        <KpiCard tone="alert" label="قيمة العقود" value={`${fmtMoney(totals.revenue)} ⃁`} definition="مجموع قيم عقود المشاريع التي أمكن توزيعها جغرافيًا على أحياء الرياض." period="كل بيانات الخريطة" formula="جمع قيمة عقود المشاريع المرتبطة بالأحياء" breakdown={topDistricts.slice(0, 5).map((d) => ({ label: d.nameAr, value: `${fmtMoney(d.revenue)} ⃁` }))} />
+        <KpiCard tone="pos" label="إجمالي العملاء" value={fmtNum(totals.clients)} definition="إجمالي عدد العملاء في النظام." period="كل العملاء" formula="عدّ كل سجلات العملاء" breakdown={[{ label: 'ظاهرون على الخريطة', value: fmtNum(totals.mappedClients) }, { label: 'بلا حي معروف', value: fmtNum(totals.clients - totals.mappedClients) }]} note={totals.clients > totals.mappedClients ? `${fmtNum(totals.clients - totals.mappedClients)} عميل بلا حي معروف لا يظهرون على الخريطة لكنهم ضمن هذا الإجمالي.` : undefined} />
+        <KpiCard label="إجمالي المشاريع" value={fmtNum(totals.projects)} definition="إجمالي عدد المشاريع في النظام." period="كل المشاريع" formula="عدّ كل سجلات المشاريع" breakdown={[{ label: 'ظاهرة على الخريطة', value: fmtNum(totals.mappedProjects) }, { label: 'بلا حي معروف', value: fmtNum(totals.projects - totals.mappedProjects) }]} note={totals.projects > totals.mappedProjects ? `${fmtNum(totals.projects - totals.mappedProjects)} مشروع لعملاء بلا حي معروف لا تظهر على الخريطة لكنها ضمن هذا الإجمالي.` : undefined} />
+        <KpiCard tone="alert" label="قيمة العقود" value={`${fmtMoney(totals.revenue)} ⃁`} definition="مجموع قيم عقود كل المشاريع في النظام." period="كل المشاريع" formula="جمع قيمة عقود كل المشاريع" breakdown={[{ label: 'موزّعة على الخريطة', value: `${fmtMoney(totals.mappedRevenue)} ⃁` }, { label: 'بلا حي معروف', value: `${fmtMoney(totals.revenue - totals.mappedRevenue)} ⃁` }, ...topDistricts.slice(0, 3).map((d) => ({ label: d.nameAr, value: `${fmtMoney(d.revenue)} ⃁` }))]} note={totals.revenue > totals.mappedRevenue ? 'يشمل قيمة عقود مشاريع لعملاء بلا حي معروف.' : undefined} />
       </div>
 
       <div className="hmwrap">

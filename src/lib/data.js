@@ -79,7 +79,7 @@ export async function updateClient(id, input) {
 export async function removeClient(id) {
   const { error } = await supabase.from('clients').delete().eq('id', id);
   if (error) throw error;
-  clearSupabaseReadCache('clients', 'projects', 'invoices');
+  clearSupabaseReadCache('clients', 'projects', 'invoices', 'all_invoice_payments', 'all_invoice_items', 'all_project_costs', 'all_project_costs_detailed', 'product_demand');
 }
 // مشاريع وفواتير عميل بعينه — لملف العميل 360
 export async function getProjectsByClient(clientId) {
@@ -119,36 +119,42 @@ export async function getProjectCosts(projectId) {
 }
 // كل بنود التكلفة لكل المشاريع دفعة واحدة — لحساب الربح الإجمالي بلوحة التحكم
 export async function getAllProjectCosts() {
-  const { data, error } = await supabase.from('project_costs')
-    .select('project_id,amount,work_date,created_at,kind,label,note,product_name,sale_price,markup_percent');
-  if (error) throw error; return data;
+  return cachedSupabaseRead('all_project_costs', async () => {
+    const { data, error } = await supabase.from('project_costs')
+      .select('project_id,amount,work_date,created_at,kind,label,note,product_name,sale_price,markup_percent');
+    if (error) throw error; return data;
+  });
 }
 // تكاليف مفصّلة لكل المشاريع — لتقارير التصدير (تفريق الخدمة عن المنظمات/المواد)
 export async function getAllProjectCostsDetailed() {
-  const { data, error } = await supabase.from('project_costs')
-    .select('project_id,kind,amount,sale_price,markup_percent');
-  if (error) throw error; return data;
+  return cachedSupabaseRead('all_project_costs_detailed', async () => {
+    const { data, error } = await supabase.from('project_costs')
+      .select('project_id,kind,amount,sale_price,markup_percent');
+    if (error) throw error; return data;
+  });
 }
 
 // ---------- مصاريف الشركة العامة ----------
 const COMPANY_EXPENSE_RECEIPTS_BUCKET = 'company-expense-receipts';
 
 export async function getCompanyExpenses() {
-  const { data, error } = await supabase.from('company_expenses')
-    .select('*').order('expense_date', { ascending: false }).order('created_at', { ascending: false });
-  if (error) throw error; return data;
+  return cachedSupabaseRead('company_expenses', async () => {
+    const { data, error } = await supabase.from('company_expenses')
+      .select('*').order('expense_date', { ascending: false }).order('created_at', { ascending: false });
+    if (error) throw error; return data;
+  });
 }
 export async function createCompanyExpense(p) {
   const { data, error } = await supabase.from('company_expenses').insert(p).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('company_expenses'); return data;
 }
 export async function updateCompanyExpense(id, p) {
   const { data, error } = await supabase.from('company_expenses').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('company_expenses'); return data;
 }
 export async function removeCompanyExpense(id) {
   const { error } = await supabase.from('company_expenses').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throw error; clearSupabaseReadCache('company_expenses');
 }
 export async function uploadCompanyExpenseReceipt(expenseId, file) {
   const rawExt = (file.name.split('.').pop() || (file.type === 'application/pdf' ? 'pdf' : 'jpg')).toLowerCase();
@@ -187,28 +193,34 @@ export async function saveCompanyExpenseBudget(month, amount, alertPercent = 80)
 
 // ---------- الحسابات والمطابقة البنكية ----------
 export async function getBankAccounts() {
-  const { data, error } = await supabase.from('bank_accounts').select('*').order('created_at');
-  if (error) throw error; return data;
+  return cachedSupabaseRead('bank_accounts', async () => {
+    const { data, error } = await supabase.from('bank_accounts').select('*').order('created_at');
+    if (error) throw error; return data;
+  });
 }
 export async function createBankAccount(p) {
   const { data, error } = await supabase.from('bank_accounts').insert(p).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('bank_accounts'); return data;
 }
 export async function getBankTransactions(accountId) {
-  let query = supabase.from('bank_transactions').select('*').order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
-  if (accountId) query = query.eq('account_id', accountId);
-  const { data, error } = await query;
-  if (error) throw error; return data;
+  // نكاش النسخة الشاملة (بلا حساب محدد) التي تستخدمها اللوحة والتقارير في كل تنقل.
+  const loader = async () => {
+    let query = supabase.from('bank_transactions').select('*').order('transaction_date', { ascending: false }).order('created_at', { ascending: false });
+    if (accountId) query = query.eq('account_id', accountId);
+    const { data, error } = await query;
+    if (error) throw error; return data;
+  };
+  return accountId ? loader() : cachedSupabaseRead('bank_transactions:all', loader);
 }
 export async function importBankTransactions(rows) {
   if (!rows.length) return [];
   const { data, error } = await supabase.from('bank_transactions')
     .upsert(rows, { onConflict: 'account_id,external_id', ignoreDuplicates: true }).select('*');
-  if (error) throw error; return data || [];
+  if (error) throw error; clearSupabaseReadCache('bank_transactions:all'); return data || [];
 }
 export async function updateBankTransaction(id, p) {
   const { data, error } = await supabase.from('bank_transactions').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('bank_transactions:all'); return data;
 }
 export async function getReconciliationInvoicePayments() {
   const { data, error } = await supabase.from('invoice_payments')
@@ -226,7 +238,9 @@ export async function saveProjectCosts(projectId, rows, options = {}) {
     p_rows: rows || [],
     p_scope: scope,
   });
-  if (error) throw error; return data;
+  if (error) throw error;
+  clearSupabaseReadCache('all_project_costs', 'all_project_costs_detailed', 'product_demand');
+  return data;
 }
 // جدول تقديري (عمالة/إشراف/مواد/نقل/أخرى) <-> بنود project_costs
 export function estimateToCostRows(estimate) {
@@ -448,16 +462,21 @@ export async function getProjectFinancials(projectId) {
 
 // ---------- المستودع ----------
 export async function getInventory() {
-  const { data, error } = await supabase.from('inventory_items')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error; return data;
+  return cachedSupabaseRead('inventory', async () => {
+    const { data, error } = await supabase.from('inventory_items')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error; return data;
+  });
 }
-export async function getWarehouses() { const { data, error } = await supabase.from('warehouses').select('*'); if (error) throw error; return data; }
-export async function getCategories() { const { data, error } = await supabase.from('categories').select('*'); if (error) throw error; return data; }
+export async function getWarehouses() { return cachedSupabaseRead('warehouses', async () => { const { data, error } = await supabase.from('warehouses').select('*'); if (error) throw error; return data; }); }
+export async function getCategories() { return cachedSupabaseRead('categories', async () => { const { data, error } = await supabase.from('categories').select('*'); if (error) throw error; return data; }); }
 
 // المنتجات الأكثر طلباً: تُجمَّع من مواد تكاليف المشاريع (kind=materials) حسب اسم المنتج
 export async function getProductDemand() {
+  return cachedSupabaseRead('product_demand', getProductDemandUncached);
+}
+async function getProductDemandUncached() {
   const { data, error } = await supabase.from('project_costs')
     .select('product_name, qty, project_id')
     .eq('kind', 'materials')
@@ -479,7 +498,7 @@ export async function getProductDemand() {
 }
 
 // ---------- الموردون / الموظفون / الجهات / الإعدادات ----------
-export async function getSuppliers()        { const { data, error } = await supabase.from('suppliers').select('*');            if (error) throw error; return data; }
+export async function getSuppliers()        { return cachedSupabaseRead('suppliers', async () => { const { data, error } = await supabase.from('suppliers').select('*'); if (error) throw error; return data; }); }
 export async function getEmployees() {
   return cachedSupabaseRead('employees', async () => {
     const { data, error } = await supabase.from('employees').select('*');
@@ -488,11 +507,13 @@ export async function getEmployees() {
   });
 }
 export async function getGovernmentAccounts() {
-  const { data, error } = await supabase.from('government_accounts').select('*');
-  if (error) throw error;
-  return signStoredFiles(data, 'gov-documents', 'doc_path', 'doc_url');
+  return cachedSupabaseRead('government_accounts', async () => {
+    const { data, error } = await supabase.from('government_accounts').select('*');
+    if (error) throw error;
+    return signStoredFiles(data, 'gov-documents', 'doc_path', 'doc_url');
+  });
 }
-export async function getCompanySettings()  { const { data, error } = await supabase.from('company_settings').select('*').limit(1).single(); if (error) throw error; return data; }
+export async function getCompanySettings()  { return cachedSupabaseRead('company_settings', async () => { const { data, error } = await supabase.from('company_settings').select('*').limit(1).single(); if (error) throw error; return data; }); }
 
 // ---------- كتالوج الخدمات ----------
 export async function getServices() {
@@ -600,7 +621,7 @@ export async function removeProject(id) {
     .maybeSingle();
   if (error) throw error;
   if (!deleted) throw new Error('لم يتم حذف المشروع. تحقق من صلاحية الحذف ثم حاول مجدداً.');
-  clearSupabaseReadCache('projects', 'invoices');
+  clearSupabaseReadCache('projects', 'invoices', 'all_invoice_payments', 'all_invoice_items', 'all_project_costs', 'all_project_costs_detailed', 'product_demand');
 
   // حذف الملفات الفعلية من Storage بعد نجاح حذف قاعدة البيانات. فشل تنظيف
   // ملف لا يعيد المشروع المحذوف، لكنه يُعاد كتحذير واضح للمستخدم.
@@ -759,11 +780,14 @@ export async function createProjectCost(p) {
   const { data, error } = await supabase.from('project_costs').insert(p)
     .select('id,kind,label,amount,qty,hours,rate,work_date,note,worker_name,product_name,supplier_id,supplier_name,sale_price,markup_percent')
     .single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  clearSupabaseReadCache('all_project_costs', 'all_project_costs_detailed', 'product_demand');
+  return data;
 }
 export async function removeProjectCost(id) {
   const { error } = await supabase.from('project_costs').delete().eq('id', id);
   if (error) throw error;
+  clearSupabaseReadCache('all_project_costs', 'all_project_costs_detailed', 'product_demand');
 }
 
 // ============================================================
@@ -771,16 +795,16 @@ export async function removeProjectCost(id) {
 // ============================================================
 export async function createInventoryItem(p) {
   const { data, error } = await supabase.from('inventory_items').insert(p).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('inventory'); return data;
 }
 export async function updateInventoryItem(id, p) {
   const { data, error } = await supabase.from('inventory_items').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('inventory'); return data;
 }
 export async function removeInventoryItem(id, imagePath) {
   if (imagePath) await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([imagePath]).catch(() => {});
   const { error } = await supabase.from('inventory_items').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throw error; clearSupabaseReadCache('inventory');
 }
 
 // يرفع صورة المنتج إلى حاوية التخزين العامة ويعيد الرابط والمسار
@@ -850,15 +874,15 @@ export async function removeEmployeeDocument(id) {
 // ============================================================
 export async function createSupplier(p) {
   const { data, error } = await supabase.from('suppliers').insert(p).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('suppliers'); return data;
 }
 export async function updateSupplier(id, p) {
   const { data, error } = await supabase.from('suppliers').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('suppliers'); return data;
 }
 export async function removeSupplier(id) {
   const { error } = await supabase.from('suppliers').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throw error; clearSupabaseReadCache('suppliers');
 }
 
 // ============================================================
@@ -879,16 +903,18 @@ export async function uploadGovDocument(file) {
 export async function createGovernmentAccount(p) {
   const { data, error } = await supabase.from('government_accounts').insert(p).select('*').single();
   if (error) throw error;
+  clearSupabaseReadCache('government_accounts');
   return signStoredFile(data, GOV_DOCUMENTS_BUCKET, 'doc_path', 'doc_url');
 }
 export async function updateGovernmentAccount(id, p) {
   const { data, error } = await supabase.from('government_accounts').update(p).eq('id', id).select('*').single();
   if (error) throw error;
+  clearSupabaseReadCache('government_accounts');
   return signStoredFile(data, GOV_DOCUMENTS_BUCKET, 'doc_path', 'doc_url');
 }
 export async function removeGovernmentAccount(id) {
   const { error } = await supabase.from('government_accounts').delete().eq('id', id);
-  if (error) throw error;
+  if (error) throw error; clearSupabaseReadCache('government_accounts');
 }
 
 // ============================================================
@@ -909,20 +935,20 @@ export async function createInvoice(invoice, items) {
     p_items: items || [],
   });
   if (error) throw error;
-  clearSupabaseReadCache('invoices');
+  clearSupabaseReadCache('invoices', 'all_invoice_payments', 'all_invoice_items');
   return data;
 }
 export async function updateInvoice(id, p) {
   const { data, error } = await supabase.from('invoices').update(p).eq('id', id).select(INVOICE_COLS).single();
   if (error) throw error;
-  clearSupabaseReadCache('invoices');
+  clearSupabaseReadCache('invoices', 'all_invoice_payments', 'all_invoice_items');
   const [invoice] = await attachInvoiceSummaries([data]);
   return invoice;
 }
 export async function removeInvoice(id) {
   const { error } = await supabase.from('invoices').delete().eq('id', id);
   if (error) throw error;
-  clearSupabaseReadCache('invoices');
+  clearSupabaseReadCache('invoices', 'all_invoice_payments', 'all_invoice_items');
 }
 // تعديل الفاتورة مع استبدال بنودها. items=[{description,qty,unit_price}]
 export async function updateInvoiceWithItems(id, invoice, items) {
@@ -932,7 +958,7 @@ export async function updateInvoiceWithItems(id, invoice, items) {
     p_items: items || [],
   });
   if (error) throw error;
-  clearSupabaseReadCache('invoices');
+  clearSupabaseReadCache('invoices', 'all_invoice_payments', 'all_invoice_items');
   const [updated] = await attachInvoiceSummaries([data]);
   return updated;
 }
@@ -944,19 +970,23 @@ export async function getInvoicePayments(invoiceId) {
   if (error) throw error; return data;
 }
 export async function getAllInvoicePayments() {
-  const { data, error } = await supabase.from('invoice_payments')
-    .select('id,invoice_id,amount,paid_at,method,created_at,invoices!inner(status)')
-    .neq('invoices.status', 'refunded')
-    .order('paid_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map(({ invoices: _invoice, ...payment }) => payment);
+  return cachedSupabaseRead('all_invoice_payments', async () => {
+    const { data, error } = await supabase.from('invoice_payments')
+      .select('id,invoice_id,amount,paid_at,method,created_at,invoices!inner(status)')
+      .neq('invoices.status', 'refunded')
+      .order('paid_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(({ invoices: _invoice, ...payment }) => payment);
+  });
 }
 export async function getAllInvoiceItems() {
-  const { data, error } = await supabase.from('invoice_items')
-    .select('invoice_id,description,qty,unit_price,internal_base_price,markup_percent,invoices!inner(status,issue_at)')
-    .neq('invoices.status', 'refunded');
-  if (error) throw error;
-  return data || [];
+  return cachedSupabaseRead('all_invoice_items', async () => {
+    const { data, error } = await supabase.from('invoice_items')
+      .select('invoice_id,description,qty,unit_price,internal_base_price,markup_percent,invoices!inner(status,issue_at)')
+      .neq('invoices.status', 'refunded');
+    if (error) throw error;
+    return data || [];
+  });
 }
 // إضافة دفعة عبر RPC ذرية تقفل صف الفاتورة وتتحقق من المتبقي داخل معاملة واحدة،
 // فلا يمكن لطلبين متزامنين تجاوز إجمالي الفاتورة (بدل الإدخال المباشر غير الآمن).
@@ -968,12 +998,12 @@ export async function createInvoicePayment(p) {
     p_method: p.method || 'cash',
     p_note: p.note?.trim() || null,
   });
-  if (error) throw error; clearSupabaseReadCache('invoices'); return data;
+  if (error) throw error; clearSupabaseReadCache('invoices', 'all_invoice_payments', 'all_invoice_items'); return data;
 }
 export async function removeInvoicePayment(id) {
   const { error } = await supabase.from('invoice_payments').delete().eq('id', id);
   if (error) throw error;
-  clearSupabaseReadCache('invoices');
+  clearSupabaseReadCache('invoices', 'all_invoice_payments', 'all_invoice_items');
 }
 
 // ============================================================
@@ -981,7 +1011,7 @@ export async function removeInvoicePayment(id) {
 // ============================================================
 export async function updateCompanySettings(id, p) {
   const { data, error } = await supabase.from('company_settings').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error; clearSupabaseReadCache('company_settings'); return data;
 }
 
 // ============================================================

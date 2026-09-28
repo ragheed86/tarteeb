@@ -75,3 +75,17 @@ export async function requireAdmin(request) {
     return { response: apiError(error.message || 'تعذّر التحقق من الصلاحيات', 500) };
   }
 }
+
+export async function requirePermission(request, permission) {
+  const session = await getSessionUser(request);
+  if (session.response) return session;
+  try {
+    const access = await getAccessForUser(session.user);
+    if (!canAccess(access, permission)) {
+      return { response: apiError('لا تملك صلاحية كافية لهذا الإجراء', 403) };
+    }
+    return { user: session.user, access };
+  } catch (error) {
+    return { response: apiError(error.message || 'تعذّر التحقق من الصلاحيات', 500) };
+  }
+}

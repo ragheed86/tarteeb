@@ -18,6 +18,7 @@ export const PERMISSION_GROUPS = [
       { key: 'warehouse_inventory', label: 'جرد المستودع', description: 'تعديل الكميات وحدود التنبيه' },
       { key: 'warehouse_products', label: 'إضافة المنتجات', description: 'إضافة وتعديل وحذف الأصناف' },
       { key: 'employees', label: 'الموظفون', description: 'الفريق والمستندات' },
+      { key: 'appointments', label: 'المواعيد', description: 'الاجتماعات والمواعيد وربطها بتقويم الموظفين' },
       { key: 'heatmap', label: 'الخريطة الحرارية', description: 'توزيع الطلبات حسب الأحياء' },
     ],
   },
@@ -45,9 +46,9 @@ export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.items.
 
 export const ROLE_PRESETS = {
   admin: ALL_PERMISSIONS,
-  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'heatmap', 'quotes', 'invoices', 'expenses', 'whatsapp'],
+  manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments', 'heatmap', 'quotes', 'invoices', 'expenses', 'whatsapp'],
   accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation'],
-  operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees'],
+  operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments'],
   viewer: ['dashboard', 'clients', 'projects'],
 };
 
@@ -103,6 +104,7 @@ export function permissionForPath(pathname) {
   if (path.startsWith('/cost')) return 'cost';
   if (path.startsWith('/warehouse')) return 'warehouse';
   if (path.startsWith('/employees')) return 'employees';
+  if (path.startsWith('/appointments')) return 'appointments';
   if (path.startsWith('/heatmap')) return 'heatmap';
   if (path.startsWith('/quotes')) return 'quotes';
   if (path.startsWith('/invoices')) return 'invoices';

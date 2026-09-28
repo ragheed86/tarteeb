@@ -1,13 +1,21 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   getEmployees, createEmployee, updateEmployee, removeEmployee,
   getEmployeeDocuments, createEmployeeDocument, removeEmployeeDocument,
   uploadEmployeePhoto,
 } from '@/lib/data';
+import { supabase } from '@/lib/supabase';
 import { fmtNum, fmtDate } from '@/lib/format';
 import { COUNTRIES_SORTED, countryByCode } from '@/lib/countries';
 import { Loading, Empty, ErrorBar } from '../ui';
+import { toast } from '../toast';
+
+async function authHeaders() {
+  const { data } = await supabase.auth.getSession();
+  return { Authorization: `Bearer ${data.session?.access_token || ''}`, 'Content-Type': 'application/json' };
+}
 
 const WAGE = { fixed: 'ثابت', daily: 'يومي', hourly: 'بالساعة' };
 const STATUS = { active: { label: 'نشط', cls: 'p-prog' }, on_project: { label: 'في مشروع', cls: 'p-quote' }, inactive: { label: 'غير نشط', cls: 'p-wait' } };
@@ -56,6 +64,14 @@ function profileCompletion(employee) {
 }
 
 export default function EmployeesPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <EmployeesPageInner />
+    </Suspense>
+  );
+}
+
+function EmployeesPageInner() {
   const [emps, setEmps] = useState(null);
   const [err, setErr] = useState('');
   const [open, setOpen] = useState(false);
@@ -66,8 +82,19 @@ export default function EmployeesPage() {
   const [saving, setSaving] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [docFor, setDocFor] = useState(null); // الموظف الذي تُعرض مستنداته
+  const [calFor, setCalFor] = useState(null); // الموظف الذي يُدار ربط تقويمه
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const calendar = searchParams.get('calendar');
+    if (!calendar) return;
+    toast(calendar === 'connected' ? 'تم ربط تقويم Google بنجاح' : 'تعذّر ربط تقويم Google', calendar === 'connected' ? 'ok' : 'err');
+    router.replace('/employees');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const visibleEmployees = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -217,6 +244,7 @@ export default function EmployeesPage() {
                         <td data-label="">
                           <div className="employee-row-actions">
                             <button className="btn ghost sm" onClick={() => setDocFor(em)}>المستندات</button>
+                            <button className="btn ghost sm" onClick={() => setCalFor(em)}>تقويم Google</button>
                             <button className="btn ghost sm" onClick={() => openEdit(em)}>تعديل</button>
                             <button className="employee-delete" onClick={() => del(em)} aria-label={`حذف ${em.name}`}>حذف</button>
                           </div>
@@ -293,7 +321,79 @@ export default function EmployeesPage() {
       )}
 
       {docFor && <DocsModal employee={docFor} onClose={() => setDocFor(null)} />}
+      {calFor && <CalendarModal employee={calFor} onClose={() => setCalFor(null)} />}
     </>
+  );
+}
+
+function CalendarModal({ employee, onClose }) {
+  const [status, setStatus] = useState(undefined); // undefined=يحمّل، null=غير مرتبط، كائن=متصل
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function load() {
+    try {
+      const res = await fetch('/api/google-calendar/status', { headers: await authHeaders() });
+      const p = await res.json();
+      if (!res.ok) throw new Error(p.error);
+      setStatus((p.connections || []).find((c) => c.employee_id === employee.id) || null);
+    } catch (e) { setErr(e.message || 'تعذّر جلب حالة التقويم'); setStatus(null); }
+  }
+  useEffect(() => { load(); }, [employee.id]);
+
+  async function connect() {
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch('/api/google-calendar/connect', {
+        method: 'POST', headers: await authHeaders(), body: JSON.stringify({ employee_id: employee.id }),
+      });
+      const p = await res.json();
+      if (!res.ok) throw new Error(p.error);
+      window.location.href = p.url;
+    } catch (e) { setErr(e.message || 'تعذّر بدء الربط'); setBusy(false); }
+  }
+  async function disconnect() {
+    if (!confirm('فصل تقويم Google عن هذا الموظف؟ لن تُزامَن مواعيده الجديدة بعد الآن.')) return;
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch('/api/google-calendar/disconnect', {
+        method: 'POST', headers: await authHeaders(), body: JSON.stringify({ employee_id: employee.id }),
+      });
+      const p = await res.json();
+      if (!res.ok) throw new Error(p.error);
+      setStatus(null); toast('تم فصل التقويم');
+    } catch (e) { setErr(e.message || 'تعذّر الفصل'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal-card">
+        <div className="modal-head">
+          <div><h2>تقويم Google — {employee.name}</h2><p>مزامنة أحادية الاتجاه: مواعيد ترتيب تظهر في تقويم هذا الموظف تلقائياً</p></div>
+          <button className="icon-close" type="button" onClick={onClose} aria-label="إغلاق">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+        {err && <div className="errbar">{err}</div>}
+        {status === undefined ? <Loading /> : status ? (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><span style={{ color: 'var(--muted)' }}>مرتبط بحساب</span><b dir="ltr">{status.google_email || '—'}</b></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><span style={{ color: 'var(--muted)' }}>تاريخ الربط</span><b>{fmtDate(status.created_at)}</b></div>
+          </div>
+        ) : (
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>غير مرتبط بتقويم Google بعد.</p>
+        )}
+        <div className="modal-actions">
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>إغلاق</button>
+          {status ? (
+            <button className="btn ghost" style={{ color: 'var(--neg)' }} type="button" onClick={disconnect} disabled={busy}>فصل التقويم</button>
+          ) : (
+            <button className="btn" type="button" onClick={connect} disabled={busy || status === undefined}>{busy ? 'جارٍ التحويل…' : 'ربط تقويم Google'}</button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -23,6 +23,7 @@ const NAV = [
     { href: '/cost', labelKey: 'nav.cost', icon: IconCost, subKey: 'nav.costSub' },
     { href: '/warehouse', labelKey: 'nav.warehouse', icon: IconWarehouse, subKey: 'nav.warehouseSub' },
     { href: '/employees', labelKey: 'nav.employees', icon: IconBadge, subKey: 'nav.employeesSub' },
+    { href: '/appointments', labelKey: 'nav.appointments', icon: IconCalendar, subKey: 'nav.appointmentsSub' },
   ] },
   { groupKey: 'nav.marketing', items: [
     { href: '/heatmap', labelKey: 'nav.heatmap', icon: IconPin, subKey: 'nav.heatmapSub' },

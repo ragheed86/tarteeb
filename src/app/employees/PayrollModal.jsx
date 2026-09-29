@@ -499,14 +499,15 @@ function AdvancesTab({ employee, cost, onChanged }) {
 
 function EosTab({ employee, cost }) {
   const [reason, setReason] = useState('employer_termination');
-  const [amount, setAmount] = useState(null);
+  const [amount, setAmount] = useState(undefined); // undefined=يحسب، null=محجوب، رقم=النتيجة
   const [err, setErr] = useState('');
 
   useEffect(() => {
     let cancelled = false;
+    setAmount(undefined);
     getEosEntitlement(employee.id, reason)
       .then((v) => { if (!cancelled) setAmount(v); })
-      .catch((e) => { if (!cancelled) setErr(e.message || 'تعذّر الاحتساب'); });
+      .catch((e) => { if (!cancelled) { setErr(e.message || 'تعذّر الاحتساب'); setAmount(null); } });
     return () => { cancelled = true; };
   }, [employee.id, reason]);
 
@@ -532,7 +533,7 @@ function EosTab({ employee, cost }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, paddingTop: 8, borderTop: '1px solid var(--line, #e5e5e5)' }}>
           <span><b>المستحق فعلياً</b></span>
-          <b dir="ltr">{amount === null ? '…' : `${fmtMoney(amount)} ${CURRENCY}`}</b>
+          <b dir="ltr">{amount === undefined ? '…' : amount === null ? '—' : `${fmtMoney(amount)} ${CURRENCY}`}</b>
         </div>
         {reason === 'resignation' && (
           <p style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 0 }}>

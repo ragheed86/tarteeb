@@ -14,19 +14,65 @@ const STATUS = {
 };
 const ACCOUNT_EMPTY = { name: '', bank_name: '', last_four: '', opening_balance: '0' };
 
+// معايير المطابقة التلقائية: فرق المبلغ المسموح، ونافذة التاريخ، وأدنى ثقة تُقترح.
+const AMOUNT_TOLERANCE = 1;
+const DATE_WINDOW = 14;
+const MIN_CONFIDENCE = 60;
+const MANUAL_LIMIT = 40;
+
 function dateDistance(a, b) {
   return Math.abs(new Date(a).setHours(0, 0, 0, 0) - new Date(b).setHours(0, 0, 0, 0)) / 86400000;
 }
-function bestCandidate(tx, expenses, payments, matchedIds) {
-  const outgoing = Number(tx.amount) < 0;
+// تطبيع المرجع: إسقاط الفواصل والمسافات وتوحيد الحالة حتى يُطابَق «INV-1024» مع «inv 1024».
+function normalizeRef(value) {
+  return String(value || '').replace(/[^0-9a-zA-Z؀-ۿ]/g, '').toUpperCase();
+}
+function candidatePool(kind, expenses, payments) {
+  return kind === 'expense'
+    ? expenses.map((x) => ({
+      kind: 'expense', id: x.id, date: x.expense_date, amount: Number(x.amount), label: x.description,
+      meta: [x.vendor, x.note].filter(Boolean).join(' · '),
+      haystack: normalizeRef(`${x.description} ${x.vendor || ''} ${x.note || ''}`),
+    }))
+    : payments.map((x) => ({
+      kind: 'payment', id: x.id, date: x.paid_at, amount: Number(x.amount), label: `دفعة فاتورة ${x.invoices?.number || '—'}`,
+      meta: x.note || '',
+      haystack: normalizeRef(`${x.invoices?.number || ''} ${x.note || ''}`),
+    }));
+}
+function scoreCandidate(tx, candidate) {
   const amount = Math.abs(Number(tx.amount));
-  const candidates = outgoing
-    ? expenses.map((x) => ({ kind: 'expense', id: x.id, date: x.expense_date, amount: Number(x.amount), label: x.description }))
-    : payments.map((x) => ({ kind: 'payment', id: x.id, date: x.paid_at, amount: Number(x.amount), label: `دفعة فاتورة ${x.invoices?.number || '—'}` }));
-  return candidates
-    .filter((x) => !matchedIds.has(x.id) && Math.abs(x.amount - amount) < 0.01 && dateDistance(tx.transaction_date, x.date) <= 7)
-    .map((x) => ({ ...x, confidence: Math.max(70, 100 - Math.round(dateDistance(tx.transaction_date, x.date) * 5)) }))
-    .sort((a, b) => b.confidence - a.confidence)[0] || null;
+  const diff = Math.abs(candidate.amount - amount);
+  if (diff > AMOUNT_TOLERANCE) return null;
+  const days = dateDistance(tx.transaction_date, candidate.date);
+  const ref = normalizeRef(tx.reference);
+  const refHit = ref.length >= 4 && candidate.haystack.includes(ref);
+  if (!refHit && days > DATE_WINDOW) return null;
+  let confidence = 100 - Math.round(days * 3) - (diff < 0.01 ? 0 : 12);
+  if (refHit) confidence = Math.max(confidence, 96);
+  return { ...candidate, days, diff, refHit, confidence: Math.max(40, Math.min(100, confidence)) };
+}
+function bestCandidate(tx, expenses, payments, matchedIds) {
+  const scored = candidatePool(Number(tx.amount) < 0 ? 'expense' : 'payment', expenses, payments)
+    .filter((c) => !matchedIds.has(c.id))
+    .map((c) => scoreCandidate(tx, c))
+    .filter(Boolean)
+    .sort((a, b) => b.confidence - a.confidence || a.days - b.days);
+  const top = scored[0];
+  if (!top || top.confidence < MIN_CONFIDENCE) return null;
+  // مرشّحان بنفس الثقة = التباس؛ لا نقترح تلقائياً ونترك القرار للمطابقة اليدوية.
+  if (scored[1] && scored[1].confidence === top.confidence) return null;
+  return top;
+}
+function manualCandidates(tx, kind, expenses, payments, matchedIds, query) {
+  const amount = Math.abs(Number(tx.amount));
+  const q = query.trim().toLowerCase();
+  return candidatePool(kind, expenses, payments)
+    .filter((c) => !matchedIds.has(c.id))
+    .filter((c) => !q || `${c.label} ${c.meta} ${c.amount}`.toLowerCase().includes(q))
+    .map((c) => ({ ...c, diff: c.amount - amount, days: dateDistance(tx.transaction_date, c.date) }))
+    .sort((a, b) => Math.abs(a.diff) - Math.abs(b.diff) || a.days - b.days)
+    .slice(0, MANUAL_LIMIT);
 }
 
 function parseCsvLine(line, delimiter) {
@@ -47,7 +93,7 @@ function normalizeDate(value) {
   return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
 }
 function parseCsv(text, accountId) {
-  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((x) => x.trim());
+  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter((x) => x.trim());
   if (lines.length < 2) throw new Error('الملف لا يحتوي على حركات');
   const delimiter = (lines[0].match(/;/g) || []).length > (lines[0].match(/,/g) || []).length ? ';' : ',';
   const headers = parseCsvLine(lines[0], delimiter).map((h) => h.trim().toLowerCase());
@@ -59,15 +105,29 @@ function parseCsv(text, accountId) {
   const idx = (key) => headers.findIndex((h) => names[key].includes(h));
   const di = idx('date'), dsi = idx('description'), ai = idx('amount'), debit = idx('debit'), credit = idx('credit'), ri = idx('reference'), ii = idx('id');
   if (di < 0 || dsi < 0 || (ai < 0 && debit < 0 && credit < 0)) throw new Error('يلزم وجود أعمدة التاريخ والوصف والمبلغ (أو مدين/دائن)');
+  // عدّاد التكرار داخل الملف: حركتان حقيقيتان متطابقتان بنفس اليوم تأخذان معرّفين مختلفين
+  // فلا تُبتلع إحداهما كأنها نسخة مكررة، مع إبقاء أول ظهور بالمعرّف القديم حفاظاً على الاستيرادات السابقة.
+  const seen = new Map();
+  const batch = new Date().toISOString();
   return lines.slice(1).map((line, i) => {
     const cols = parseCsvLine(line, delimiter); const date = normalizeDate(cols[di]);
     const cleanNum = (v) => Number(String(v || '').replace(/,/g, '').replace(/\s/g, '')) || 0;
     const amount = ai >= 0 ? cleanNum(cols[ai]) : cleanNum(cols[credit]) - cleanNum(cols[debit]);
     const description = String(cols[dsi] || '').trim(); const reference = ri >= 0 ? String(cols[ri] || '').trim() : '';
     if (!date || !description || !amount) throw new Error(`بيانات غير صالحة في السطر ${i + 2}`);
-    const external = ii >= 0 && cols[ii] ? String(cols[ii]).trim() : `${date}|${amount}|${reference}|${description}`;
-    return { account_id: accountId, transaction_date: date, description, reference: reference || null, external_id: external, amount, import_batch: new Date().toISOString() };
+    let external = ii >= 0 && cols[ii] ? String(cols[ii]).trim() : `${date}|${amount}|${reference}|${description}`;
+    if (!(ii >= 0 && cols[ii])) {
+      const occurrence = (seen.get(external) || 0) + 1; seen.set(external, occurrence);
+      if (occurrence > 1) external = `${external}#${occurrence}`;
+    }
+    return { account_id: accountId, transaction_date: date, description, reference: reference || null, external_id: external, amount, import_batch: batch };
   });
+}
+
+function matchError(e) {
+  const message = e?.message || '';
+  if (e?.code === '23505' || /duplicate key|unique/i.test(message)) return 'هذا البند مرتبط بحركة بنكية أخرى مسبقاً';
+  return message || 'تعذّر اعتماد المطابقة';
 }
 
 export default function BankReconciliationPage() {
@@ -78,6 +138,9 @@ export default function BankReconciliationPage() {
   const [err, setErr] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountForm, setAccountForm] = useState(ACCOUNT_EMPTY);
+  const [manual, setManual] = useState(null);
+  const [manualKind, setManualKind] = useState('expense');
+  const [manualQuery, setManualQuery] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function load(preferredAccount) {
@@ -95,12 +158,30 @@ export default function BankReconciliationPage() {
   async function changeAccount(id) { setAccountId(id); await load(id); }
 
   const matchedIds = useMemo(() => new Set((state?.transactions || []).flatMap((t) => [t.matched_expense_id, t.matched_invoice_payment_id]).filter(Boolean)), [state]);
+  const expenseById = useMemo(() => new Map((state?.expenses || []).map((x) => [x.id, x])), [state]);
+  const paymentById = useMemo(() => new Map((state?.payments || []).map((x) => [x.id, x])), [state]);
   const rows = useMemo(() => (state?.transactions || []).map((tx) => ({ ...tx, suggestion: tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, matchedIds) : null })), [state, matchedIds]);
   const visible = rows.filter((r) => filter === 'all' || (filter === 'suggested' ? Boolean(r.suggestion) : r.status === filter));
   const matched = rows.filter((r) => r.status === 'matched').length;
   const pending = rows.filter((r) => r.status === 'unmatched').length;
   const suggested = rows.filter((r) => r.suggestion).length;
   const balance = (state?.accounts.find((a) => a.id === accountId)?.opening_balance || 0) + rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+
+  function matchedLabel(r) {
+    if (r.matched_expense_id) return expenseById.get(r.matched_expense_id)?.description || 'مصروف مرتبط';
+    if (r.matched_invoice_payment_id) {
+      const p = paymentById.get(r.matched_invoice_payment_id);
+      return p ? `دفعة فاتورة ${p.invoices?.number || '—'}` : 'دفعة مرتبطة';
+    }
+    return null;
+  }
+  function openManual(tx) {
+    setManual(tx); setManualKind(Number(tx.amount) < 0 ? 'expense' : 'payment'); setManualQuery('');
+  }
+  const manualList = useMemo(
+    () => (manual && state ? manualCandidates(manual, manualKind, state.expenses, state.payments, matchedIds, manualQuery) : []),
+    [manual, manualKind, state, matchedIds, manualQuery],
+  );
 
   async function addAccount(e) {
     e.preventDefault(); if (!accountForm.name.trim()) return;
@@ -121,16 +202,17 @@ export default function BankReconciliationPage() {
     } catch (e2) { toast(e2.message || 'تعذّر استيراد الملف', 'err'); }
     finally { setSaving(false); }
   }
-  async function match(tx, candidate) {
+  // confidence = null تعني مطابقة يدوية اعتمدها المستخدم بنفسه، تمييزاً عن ثقة الخوارزمية.
+  async function match(tx, candidate, manualMatch) {
     setSaving(true);
     try {
       await updateBankTransaction(tx.id, {
-        status: 'matched', confidence: candidate.confidence,
+        status: 'matched', confidence: manualMatch ? null : candidate.confidence,
         matched_expense_id: candidate.kind === 'expense' ? candidate.id : null,
         matched_invoice_payment_id: candidate.kind === 'payment' ? candidate.id : null,
       });
-      toast('تم اعتماد المطابقة'); await load(accountId);
-    } catch (e) { toast(e.message || 'تعذّر اعتماد المطابقة', 'err'); }
+      setManual(null); toast(manualMatch ? 'تمت المطابقة اليدوية' : 'تم اعتماد المطابقة'); await load(accountId);
+    } catch (e) { toast(matchError(e), 'err'); }
     finally { setSaving(false); }
   }
   async function exclude(tx) {
@@ -147,7 +229,7 @@ export default function BankReconciliationPage() {
     try {
       const expense = await createCompanyExpense({ description: tx.description, category: 'other', amount: Math.abs(Number(tx.amount)), vat_amount: 0, expense_date: tx.transaction_date, payment_status: 'paid', recurrence: 'none', note: tx.reference ? `مرجع البنك: ${tx.reference}` : null });
       await updateBankTransaction(tx.id, { status: 'matched', matched_expense_id: expense.id, matched_invoice_payment_id: null, confidence: 100 });
-      toast('تم إنشاء المصروف ومطابقته'); await load(accountId);
+      setManual(null); toast('تم إنشاء المصروف ومطابقته'); await load(accountId);
     } catch (e) { toast(e.message || 'تعذّر إنشاء المصروف', 'err'); }
     finally { setSaving(false); }
   }
@@ -167,7 +249,7 @@ export default function BankReconciliationPage() {
       {state.accounts.length === 0 ? <div className="card"><Empty title="لا يوجد حساب بنكي" desc="أضف الحساب أولاً، ثم استورد كشف CSV." /><div className="empty-action"><button className="btn" onClick={() => setAccountOpen(true)}>إضافة حساب بنكي</button></div></div> : <>
         <div className="card bank-toolbar">
           <Select label="الحساب" value={accountId} onChange={(e) => changeAccount(e.target.value)} options={state.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.last_four ? ` • ${a.last_four}` : ''}` }))} />
-          <div className="csv-hint">الأعمدة المدعومة: date, description, amount, reference — أو debit / credit</div>
+          <div className="csv-hint">الأعمدة المدعومة: date, description, amount, reference — أو debit / credit<br />المطابقة التلقائية تقارن المبلغ (±{fmtNum(AMOUNT_TOLERANCE)}) والتاريخ (±{fmtNum(DATE_WINDOW)} يوم) والمرجع.</div>
         </div>
         <div className="kpis bank-kpis">
           <KpiCard label="الرصيد المحسوب" value={`${fmtMoney(balance)} ⃁`} trend={account?.bank_name || account?.name} definition="الرصيد الافتتاحي للحساب مضافًا إليه صافي جميع الحركات المستوردة." period="جميع حركات الحساب المحدد" formula="الرصيد الافتتاحي + الإيداعات − المسحوبات" breakdown={[{ label: 'الرصيد الافتتاحي', value: `${fmtMoney(account?.opening_balance || 0)} ⃁` }, { label: 'صافي الحركات', value: `${fmtMoney(rows.reduce((s, r) => s + Number(r.amount || 0), 0))} ⃁` }, { label: 'الرصيد المحسوب', value: `${fmtMoney(balance)} ⃁` }]} note="يجب أن يطابق الرصيد الختامي في كشف البنك بعد استيراد جميع الحركات." />
@@ -183,11 +265,56 @@ export default function BankReconciliationPage() {
             { key: 'transaction_date', label: 'التاريخ', render: (r) => <DateText v={r.transaction_date} /> },
             { key: 'amount', label: 'المبلغ', render: (r) => <Money v={r.amount} className={Number(r.amount) < 0 ? 'bank-out' : 'bank-in'} /> },
             { key: 'status', label: 'الحالة', render: (r) => <StatusPill status={r.suggestion ? 'suggested' : r.status} map={STATUS} /> },
-            { key: 'suggestion', label: 'المطابقة', render: (r) => r.suggestion ? <div className="match-suggestion"><b>{r.suggestion.label}</b><small>ثقة {fmtNum(r.suggestion.confidence)}%</small></div> : r.status === 'matched' ? <span>تم الاعتماد</span> : '—' },
-            { key: 'actions', label: 'إجراء', align: 'left', render: (r) => <div className="row-actions">{r.suggestion && <button className="btn sm" disabled={saving} onClick={() => match(r, r.suggestion)}>اعتماد</button>}{r.status === 'unmatched' && Number(r.amount) < 0 && !r.suggestion && <button className="btn ghost sm" disabled={saving} onClick={() => expenseFromTransaction(r)}>إنشاء مصروف</button>}{r.status === 'unmatched' && <button className="btn ghost sm" onClick={() => exclude(r)}>استبعاد</button>}{['matched', 'excluded'].includes(r.status) && <button className="btn ghost sm" onClick={() => undo(r)}>تراجع</button>}</div> },
+            {
+              key: 'suggestion',
+              label: 'المطابقة',
+              render: (r) => {
+                if (r.suggestion) {
+                  return <div className="match-suggestion"><b>{r.suggestion.label}</b><small>{r.suggestion.refHit ? 'تطابق المرجع' : `ثقة ${fmtNum(r.suggestion.confidence)}%`}</small></div>;
+                }
+                if (r.status === 'matched') {
+                  return <div className="match-suggestion"><b>{matchedLabel(r) || 'تم الاعتماد'}</b><small className="match-note">{r.confidence == null ? 'مطابقة يدوية' : `ثقة ${fmtNum(r.confidence)}%`}</small></div>;
+                }
+                return '—';
+              },
+            },
+            { key: 'actions', label: 'إجراء', align: 'left', render: (r) => <div className="row-actions">{r.suggestion && <button className="btn sm" disabled={saving} onClick={() => match(r, r.suggestion)}>اعتماد</button>}{r.status === 'unmatched' && <button className="btn ghost sm" disabled={saving} onClick={() => openManual(r)}>طابق يدوياً</button>}{r.status === 'unmatched' && Number(r.amount) < 0 && !r.suggestion && <button className="btn ghost sm" disabled={saving} onClick={() => expenseFromTransaction(r)}>إنشاء مصروف</button>}{r.status === 'unmatched' && <button className="btn ghost sm" onClick={() => exclude(r)}>استبعاد</button>}{['matched', 'excluded'].includes(r.status) && <button className="btn ghost sm" onClick={() => undo(r)}>تراجع</button>}</div> },
           ]} />
         </div>
       </>}
+
+      <Modal open={Boolean(manual)} onClose={() => !saving && setManual(null)} title="مطابقة يدوية" subtitle="اختر البند الذي تمثّله هذه الحركة البنكية" size="lg" footer={<><button type="button" className="btn ghost" onClick={() => setManual(null)}>إغلاق</button>{manual && Number(manual.amount) < 0 && <button type="button" className="btn" disabled={saving} onClick={() => expenseFromTransaction(manual)}>إنشاء مصروف جديد بدلاً من ذلك</button>}</>}>
+        {manual && <>
+          <div className="manual-tx">
+            <div><span className="manual-lbl">الحركة</span><b>{manual.description}</b></div>
+            <div><span className="manual-lbl">التاريخ</span><DateText v={manual.transaction_date} /></div>
+            <div><span className="manual-lbl">المبلغ</span><Money v={manual.amount} className={Number(manual.amount) < 0 ? 'bank-out' : 'bank-in'} /></div>
+            {manual.reference && <div><span className="manual-lbl">المرجع</span><small dir="ltr">{manual.reference}</small></div>}
+          </div>
+          <div className="manual-filters">
+            <Select label="نوع البند" value={manualKind} onChange={(e) => setManualKind(e.target.value)} options={[{ value: 'expense', label: 'مصروف شركة' }, { value: 'payment', label: 'دفعة فاتورة' }]} />
+            <Input label="بحث" value={manualQuery} onChange={(e) => setManualQuery(e.target.value)} placeholder="وصف، مورّد، رقم فاتورة أو مبلغ" />
+          </div>
+          {manualList.length === 0
+            ? <Empty title="لا توجد بنود مطابقة" desc="غيّر نوع البند أو كلمة البحث، أو أنشئ مصروفاً جديداً." />
+            : <ul className="cand-list">
+              {manualList.map((c) => (
+                <li key={`${c.kind}-${c.id}`}>
+                  <button type="button" className="cand" disabled={saving} onClick={() => match(manual, c, true)}>
+                    <span className="cand-main"><b>{c.label}</b>{c.meta && <small>{c.meta}</small>}</span>
+                    <span className="cand-side">
+                      <Money v={c.amount} />
+                      <small className={Math.abs(c.diff) < 0.01 ? 'cand-ok' : 'cand-diff'}>
+                        {Math.abs(c.diff) < 0.01 ? 'مبلغ مطابق' : `فرق ${fmtMoney(Math.abs(c.diff))} ⃁`} · {c.days === 0 ? 'نفس اليوم' : `${fmtNum(c.days)} يوم`}
+                      </small>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>}
+          {manualList.length === MANUAL_LIMIT && <p className="cand-more">تُعرض أقرب {fmtNum(MANUAL_LIMIT)} نتيجة — استخدم البحث لتضييق القائمة.</p>}
+        </>}
+      </Modal>
 
       <Modal open={accountOpen} onClose={() => !saving && setAccountOpen(false)} title="حساب بنكي جديد" subtitle="لا تُخزّن بيانات الدخول أو رقم الحساب الكامل" as="form" onSubmit={addAccount} size="sm" footer={<><button type="button" className="btn ghost" onClick={() => setAccountOpen(false)}>إلغاء</button><button className="btn" disabled={saving}>حفظ الحساب</button></>}>
         <Input label="اسم مختصر للحساب" value={accountForm.name} onChange={(e) => setAccountForm((f) => ({ ...f, name: e.target.value }))} placeholder="الحساب التشغيلي" required />
@@ -200,6 +327,8 @@ export default function BankReconciliationPage() {
 }
 
 const CSS = `
-.bank-head{margin-bottom:16px;align-items:flex-end}.bank-head h2{margin:0}.bank-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.bank-actions,.row-actions{display:flex;gap:8px;flex-wrap:wrap}.bank-toolbar{display:flex;align-items:flex-end;gap:18px;margin-bottom:14px;padding:14px}.bank-toolbar .field{margin:0;min-width:250px}.csv-hint{color:var(--muted);font-size:12px;padding-bottom:10px}.bank-kpis{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px}.bank-tabs{margin-bottom:12px;width:max-content;max-width:100%;overflow:auto}.bank-out{color:var(--neg)}.bank-in{color:var(--green)}.match-suggestion{display:flex;flex-direction:column;gap:3px}.match-suggestion small{color:var(--green)}.empty-action{text-align:center;padding-bottom:20px}
-@media(max-width:850px){.bank-kpis{grid-template-columns:1fr}.bank-toolbar{align-items:stretch;flex-direction:column}.bank-toolbar .field{min-width:0}.bank-head{align-items:flex-start}}
+.bank-head{margin-bottom:16px;align-items:flex-end}.bank-head h2{margin:0}.bank-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.bank-actions,.row-actions{display:flex;gap:8px;flex-wrap:wrap}.bank-toolbar{display:flex;align-items:flex-end;gap:18px;margin-bottom:14px;padding:14px}.bank-toolbar .field{margin:0;min-width:250px}.csv-hint{color:var(--muted);font-size:12px;padding-bottom:10px;line-height:1.7}.bank-kpis{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px}.bank-tabs{margin-bottom:12px;width:max-content;max-width:100%;overflow:auto}.bank-out{color:var(--neg)}.bank-in{color:var(--green)}.match-suggestion{display:flex;flex-direction:column;gap:3px}.match-suggestion small{color:var(--green)}.match-suggestion .match-note{color:var(--muted)}.empty-action{text-align:center;padding-bottom:20px}
+.manual-tx{display:flex;flex-wrap:wrap;gap:8px 22px;padding:12px 14px;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-soft,transparent)}.manual-tx>div{display:flex;flex-direction:column;gap:2px}.manual-lbl{color:var(--muted);font-size:11px}.manual-filters{display:flex;gap:14px;flex-wrap:wrap}.manual-filters .field{flex:1;min-width:200px}
+.cand-list{list-style:none;margin:6px 0 0;padding:0;max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}.cand-list li+li{border-top:1px solid var(--line)}.cand{display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%;padding:11px 13px;background:none;border:0;cursor:pointer;text-align:start;font:inherit;color:inherit}.cand:hover:not(:disabled){background:var(--hover,rgba(0,0,0,.04))}.cand:disabled{opacity:.6;cursor:default}.cand-main,.cand-side{display:flex;flex-direction:column;gap:3px}.cand-side{align-items:flex-end;text-align:end;white-space:nowrap}.cand-main small{color:var(--muted);font-size:12px}.cand-ok{color:var(--green);font-size:11px}.cand-diff{color:var(--muted);font-size:11px}.cand-more{color:var(--muted);font-size:12px;margin:8px 0 0}
+@media(max-width:850px){.bank-kpis{grid-template-columns:1fr}.bank-toolbar{align-items:stretch;flex-direction:column}.bank-toolbar .field{min-width:0}.bank-head{align-items:flex-start}.cand{flex-direction:column;align-items:flex-start;gap:6px}.cand-side{align-items:flex-start;text-align:start}}
 `;

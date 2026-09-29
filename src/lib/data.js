@@ -252,6 +252,27 @@ export async function getBankTransactionAudit(transactionId) {
     .select('*').eq('transaction_id', transactionId).order('created_at', { ascending: false });
   if (error) throw error; return data || [];
 }
+// الأقساط غير المسددة بالكامل فقط — المتبقي هو ما يُطابَق مع الحركة البنكية.
+export async function getOpenLoanInstallments() {
+  const { data, error } = await supabase.from('loan_installments')
+    .select('id,loan_id,seq,due_date,amount,paid_amount,status,note,loans!inner(name,lender)')
+    .neq('status', 'paid').order('due_date');
+  if (error) throw error; return data || [];
+}
+export async function getReconciliationLoanPayments() {
+  const { data, error } = await supabase.from('loan_payments')
+    .select('id,loan_id,installment_id,amount,paid_at,reference,note,loans!inner(name,lender)')
+    .order('paid_at', { ascending: false });
+  if (error) throw error; return data || [];
+}
+export async function createLoanPayment(p) {
+  const { data, error } = await supabase.from('loan_payments').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function deleteLoanPayment(id) {
+  const { error } = await supabase.from('loan_payments').delete().eq('id', id);
+  if (error) throw error;
+}
 // بنود «الجدول التقديري» (عمالة/إشراف/مواد/نقل/أخرى بلا وصف مخصّص) مقابل بنود التكلفة الحرة
 // التي يضيفها المستخدم يدوياً بنوع ووصف ومبلغ من اختياره.
 // يستبدل بنود الجدول التقديري فقط دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً

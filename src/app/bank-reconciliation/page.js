@@ -4,6 +4,7 @@ import {
   getBankAccounts, createBankAccount, getBankTransactions, importBankTransactions, updateBankTransaction,
   getCompanyExpenses, createCompanyExpense, getReconciliationInvoicePayments,
   getReconciliationPeriods, closeReconciliationPeriod, reopenReconciliationPeriod, getBankTransactionAudit,
+  getOpenLoanInstallments, getReconciliationLoanPayments, createLoanPayment, deleteLoanPayment,
 } from '@/lib/data';
 import { fmtMoney, fmtNum } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Money, DateText, StatusPill, KpiCard } from '@/components';
@@ -41,18 +42,31 @@ function monthLabel(month) {
 function normalizeRef(value) {
   return String(value || '').replace(/[^0-9a-zA-Z؀-ۿ]/g, '').toUpperCase();
 }
-function candidatePool(kind, expenses, payments) {
-  return kind === 'expense'
-    ? expenses.map((x) => ({
+function candidatePool(kind, expenses, payments, installments) {
+  if (kind === 'expense') {
+    return expenses.map((x) => ({
       kind: 'expense', id: x.id, date: x.expense_date, amount: Number(x.amount), label: x.description,
       meta: [x.vendor, x.note].filter(Boolean).join(' · '),
       haystack: normalizeRef(`${x.description} ${x.vendor || ''} ${x.note || ''}`),
-    }))
-    : payments.map((x) => ({
-      kind: 'payment', id: x.id, date: x.paid_at, amount: Number(x.amount), label: `دفعة فاتورة ${x.invoices?.number || '—'}`,
-      meta: x.note || '',
-      haystack: normalizeRef(`${x.invoices?.number || ''} ${x.note || ''}`),
     }));
+  }
+  // القسط يُطابَق بالمتبقي عليه لا بقيمته الكاملة، فقسط مسدَّد جزئياً يبقى مرشّحاً بفارقه.
+  if (kind === 'loan_installment') {
+    return (installments || [])
+      .map((x) => ({
+        kind: 'loan_installment', id: x.id, loanId: x.loan_id, date: x.due_date,
+        amount: Number(x.amount) - Number(x.paid_amount || 0),
+        label: `قسط ${x.seq} — ${x.loans?.name || 'قرض'}`,
+        meta: [x.loans?.lender, x.note].filter(Boolean).join(' · '),
+        haystack: normalizeRef(`${x.loans?.name || ''} ${x.loans?.lender || ''} ${x.note || ''}`),
+      }))
+      .filter((x) => x.amount > 0.009);
+  }
+  return payments.map((x) => ({
+    kind: 'payment', id: x.id, date: x.paid_at, amount: Number(x.amount), label: `دفعة فاتورة ${x.invoices?.number || '—'}`,
+    meta: x.note || '',
+    haystack: normalizeRef(`${x.invoices?.number || ''} ${x.note || ''}`),
+  }));
 }
 function scoreCandidate(tx, candidate) {
   const amount = Math.abs(Number(tx.amount));
@@ -66,8 +80,13 @@ function scoreCandidate(tx, candidate) {
   if (refHit) confidence = Math.max(confidence, 96);
   return { ...candidate, days, diff, refHit, confidence: Math.max(40, Math.min(100, confidence)) };
 }
-function bestCandidate(tx, expenses, payments, matchedIds) {
-  const scored = candidatePool(Number(tx.amount) < 0 ? 'expense' : 'payment', expenses, payments)
+// الحركة الصادرة قد تكون مصروفاً أو قسط قرض، فيُرشَّح الاثنان معاً ويفوز الأعلى ثقة.
+function bestCandidate(tx, expenses, payments, installments, matchedIds) {
+  const outgoing = Number(tx.amount) < 0;
+  const pool = outgoing
+    ? [...candidatePool('expense', expenses, payments, installments), ...candidatePool('loan_installment', expenses, payments, installments)]
+    : candidatePool('payment', expenses, payments, installments);
+  const scored = pool
     .filter((c) => !matchedIds.has(c.id))
     .map((c) => scoreCandidate(tx, c))
     .filter(Boolean)
@@ -78,10 +97,10 @@ function bestCandidate(tx, expenses, payments, matchedIds) {
   if (scored[1] && scored[1].confidence === top.confidence) return null;
   return top;
 }
-function manualCandidates(tx, kind, expenses, payments, matchedIds, query) {
+function manualCandidates(tx, kind, expenses, payments, installments, matchedIds, query) {
   const amount = Math.abs(Number(tx.amount));
   const q = query.trim().toLowerCase();
-  return candidatePool(kind, expenses, payments)
+  return candidatePool(kind, expenses, payments, installments)
     .filter((c) => !matchedIds.has(c.id))
     .filter((c) => !q || `${c.label} ${c.meta} ${c.amount}`.toLowerCase().includes(q))
     .map((c) => ({ ...c, diff: c.amount - amount, days: dateDistance(tx.transaction_date, c.date) }))
@@ -202,18 +221,33 @@ export default function BankReconciliationPage() {
     try {
       const accounts = await getBankAccounts();
       const chosen = preferredAccount || accountId || accounts[0]?.id || '';
-      const [transactions, expenses, payments, periods] = await Promise.all([
+      const [transactions, expenses, payments, periods, installments, loanPayments] = await Promise.all([
         chosen ? getBankTransactions(chosen) : Promise.resolve([]),
         getCompanyExpenses().catch(() => []), getReconciliationInvoicePayments().catch(() => []),
         chosen ? getReconciliationPeriods(chosen).catch(() => []) : Promise.resolve([]),
+        getOpenLoanInstallments().catch(() => []), getReconciliationLoanPayments().catch(() => []),
       ]);
-      setAccountId(chosen); setState({ accounts, transactions, expenses, payments, periods });
+      setAccountId(chosen); setState({ accounts, transactions, expenses, payments, periods, installments, loanPayments });
     } catch (e) { setErr(e.message || 'تعذّر تحميل المطابقة البنكية'); }
   }
   useEffect(() => { load(); }, []);
   async function changeAccount(id) { setAccountId(id); setCloseMonth(''); await load(id); }
 
-  const matchedIds = useMemo(() => new Set((state?.transactions || []).flatMap((t) => [t.matched_expense_id, t.matched_invoice_payment_id]).filter(Boolean)), [state]);
+  // القسط المرتبط بدفعة قرض مربوطة بحركة يُستبعد من الترشيح، وكذلك البنود المرتبطة مباشرة.
+  const loanPaymentById = useMemo(() => new Map((state?.loanPayments || []).map((x) => [x.id, x])), [state]);
+  const matchedIds = useMemo(() => {
+    const ids = new Set();
+    (state?.transactions || []).forEach((t) => {
+      if (t.matched_expense_id) ids.add(t.matched_expense_id);
+      if (t.matched_invoice_payment_id) ids.add(t.matched_invoice_payment_id);
+      if (t.matched_loan_payment_id) {
+        ids.add(t.matched_loan_payment_id);
+        const installmentId = loanPaymentById.get(t.matched_loan_payment_id)?.installment_id;
+        if (installmentId) ids.add(installmentId);
+      }
+    });
+    return ids;
+  }, [state, loanPaymentById]);
   const expenseById = useMemo(() => new Map((state?.expenses || []).map((x) => [x.id, x])), [state]);
   const paymentById = useMemo(() => new Map((state?.payments || []).map((x) => [x.id, x])), [state]);
   const periodByMonth = useMemo(() => new Map((state?.periods || []).map((p) => [p.month, p])), [state]);
@@ -225,7 +259,7 @@ export default function BankReconciliationPage() {
       ...tx,
       locked,
       duplicate: duplicateIds.has(tx.id),
-      suggestion: !locked && tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, matchedIds) : null,
+      suggestion: !locked && tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, state.installments, matchedIds) : null,
     };
   }), [state, matchedIds, closedMonths, duplicateIds]);
   const visible = rows.filter((r) => filter === 'all' || (filter === 'suggested' ? Boolean(r.suggestion) : r.status === filter));
@@ -255,15 +289,19 @@ export default function BankReconciliationPage() {
       const p = paymentById.get(r.matched_invoice_payment_id);
       return p ? `دفعة فاتورة ${p.invoices?.number || '—'}` : 'دفعة مرتبطة';
     }
+    if (r.matched_loan_payment_id) {
+      const p = loanPaymentById.get(r.matched_loan_payment_id);
+      return p ? `دفعة قرض — ${p.loans?.name || 'قرض'}` : 'دفعة قرض مرتبطة';
+    }
     return null;
   }
+  const manualList = useMemo(
+    () => (manual && state ? manualCandidates(manual, manualKind, state.expenses, state.payments, state.installments, matchedIds, manualQuery) : []),
+    [manual, manualKind, state, matchedIds, manualQuery],
+  );
   function openManual(tx) {
     setManual(tx); setManualKind(Number(tx.amount) < 0 ? 'expense' : 'payment'); setManualQuery('');
   }
-  const manualList = useMemo(
-    () => (manual && state ? manualCandidates(manual, manualKind, state.expenses, state.payments, matchedIds, manualQuery) : []),
-    [manual, manualKind, state, matchedIds, manualQuery],
-  );
   async function openAudit(tx) {
     setAudit({ tx, rows: null });
     try { setAudit({ tx, rows: await getBankTransactionAudit(tx.id) }); }
@@ -290,32 +328,50 @@ export default function BankReconciliationPage() {
     finally { setSaving(false); }
   }
   // confidence = null تعني مطابقة يدوية اعتمدها المستخدم بنفسه، تمييزاً عن ثقة الخوارزمية.
+  // القسط ليس سجلاً قابلاً للربط مباشرة: نُنشئ له دفعة قرض من الحركة ثم نربط الدفعة.
   async function match(tx, candidate, manualMatch) {
     setSaving(true);
     try {
+      let loanPaymentId = null;
+      if (candidate.kind === 'loan_installment') {
+        const created = await createLoanPayment({
+          loan_id: candidate.loanId, installment_id: candidate.id,
+          amount: Math.abs(Number(tx.amount)), paid_at: tx.transaction_date,
+          method: 'bank_transfer', reference: tx.reference || null,
+          note: 'أُنشئت من المطابقة البنكية',
+        });
+        loanPaymentId = created.id;
+      }
       await updateBankTransaction(tx.id, {
         status: 'matched', confidence: manualMatch ? null : candidate.confidence,
         matched_expense_id: candidate.kind === 'expense' ? candidate.id : null,
         matched_invoice_payment_id: candidate.kind === 'payment' ? candidate.id : null,
+        matched_loan_payment_id: loanPaymentId,
       });
       setManual(null); toast(manualMatch ? 'تمت المطابقة اليدوية' : 'تم اعتماد المطابقة'); await load(accountId);
     } catch (e) { toast(matchError(e), 'err'); }
     finally { setSaving(false); }
   }
-  async function exclude(tx) {
-    try { await updateBankTransaction(tx.id, { status: 'excluded', confidence: null, matched_expense_id: null, matched_invoice_payment_id: null }); toast('تم استبعاد الحركة'); await load(accountId); }
-    catch (e) { toast(e.message || 'تعذّر الاستبعاد', 'err'); }
+  // فك الارتباط يحذف دفعة القرض التي أنشأتها المطابقة، وإلا بقي القسط مسدَّداً بلا حركة تقابله.
+  async function clearMatch(tx, status, message) {
+    setSaving(true);
+    try {
+      await updateBankTransaction(tx.id, {
+        status, confidence: null, matched_expense_id: null, matched_invoice_payment_id: null, matched_loan_payment_id: null,
+      });
+      if (tx.matched_loan_payment_id) await deleteLoanPayment(tx.matched_loan_payment_id);
+      toast(message); await load(accountId);
+    } catch (e) { toast(e.message || 'تعذّر تنفيذ الإجراء', 'err'); }
+    finally { setSaving(false); }
   }
-  async function undo(tx) {
-    try { await updateBankTransaction(tx.id, { status: 'unmatched', confidence: null, matched_expense_id: null, matched_invoice_payment_id: null }); toast('أُعيدت الحركة للمراجعة'); await load(accountId); }
-    catch (e) { toast(e.message || 'تعذّر التراجع', 'err'); }
-  }
+  const exclude = (tx) => clearMatch(tx, 'excluded', 'تم استبعاد الحركة');
+  const undo = (tx) => clearMatch(tx, 'unmatched', 'أُعيدت الحركة للمراجعة');
   async function expenseFromTransaction(tx) {
     if (Number(tx.amount) >= 0) return;
     setSaving(true);
     try {
       const expense = await createCompanyExpense({ description: tx.description, category: 'other', amount: Math.abs(Number(tx.amount)), vat_amount: 0, expense_date: tx.transaction_date, payment_status: 'paid', recurrence: 'none', note: tx.reference ? `مرجع البنك: ${tx.reference}` : null });
-      await updateBankTransaction(tx.id, { status: 'matched', matched_expense_id: expense.id, matched_invoice_payment_id: null, confidence: 100 });
+      await updateBankTransaction(tx.id, { status: 'matched', matched_expense_id: expense.id, matched_invoice_payment_id: null, matched_loan_payment_id: null, confidence: 100 });
       setManual(null); toast('تم إنشاء المصروف ومطابقته'); await load(accountId);
     } catch (e) { toast(e.message || 'تعذّر إنشاء المصروف', 'err'); }
     finally { setSaving(false); }
@@ -456,7 +512,9 @@ export default function BankReconciliationPage() {
             {manual.reference && <div><span className="manual-lbl">المرجع</span><small dir="ltr">{manual.reference}</small></div>}
           </div>
           <div className="manual-filters">
-            <Select label="نوع البند" value={manualKind} onChange={(e) => setManualKind(e.target.value)} options={[{ value: 'expense', label: 'مصروف شركة' }, { value: 'payment', label: 'دفعة فاتورة' }]} />
+            <Select label="نوع البند" value={manualKind} onChange={(e) => setManualKind(e.target.value)} options={Number(manual.amount) < 0
+              ? [{ value: 'expense', label: 'مصروف شركة' }, { value: 'loan_installment', label: 'قسط قرض' }, { value: 'payment', label: 'دفعة فاتورة' }]
+              : [{ value: 'payment', label: 'دفعة فاتورة' }, { value: 'expense', label: 'مصروف شركة' }, { value: 'loan_installment', label: 'قسط قرض' }]} />
             <Input label="بحث" value={manualQuery} onChange={(e) => setManualQuery(e.target.value)} placeholder="وصف، مورّد، رقم فاتورة أو مبلغ" />
           </div>
           {manualList.length === 0

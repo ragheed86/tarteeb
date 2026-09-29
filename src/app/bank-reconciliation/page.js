@@ -26,6 +26,8 @@ const AMOUNT_TOLERANCE = 1;
 const DATE_WINDOW = 14;
 const MIN_CONFIDENCE = 60;
 const MANUAL_LIMIT = 40;
+// نافذة كشف التكرار داخل الكشف نفسه: نفس المبلغ ونفس الوصف خلال 3 أيام.
+const DUPLICATE_WINDOW = 3;
 
 function dateDistance(a, b) {
   return Math.abs(new Date(a).setHours(0, 0, 0, 0) - new Date(b).setHours(0, 0, 0, 0)) / 86400000;
@@ -142,6 +144,43 @@ function matchError(e) {
   return message || 'تعذّر اعتماد المطابقة';
 }
 
+// تكرار محتمل داخل الكشف: حركتان بنفس المبلغ ونفس الوصف خلال نافذة قصيرة.
+// لا نحذف شيئاً — نرفع راية للمراجع لأن التكرار قد يكون حقيقياً (شحنتان بنفس السعر).
+function findDuplicates(transactions) {
+  const groups = new Map();
+  transactions.forEach((t) => {
+    const key = `${Math.abs(Number(t.amount))}|${normalizeRef(t.description)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  });
+  const flagged = new Set();
+  groups.forEach((list) => {
+    if (list.length < 2) return;
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length; j += 1) {
+        if (dateDistance(list[i].transaction_date, list[j].transaction_date) <= DUPLICATE_WINDOW) {
+          flagged.add(list[i].id); flagged.add(list[j].id);
+        }
+      }
+    }
+  });
+  return flagged;
+}
+
+function csvCell(value) {
+  const v = value == null ? '' : String(value);
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+}
+function downloadCsv(rows, filename) {
+  // BOM حتى يفتح Excel العربية بترميز صحيح.
+  const blob = new Blob([`﻿${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
 export default function BankReconciliationPage() {
   const fileRef = useRef(null);
   const [state, setState] = useState(null);
@@ -179,10 +218,16 @@ export default function BankReconciliationPage() {
   const paymentById = useMemo(() => new Map((state?.payments || []).map((x) => [x.id, x])), [state]);
   const periodByMonth = useMemo(() => new Map((state?.periods || []).map((p) => [p.month, p])), [state]);
   const closedMonths = useMemo(() => new Set((state?.periods || []).filter((p) => p.status === 'closed').map((p) => p.month)), [state]);
+  const duplicateIds = useMemo(() => findDuplicates(state?.transactions || []), [state]);
   const rows = useMemo(() => (state?.transactions || []).map((tx) => {
     const locked = closedMonths.has(monthOf(tx.transaction_date));
-    return { ...tx, locked, suggestion: !locked && tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, matchedIds) : null };
-  }), [state, matchedIds, closedMonths]);
+    return {
+      ...tx,
+      locked,
+      duplicate: duplicateIds.has(tx.id),
+      suggestion: !locked && tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, matchedIds) : null,
+    };
+  }), [state, matchedIds, closedMonths, duplicateIds]);
   const visible = rows.filter((r) => filter === 'all' || (filter === 'suggested' ? Boolean(r.suggestion) : r.status === filter));
   const matched = rows.filter((r) => r.status === 'matched').length;
   const pending = rows.filter((r) => r.status === 'unmatched').length;
@@ -198,6 +243,7 @@ export default function BankReconciliationPage() {
   const monthBalance = openingBalance + rows.filter((r) => monthOf(r.transaction_date) <= activeMonth).reduce((s, r) => s + Number(r.amount || 0), 0);
   const activePeriod = periodByMonth.get(activeMonth);
   const periodClosed = activePeriod?.status === 'closed';
+  const monthDuplicates = monthRows.filter((r) => r.duplicate).length;
   const statementInput = closeForm.statement_closing_balance === '' ? null : Number(closeForm.statement_closing_balance);
   const liveGap = statementInput == null ? null : statementInput - monthBalance;
   const closedGap = activePeriod?.statement_closing_balance == null ? null
@@ -289,6 +335,29 @@ export default function BankReconciliationPage() {
     catch (e) { toast(e.message || 'تعذّرت إعادة الفتح', 'err'); }
     finally { setSaving(false); }
   }
+  // تقرير ما قبل الإقفال: كل حركات الشهر بحالتها ومصدرها، مع رايات التكرار والفروقات.
+  function exportMonthReport() {
+    const header = ['التاريخ', 'الوصف', 'المرجع', 'المبلغ', 'الحالة', 'البند المطابق', 'نوع المطابقة', 'تكرار محتمل'];
+    const body = monthRows.map((r) => [
+      r.transaction_date, r.description, r.reference || '', r.amount,
+      STATUS[r.status]?.label || r.status,
+      matchedLabel(r) || '',
+      r.status === 'matched' ? (r.confidence == null ? 'يدوية' : `آلية ${r.confidence}%`) : '',
+      r.duplicate ? 'نعم' : '',
+    ]);
+    const summary = [
+      [],
+      ['إجمالي حركات الشهر', monthRows.length],
+      ['غير مطابقة', monthPending],
+      ['تكرارات محتملة', monthDuplicates],
+      ['الرصيد المحسوب حتى نهاية الشهر', monthBalance],
+    ];
+    if (activePeriod?.statement_closing_balance != null) {
+      summary.push(['الرصيد الختامي في كشف البنك', Number(activePeriod.statement_closing_balance)]);
+      summary.push(['الفرق', closedGap]);
+    }
+    downloadCsv([header, ...body, ...summary], `مطابقة-${activeMonth.slice(0, 7)}.csv`);
+  }
 
   if (err) return <ErrorBar message={err} />;
   if (!state) return <Loading />;
@@ -313,11 +382,13 @@ export default function BankReconciliationPage() {
           <div className="close-stats">
             <div><span>حركات الشهر</span><b>{fmtNum(monthRows.length)}</b></div>
             <div><span>غير مطابقة</span><b className={monthPending ? 'bank-out' : 'bank-in'}>{fmtNum(monthPending)}</b></div>
+            <div><span>تكرارات محتملة</span><b className={monthDuplicates ? 'bank-out' : 'bank-in'}>{fmtNum(monthDuplicates)}</b></div>
             <div><span>الرصيد حتى نهاية الشهر</span><b>{fmtMoney(monthBalance)} ⃁</b></div>
             {periodClosed && closedGap != null && <div><span>فرق الكشف</span><b className={Math.abs(closedGap) < 0.01 ? 'bank-in' : 'bank-out'}>{fmtMoney(closedGap)} ⃁</b></div>}
           </div>
           <div className="close-cta">
             <StatusPill status={periodClosed ? 'closed' : 'open'} map={PERIOD_STATUS} />
+            <button className="btn ghost sm" onClick={exportMonthReport}>تقرير الشهر</button>
             {periodClosed
               ? <button className="btn ghost sm" disabled={saving} onClick={reopen}>إعادة فتح الشهر</button>
               : <button className="btn sm" disabled={saving || monthPending > 0} onClick={() => { setCloseForm(CLOSE_EMPTY); setCloseOpen(true); }}>إقفال الشهر</button>}
@@ -336,7 +407,7 @@ export default function BankReconciliationPage() {
         </div>
         <div className="card" style={{ padding: '6px 0' }}>
           <DataTable rows={visible} empty={<Empty title="لا توجد حركات" desc="استورد كشف الحساب أو غيّر الفلتر." />} columns={[
-            { key: 'description', label: 'الحركة', primary: true, render: (r) => <><span className="nm">{r.description}</span>{r.reference && <><br /><small dir="ltr">{r.reference}</small></>}</> },
+            { key: 'description', label: 'الحركة', primary: true, render: (r) => <><span className="nm">{r.description}</span>{r.duplicate && <span className="dup-flag">تكرار محتمل</span>}{r.reference && <><br /><small dir="ltr">{r.reference}</small></>}</> },
             { key: 'transaction_date', label: 'التاريخ', render: (r) => <DateText v={r.transaction_date} /> },
             { key: 'amount', label: 'المبلغ', render: (r) => <Money v={r.amount} className={Number(r.amount) < 0 ? 'bank-out' : 'bank-in'} /> },
             { key: 'status', label: 'الحالة', render: (r) => <StatusPill status={r.suggestion ? 'suggested' : r.status} map={STATUS} /> },
@@ -448,7 +519,7 @@ const CSS = `
 .close-bar{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;padding:14px;margin-bottom:14px}.close-bar .field{margin:0;min-width:210px}.close-stats{display:flex;gap:22px;flex-wrap:wrap;padding-bottom:6px}.close-stats>div{display:flex;flex-direction:column;gap:2px}.close-stats span{color:var(--muted);font-size:11px}.close-cta{display:flex;align-items:center;gap:10px;margin-inline-start:auto;padding-bottom:4px}.close-block{flex-basis:100%;margin:2px 0 0;color:var(--neg);font-size:12px}.close-block.closed-note{color:var(--muted)}
 .manual-tx{display:flex;flex-wrap:wrap;gap:8px 22px;padding:12px 14px;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-soft,transparent)}.manual-tx>div{display:flex;flex-direction:column;gap:2px}.manual-lbl{color:var(--muted);font-size:11px}.manual-filters{display:flex;gap:14px;flex-wrap:wrap}.manual-filters .field{flex:1;min-width:200px}
 .cand-list{list-style:none;margin:6px 0 0;padding:0;max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}.cand-list li+li{border-top:1px solid var(--line)}.cand{display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%;padding:11px 13px;background:none;border:0;cursor:pointer;text-align:start;font:inherit;color:inherit}.cand:hover:not(:disabled){background:var(--hover,rgba(0,0,0,.04))}.cand:disabled{opacity:.6;cursor:default}.cand-main,.cand-side{display:flex;flex-direction:column;gap:3px}.cand-side{align-items:flex-end;text-align:end;white-space:nowrap}.cand-main small{color:var(--muted);font-size:12px}.cand-ok{color:var(--green);font-size:11px}.cand-diff{color:var(--muted);font-size:11px}.cand-more{color:var(--muted);font-size:12px;margin:8px 0 0}
-.gap-note{margin:2px 0 10px;font-size:12px}.gap-ok{color:var(--green)}.gap-bad{color:var(--neg)}
+.gap-note{margin:2px 0 10px;font-size:12px}.gap-ok{color:var(--green)}.gap-bad{color:var(--neg)}.dup-flag{display:inline-block;margin-inline-start:7px;padding:1px 7px;border-radius:999px;font-size:11px;color:var(--neg);border:1px solid var(--neg)}
 .audit-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;max-height:50vh;overflow:auto}.audit-list li{display:flex;flex-direction:column;gap:3px;padding:10px 13px}.audit-list li+li{border-top:1px solid var(--line)}.audit-list small{color:var(--muted);font-size:12px}.audit-list .audit-time{font-size:11px}
 @media(max-width:850px){.bank-kpis{grid-template-columns:1fr}.bank-toolbar{align-items:stretch;flex-direction:column}.bank-toolbar .field{min-width:0}.bank-head{align-items:flex-start}.close-bar{align-items:stretch;flex-direction:column}.close-bar .field{min-width:0}.close-cta{margin-inline-start:0}.cand{flex-direction:column;align-items:flex-start;gap:6px}.cand-side{align-items:flex-start;text-align:start}}
 `;

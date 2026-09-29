@@ -222,12 +222,12 @@ alter table public.bank_transaction_audit enable row level security;
 create policy permission_select on public.reconciliation_periods for select to authenticated
   using ((select public.has_permission('bank_reconciliation')));
 create policy permission_insert on public.reconciliation_periods for insert to authenticated
-  with check ((select public.has_permission('bank_reconciliation')));
+  with check ((select public.has_permission('bank_reconciliation')) and (select public.can_write()));
 create policy permission_update on public.reconciliation_periods for update to authenticated
-  using ((select public.has_permission('bank_reconciliation')))
-  with check ((select public.has_permission('bank_reconciliation')));
+  using ((select public.has_permission('bank_reconciliation')) and (select public.can_write()))
+  with check ((select public.has_permission('bank_reconciliation')) and (select public.can_write()));
 create policy permission_delete on public.reconciliation_periods for delete to authenticated
-  using ((select public.has_permission('bank_reconciliation')));
+  using ((select public.has_permission('bank_reconciliation')) and (select public.can_write()));
 
 -- السجل للقراءة فقط من التطبيق؛ الكتابة تتم عبر المشغّل بصلاحية definer.
 create policy permission_select on public.bank_transaction_audit for select to authenticated
@@ -237,3 +237,7 @@ grant select, insert, update, delete on public.reconciliation_periods to authent
 grant select on public.bank_transaction_audit to authenticated;
 grant execute on function public.close_reconciliation_period(uuid, date, numeric, text) to authenticated;
 grant execute on function public.reopen_reconciliation_period(uuid, date) to authenticated;
+
+-- دوال المشغّلات ليست نقاط RPC؛ سحب صلاحية التنفيذ يمنع استدعاءها من REST.
+revoke execute on function public.guard_closed_reconciliation_period() from public, anon, authenticated;
+revoke execute on function public.log_bank_transaction_change() from public, anon, authenticated;

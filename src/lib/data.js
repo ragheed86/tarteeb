@@ -227,6 +227,65 @@ export async function getReconciliationInvoicePayments() {
     .neq('invoices.status', 'refunded').order('paid_at', { ascending: false });
   if (error) throw error; return data || [];
 }
+// ---------- القروض والالتزامات المالية ----------
+export async function getLoans() {
+  const { data, error } = await supabase.from('loans')
+    .select('*').order('status').order('start_date', { ascending: false });
+  if (error) throw error; return data || [];
+}
+export async function createLoan(p) {
+  const { data, error } = await supabase.from('loans').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function updateLoan(id, p) {
+  const { data, error } = await supabase.from('loans').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removeLoan(id) {
+  const { error } = await supabase.from('loans').delete().eq('id', id);
+  if (error) throw error;
+}
+export async function getLoanInstallments(loanId) {
+  let query = supabase.from('loan_installments').select('*').order('due_date').order('seq');
+  if (loanId) query = query.eq('loan_id', loanId);
+  const { data, error } = await query;
+  if (error) throw error; return data || [];
+}
+// يستبدل جدول الأقساط بالكامل — يُستخدم عند إنشاء القرض أو إعادة جدولته.
+export async function replaceLoanInstallments(loanId, rows) {
+  const { error: delError } = await supabase.from('loan_installments').delete().eq('loan_id', loanId);
+  if (delError) throw delError;
+  if (!rows.length) return [];
+  const { data, error } = await supabase.from('loan_installments')
+    .insert(rows.map((r) => ({ ...r, loan_id: loanId }))).select('*');
+  if (error) throw error; return data || [];
+}
+export async function updateLoanInstallment(id, p) {
+  const { data, error } = await supabase.from('loan_installments').update(p).eq('id', id).select('*').single();
+  if (error) throw error; return data;
+}
+export async function getLoanPayments(loanId) {
+  let query = supabase.from('loan_payments').select('*').order('paid_at', { ascending: false }).order('created_at', { ascending: false });
+  if (loanId) query = query.eq('loan_id', loanId);
+  const { data, error } = await query;
+  if (error) throw error; return data || [];
+}
+export async function createLoanPayment(p) {
+  const { data, error } = await supabase.from('loan_payments').insert(p).select('*').single();
+  if (error) throw error; return data;
+}
+export async function removeLoanPayment(id) {
+  const { error } = await supabase.from('loan_payments').delete().eq('id', id);
+  if (error) throw error;
+}
+// دفعات القروض المرتبطة بحركات بنكية — لمنع ازدواجية المطابقة البنكية.
+export async function getLoanPaymentsForReconciliation() {
+  const { data, error } = await supabase.from('loan_payments')
+    .select('id,loan_id,amount,paid_at,reference,loans!inner(name,lender)')
+    .order('paid_at', { ascending: false });
+  if (error) throw error; return data || [];
+}
+
 // بنود «الجدول التقديري» (عمالة/إشراف/مواد/نقل/أخرى بلا وصف مخصّص) مقابل بنود التكلفة الحرة
 // التي يضيفها المستخدم يدوياً بنوع ووصف ومبلغ من اختياره.
 // يستبدل بنود الجدول التقديري فقط دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً

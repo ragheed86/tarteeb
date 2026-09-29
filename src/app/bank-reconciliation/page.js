@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getBankAccounts, createBankAccount, getBankTransactions, importBankTransactions, updateBankTransaction,
-  getCompanyExpenses, createCompanyExpense, getReconciliationInvoicePayments,
+  getCompanyExpenses, createCompanyExpense, getReconciliationInvoicePayments, getLoanPaymentsForReconciliation,
 } from '@/lib/data';
 import { fmtMoney, fmtNum } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill, KpiCard } from '@/components';
@@ -17,11 +17,15 @@ const ACCOUNT_EMPTY = { name: '', bank_name: '', last_four: '', opening_balance:
 function dateDistance(a, b) {
   return Math.abs(new Date(a).setHours(0, 0, 0, 0) - new Date(b).setHours(0, 0, 0, 0)) / 86400000;
 }
-function bestCandidate(tx, expenses, payments, matchedIds) {
+function bestCandidate(tx, expenses, payments, matchedIds, loanPayments = []) {
   const outgoing = Number(tx.amount) < 0;
   const amount = Math.abs(Number(tx.amount));
   const candidates = outgoing
-    ? expenses.map((x) => ({ kind: 'expense', id: x.id, date: x.expense_date, amount: Number(x.amount), label: x.description }))
+    ? [
+      ...expenses.map((x) => ({ kind: 'expense', id: x.id, date: x.expense_date, amount: Number(x.amount), label: x.description })),
+      // دفعات القروض: تُطابق مباشرة بدل تسجيلها كمصروف جديد (منعاً للازدواجية).
+      ...loanPayments.map((x) => ({ kind: 'loan', id: x.id, date: x.paid_at, amount: Number(x.amount), label: `سداد قرض ${x.loans?.name || ''}`.trim() })),
+    ]
     : payments.map((x) => ({ kind: 'payment', id: x.id, date: x.paid_at, amount: Number(x.amount), label: `دفعة فاتورة ${x.invoices?.number || '—'}` }));
   return candidates
     .filter((x) => !matchedIds.has(x.id) && Math.abs(x.amount - amount) < 0.01 && dateDistance(tx.transaction_date, x.date) <= 7)
@@ -84,18 +88,19 @@ export default function BankReconciliationPage() {
     try {
       const accounts = await getBankAccounts();
       const chosen = preferredAccount || accountId || accounts[0]?.id || '';
-      const [transactions, expenses, payments] = await Promise.all([
+      const [transactions, expenses, payments, loanPayments] = await Promise.all([
         chosen ? getBankTransactions(chosen) : Promise.resolve([]),
         getCompanyExpenses().catch(() => []), getReconciliationInvoicePayments().catch(() => []),
+        getLoanPaymentsForReconciliation().catch(() => []),
       ]);
-      setAccountId(chosen); setState({ accounts, transactions, expenses, payments });
+      setAccountId(chosen); setState({ accounts, transactions, expenses, payments, loanPayments });
     } catch (e) { setErr(e.message || 'تعذّر تحميل المطابقة البنكية'); }
   }
   useEffect(() => { load(); }, []);
   async function changeAccount(id) { setAccountId(id); await load(id); }
 
-  const matchedIds = useMemo(() => new Set((state?.transactions || []).flatMap((t) => [t.matched_expense_id, t.matched_invoice_payment_id]).filter(Boolean)), [state]);
-  const rows = useMemo(() => (state?.transactions || []).map((tx) => ({ ...tx, suggestion: tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, matchedIds) : null })), [state, matchedIds]);
+  const matchedIds = useMemo(() => new Set((state?.transactions || []).flatMap((t) => [t.matched_expense_id, t.matched_invoice_payment_id, t.matched_loan_payment_id]).filter(Boolean)), [state]);
+  const rows = useMemo(() => (state?.transactions || []).map((tx) => ({ ...tx, suggestion: tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, matchedIds, state.loanPayments) : null })), [state, matchedIds]);
   const visible = rows.filter((r) => filter === 'all' || (filter === 'suggested' ? Boolean(r.suggestion) : r.status === filter));
   const matched = rows.filter((r) => r.status === 'matched').length;
   const pending = rows.filter((r) => r.status === 'unmatched').length;
@@ -128,17 +133,18 @@ export default function BankReconciliationPage() {
         status: 'matched', confidence: candidate.confidence,
         matched_expense_id: candidate.kind === 'expense' ? candidate.id : null,
         matched_invoice_payment_id: candidate.kind === 'payment' ? candidate.id : null,
+        matched_loan_payment_id: candidate.kind === 'loan' ? candidate.id : null,
       });
       toast('تم اعتماد المطابقة'); await load(accountId);
     } catch (e) { toast(e.message || 'تعذّر اعتماد المطابقة', 'err'); }
     finally { setSaving(false); }
   }
   async function exclude(tx) {
-    try { await updateBankTransaction(tx.id, { status: 'excluded', confidence: null, matched_expense_id: null, matched_invoice_payment_id: null }); toast('تم استبعاد الحركة'); await load(accountId); }
+    try { await updateBankTransaction(tx.id, { status: 'excluded', confidence: null, matched_expense_id: null, matched_invoice_payment_id: null, matched_loan_payment_id: null }); toast('تم استبعاد الحركة'); await load(accountId); }
     catch (e) { toast(e.message || 'تعذّر الاستبعاد', 'err'); }
   }
   async function undo(tx) {
-    try { await updateBankTransaction(tx.id, { status: 'unmatched', confidence: null, matched_expense_id: null, matched_invoice_payment_id: null }); toast('أُعيدت الحركة للمراجعة'); await load(accountId); }
+    try { await updateBankTransaction(tx.id, { status: 'unmatched', confidence: null, matched_expense_id: null, matched_invoice_payment_id: null, matched_loan_payment_id: null }); toast('أُعيدت الحركة للمراجعة'); await load(accountId); }
     catch (e) { toast(e.message || 'تعذّر التراجع', 'err'); }
   }
   async function expenseFromTransaction(tx) {
@@ -146,7 +152,7 @@ export default function BankReconciliationPage() {
     setSaving(true);
     try {
       const expense = await createCompanyExpense({ description: tx.description, category: 'other', amount: Math.abs(Number(tx.amount)), vat_amount: 0, expense_date: tx.transaction_date, payment_status: 'paid', recurrence: 'none', note: tx.reference ? `مرجع البنك: ${tx.reference}` : null });
-      await updateBankTransaction(tx.id, { status: 'matched', matched_expense_id: expense.id, matched_invoice_payment_id: null, confidence: 100 });
+      await updateBankTransaction(tx.id, { status: 'matched', matched_expense_id: expense.id, matched_invoice_payment_id: null, matched_loan_payment_id: null, confidence: 100 });
       toast('تم إنشاء المصروف ومطابقته'); await load(accountId);
     } catch (e) { toast(e.message || 'تعذّر إنشاء المصروف', 'err'); }
     finally { setSaving(false); }

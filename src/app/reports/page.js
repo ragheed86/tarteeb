@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   getClients, getProjects, getInvoices, getAllInvoicePayments, getAllInvoiceItems,
   getAllProjectCosts, getInventory, getCompanyExpenses, getSuppliers,
-  getBankAccounts, getBankTransactions,
+  getBankAccounts, getBankTransactions, getLoanPayments,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS, PROJECT_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar, DataTable, KpiCard, Money, DateText, StatusPill } from '@/components';
@@ -33,13 +33,14 @@ export default function ReportsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts, bankTransactions] = await Promise.all([
+        const [clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts, bankTransactions, loanPayments] = await Promise.all([
           getClients(), getProjects(), getInvoices(), getAllInvoicePayments(), getAllInvoiceItems(),
           getAllProjectCosts(), getInventory(), getCompanyExpenses().catch(() => []), getSuppliers().catch(() => []), getBankAccounts().catch(() => []),
           // كل الحسابات باستعلام واحد بدل حلقة N+1 (بلا accountId تجلب كل الحركات دفعة واحدة).
           getBankTransactions().catch(() => []),
+          getLoanPayments().catch(() => []),
         ]);
-        setData({ clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts, bankTransactions });
+        setData({ clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts, bankTransactions, loanPayments });
       } catch (loadError) {
         setError(loadError.message || 'تعذّر تحميل التقارير');
       }
@@ -93,12 +94,14 @@ export default function ReportsPage() {
     const inventoryValue = sum(data.inventory, (item) => n(item.quantity) * n(item.unit_cost));
     const bankBalance = sum(data.bankAccounts, (account) => account.opening_balance) + sum(data.bankTransactions, (transaction) => transaction.amount);
     const bankFlow = sum(data.bankTransactions.filter((transaction) => inRange(transaction.transaction_date, from, to)), (transaction) => transaction.amount);
+    // سداد القروض تدفّق نقدي خارج فقط — لا يُخصم من الأرباح كي لا يُحتسب مرتين مع الرسوم.
+    const loanRepaid = sum((data.loanPayments || []).filter((payment) => inRange(payment.paid_at, from, to)), (payment) => payment.amount);
     const receivables = sum(invoices, (invoice) => invoice.remaining_amount);
     const overdue = invoices.filter((invoice) => invoice.status === 'overdue');
     return {
       periodInvoices, periodCosts, periodExpenses, collected, billed, projectCosts, companyExpenses, netProfit,
       serviceSales, serviceCosts, organizersSales, organizersCosts, clientRows, projectRows, supplierRows,
-      lowStock, inventoryValue, bankBalance, bankFlow, receivables, overdue,
+      lowStock, inventoryValue, bankBalance, bankFlow, loanRepaid, receivables, overdue,
     };
   }, [data, from, to]);
 
@@ -222,7 +225,7 @@ function Statement({ report }) {
   return <div className="card report-statement"><h3>قائمة الدخل النقدية</h3><p>تعتمد على الدفعات المحصلة والتكاليف والمصاريف المدفوعة.</p><Line label="الإيرادات المحصّلة" value={report.collected} /><Line label="تكاليف المشاريع" value={-report.projectCosts} negative /><Line label="مصاريف الشركة" value={-report.companyExpenses} negative /><Line label="صافي الربح النقدي" value={report.netProfit} total /></div>;
 }
 function CashFlow({ report }) {
-  return <div className="card report-statement"><h3>التدفق النقدي والبنك</h3><p>حركة نقدية الفترة مع الرصيد البنكي بعد الحركات المستوردة.</p><Line label="داخل الفترة" value={report.collected} /><Line label="خارج الفترة" value={-(report.projectCosts + report.companyExpenses)} negative /><Line label="صافي حركة البنك" value={report.bankFlow} total /><Line label="الرصيد الحالي بالبنك" value={report.bankBalance} total /></div>;
+  return <div className="card report-statement"><h3>التدفق النقدي والبنك</h3><p>حركة نقدية الفترة مع الرصيد البنكي بعد الحركات المستوردة.</p><Line label="داخل الفترة" value={report.collected} /><Line label="خارج الفترة" value={-(report.projectCosts + report.companyExpenses)} negative /><Line label="سداد أقساط القروض" value={-report.loanRepaid} negative /><Line label="صافي حركة البنك" value={report.bankFlow} total /><Line label="الرصيد الحالي بالبنك" value={report.bankBalance} total /></div>;
 }
 function Receivables({ report }) {
   return <div className="card report-statement"><h3>الذمم المدينة</h3><p>المبالغ المتبقية على الفواتير غير المرتجعة.</p><Line label="إجمالي الذمم" value={report.receivables} /><Line label="فواتير متأخرة" value={report.overdue.length} count /><Line label="قيمة المتأخر" value={sum(report.overdue, (invoice) => invoice.remaining_amount)} total /></div>;

@@ -29,6 +29,7 @@ export const PERMISSION_GROUPS = [
       { key: 'invoices', label: 'الفواتير', description: 'إنشاء ومتابعة الفواتير' },
       { key: 'expenses', label: 'مصاريف الشركة', description: 'النفقات التشغيلية العامة' },
       { key: 'bank_reconciliation', label: 'المطابقة البنكية', description: 'استيراد ومطابقة حركات الحساب البنكي' },
+      { key: 'loans', label: 'القروض والالتزامات', description: 'جدولة أقساط القروض وتسجيل السداد' },
       { key: 'government', label: 'الجهات الحكومية', description: 'الحسابات والرخص والتنبيهات' },
     ],
   },
@@ -47,7 +48,7 @@ export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.items.
 export const ROLE_PRESETS = {
   admin: ALL_PERMISSIONS,
   manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments', 'heatmap', 'quotes', 'invoices', 'expenses', 'whatsapp'],
-  accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation'],
+  accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation', 'loans'],
   operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments'],
   viewer: ['dashboard', 'clients', 'projects'],
 };
@@ -110,6 +111,7 @@ export function permissionForPath(pathname) {
   if (path.startsWith('/invoices')) return 'invoices';
   if (path.startsWith('/company-expenses')) return 'expenses';
   if (path.startsWith('/bank-reconciliation')) return 'bank_reconciliation';
+  if (path.startsWith('/loans')) return 'loans';
   if (path.startsWith('/partners')) return 'expenses';
   if (path.startsWith('/government')) return 'government';
   if (path.startsWith('/suppliers')) return 'warehouse';

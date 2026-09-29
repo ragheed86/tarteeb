@@ -4,13 +4,16 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   getEmployees, createEmployee, updateEmployee, removeEmployee,
   getEmployeeDocuments, createEmployeeDocument, removeEmployeeDocument,
-  uploadEmployeePhoto,
+  uploadEmployeePhoto, getEmployeeCosts,
 } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
-import { fmtNum, fmtDate } from '@/lib/format';
+import { fmtNum, fmtDate, fmtMoney, CURRENCY } from '@/lib/format';
 import { COUNTRIES_SORTED, countryByCode } from '@/lib/countries';
+import { useAccess } from '@/lib/useAccess';
+import { canAccess } from '@/lib/permissions';
 import { Loading, Empty, ErrorBar } from '../ui';
 import { toast } from '../toast';
+import PayrollModal from './PayrollModal';
 
 async function authHeaders() {
   const { data } = await supabase.auth.getSession();
@@ -41,7 +44,10 @@ function roleRank(role) {
   return 800;
 }
 
-const EMPTY = { name: '', role: '', phone: '', national_id: '', nationality: '', wage: 'fixed', status: 'active', photo_url: '', photo_path: '' };
+const EMPTY = {
+  name: '', role: '', phone: '', national_id: '', nationality: '', wage: 'fixed', status: 'active',
+  photo_url: '', photo_path: '', hire_date: '', iban: '', gosi_number: '', is_billable: true,
+};
 
 function daysUntil(d) {
   if (!d) return null;
@@ -59,6 +65,7 @@ function profileCompletion(employee) {
   const fields = [
     employee.name, employee.role, employee.phone, employee.national_id,
     employee.nationality, employee.photo_url || employee.photo_path, employee.wage,
+    employee.hire_date, employee.iban,
   ];
   return Math.round((fields.filter(Boolean).length / fields.length) * 100);
 }
@@ -83,10 +90,14 @@ function EmployeesPageInner() {
   const [formErr, setFormErr] = useState('');
   const [docFor, setDocFor] = useState(null); // الموظف الذي تُعرض مستنداته
   const [calFor, setCalFor] = useState(null); // الموظف الذي يُدار ربط تقويمه
+  const [payFor, setPayFor] = useState(null); // الموظف الذي يُفتح ملفه المالي
+  const [costs, setCosts] = useState({}); // التكلفة الفعلية لكل موظف، مفهرسة بالمعرّف
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { access } = useAccess();
+  const canSeePayroll = canAccess(access, 'payroll');
 
   useEffect(() => {
     const calendar = searchParams.get('calendar');
@@ -109,10 +120,27 @@ function EmployeesPageInner() {
       .sort((a, b) => roleRank(a.role) - roleRank(b.role));
   }, [emps, query, statusFilter]);
 
+  // إجمالي ما يكلّفه الفريق على الشركة شهرياً، لا مجموع الرواتب.
+  const teamCost = useMemo(
+    () => Object.values(costs).reduce((sum, row) => sum + Number(row.total_employer_cost || 0), 0),
+    [costs],
+  );
+
   async function load() {
     try { setEmps(await getEmployees()); } catch (e) { setErr(e.message || 'تعذّر التحميل'); }
   }
   useEffect(() => { load(); }, []);
+
+  // التكلفة تُقرأ فقط لمن يملك صلاحية الرواتب، وسياسات الوصول تمنع غيره
+  // من الجهة الأخرى أيضاً.
+  async function loadCosts() {
+    if (!canSeePayroll) { setCosts({}); return; }
+    try {
+      const rows = await getEmployeeCosts();
+      setCosts(Object.fromEntries(rows.map((row) => [row.employee_id, row])));
+    } catch { setCosts({}); }
+  }
+  useEffect(() => { loadCosts(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [canSeePayroll]);
 
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
   function openAdd() { setEditing(null); setForm(EMPTY); setPhotoPreview(''); setFormErr(''); setOpen(true); }
@@ -122,6 +150,8 @@ function EmployeesPageInner() {
       name: em.name || '', role: em.role || '', phone: em.phone || '', national_id: em.national_id || '',
       nationality: em.nationality || '',
       wage: em.wage || 'fixed', status: em.status || 'active', photo_url: em.photo_url || '', photo_path: em.photo_path || '',
+      hire_date: em.hire_date || '', iban: em.iban || '', gosi_number: em.gosi_number || '',
+      is_billable: em.is_billable !== false,
     });
     setPhotoPreview('');
     setFormErr(''); setOpen(true);
@@ -156,6 +186,10 @@ function EmployeesPageInner() {
       wage: form.wage, status: form.status,
       photo_url: form.photo_path ? null : form.photo_url.trim() || null,
       photo_path: form.photo_path || null,
+      hire_date: form.hire_date || null,
+      iban: form.iban.trim().replace(/\s+/g, '').toUpperCase() || null,
+      gosi_number: form.gosi_number.trim() || null,
+      is_billable: form.is_billable,
     };
     try {
       if (editing) {
@@ -185,7 +219,10 @@ function EmployeesPageInner() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /></svg>
           موظف جديد
         </button>
-        <span className="more" style={{ marginInlineStart: 'auto' }}>{fmtNum(emps.length)} موظف</span>
+        <span className="more" style={{ marginInlineStart: 'auto' }}>
+          {fmtNum(emps.length)} موظف
+          {canSeePayroll && teamCost > 0 && ` · كلفة الفريق ${fmtMoney(teamCost)} ${CURRENCY} شهرياً`}
+        </span>
       </div>
 
       {emps.length === 0 ? (
@@ -210,7 +247,11 @@ function EmployeesPageInner() {
             <div className="employee-table-wrap">
               <table className="employee-table">
                 <thead>
-                  <tr><th>الموظف</th><th>الدور والجنسية</th><th>الحالة</th><th>نوع الأجر</th><th>اكتمال البيانات</th><th aria-label="الإجراءات" /></tr>
+                  <tr>
+                    <th>الموظف</th><th>الدور والجنسية</th><th>الحالة</th><th>نوع الأجر</th>
+                    {canSeePayroll && <th>التكلفة الشهرية</th>}
+                    <th>اكتمال البيانات</th><th aria-label="الإجراءات" />
+                  </tr>
                 </thead>
                 <tbody>
                   {visibleEmployees.map((em) => {
@@ -235,6 +276,11 @@ function EmployeesPageInner() {
                         </td>
                         <td data-label="الحالة"><span className={`pill ${st.cls}`}>{st.label}</span></td>
                         <td data-label="نوع الأجر"><span>{WAGE[em.wage] || em.wage || '—'}</span></td>
+                        {canSeePayroll && (
+                          <td data-label="التكلفة الشهرية">
+                            <EmployeeCostCell cost={costs[em.id]} />
+                          </td>
+                        )}
                         <td data-label="اكتمال البيانات">
                           <div className="employee-completion" aria-label={`اكتمال البيانات ${completion}%`}>
                             <div className="employee-progress"><i style={{ width: `${completion}%` }} /></div>
@@ -243,6 +289,7 @@ function EmployeesPageInner() {
                         </td>
                         <td data-label="">
                           <div className="employee-row-actions">
+                            {canSeePayroll && <button className="btn ghost sm" onClick={() => setPayFor(em)}>الملف المالي</button>}
                             <button className="btn ghost sm" onClick={() => setDocFor(em)}>المستندات</button>
                             <button className="btn ghost sm" onClick={() => setCalFor(em)}>تقويم Google</button>
                             <button className="btn ghost sm" onClick={() => openEdit(em)}>تعديل</button>
@@ -297,6 +344,22 @@ function EmployeesPageInner() {
                   {Object.entries(STATUS).map(([v, o]) => <option key={v} value={v}>{o.label}</option>)}
                 </select>
               </div>
+              <div className="field"><label>تاريخ المباشرة</label>
+                <input type="date" lang="en-GB" dir="ltr" value={form.hire_date} onChange={(e) => set('hire_date', e.target.value)} />
+              </div>
+              <div className="field"><label>الآيبان</label>
+                <input value={form.iban} onChange={(e) => set('iban', e.target.value)} dir="ltr" placeholder="SA00 0000 0000 0000 0000 0000" />
+              </div>
+              <div className="field"><label>رقم المشترك في التأمينات</label>
+                <input value={form.gosi_number} onChange={(e) => set('gosi_number', e.target.value)} dir="ltr" inputMode="numeric" />
+              </div>
+              <div className="field">
+                <label>تحميل التكلفة</label>
+                <select value={form.is_billable ? 'yes' : 'no'} onChange={(e) => set('is_billable', e.target.value === 'yes')}>
+                  <option value="yes">تُوزَّع على المشاريع</option>
+                  <option value="no">إدارة عامة — تُنزَّل يدوياً</option>
+                </select>
+              </div>
               <div className="field span-2">
                 <label>صورة الموظف</label>
                 <div className="upload-row">
@@ -322,7 +385,34 @@ function EmployeesPageInner() {
 
       {docFor && <DocsModal employee={docFor} onClose={() => setDocFor(null)} />}
       {calFor && <CalendarModal employee={calFor} onClose={() => setCalFor(null)} />}
+      {payFor && (
+        <PayrollModal
+          employee={payFor}
+          cost={costs[payFor.id]}
+          onClose={() => setPayFor(null)}
+          onChanged={loadCosts}
+        />
+      )}
     </>
+  );
+}
+
+// التكلفة الفعلية مقابل الراتب. الفرق بينهما هو ما تنساه أغلب الشركات
+// عند تسعير المشاريع.
+function EmployeeCostCell({ cost }) {
+  const total = Number(cost?.total_employer_cost || 0);
+  const gross = Number(cost?.gross_pay || 0);
+  if (!cost?.contract_id) {
+    return <span style={{ fontSize: 12, color: 'var(--muted)' }}>لا عقد</span>;
+  }
+  return (
+    <div className="employee-role-cell">
+      <strong dir="ltr">{fmtMoney(total)} {CURRENCY}</strong>
+      <span dir="ltr">
+        {fmtMoney(gross)} {CURRENCY} أجر
+        {gross > 0 && ` · +${Math.round(((total - gross) / gross) * 100)}٪`}
+      </span>
+    </div>
   );
 }
 

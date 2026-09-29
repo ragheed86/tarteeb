@@ -30,6 +30,7 @@ export const PERMISSION_GROUPS = [
       { key: 'expenses', label: 'مصاريف الشركة', description: 'النفقات التشغيلية العامة' },
       { key: 'bank_reconciliation', label: 'المطابقة البنكية', description: 'استيراد ومطابقة حركات الحساب البنكي' },
       { key: 'loans', label: 'القروض والالتزامات', description: 'جدولة أقساط القروض وتسجيل السداد' },
+      { key: 'payroll', label: 'الرواتب وتكلفة الموظفين', description: 'العقود والأجور والسلف ومسيّر الرواتب (رغيد ودلال فقط)' },
       { key: 'government', label: 'الجهات الحكومية', description: 'الحسابات والرخص والتنبيهات' },
     ],
   },
@@ -45,8 +46,12 @@ export const PERMISSION_GROUPS = [
 
 export const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.items.map((item) => item.key));
 
+// صلاحية الرواتب لا تُمنح بالدور: بيانات الأجور تُسنَد بالاسم لا بالمنصب،
+// فلا يرثها أي مدير جديد تلقائياً.
+export const RESTRICTED_PERMISSIONS = ['payroll'];
+
 export const ROLE_PRESETS = {
-  admin: ALL_PERMISSIONS,
+  admin: ALL_PERMISSIONS.filter((permission) => !RESTRICTED_PERMISSIONS.includes(permission)),
   manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments', 'heatmap', 'quotes', 'invoices', 'expenses', 'whatsapp'],
   accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation', 'loans'],
   operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments'],
@@ -86,8 +91,11 @@ export function normalizePermissions(permissions, email = '') {
 export function canAccess(access, permission) {
   if (!permission) return true;
   if (!access?.active) return false;
-  if (access?.isPrimaryAdmin || access?.role === 'admin') return true;
+  if (access?.isPrimaryAdmin) return true;
   const permissions = access?.permissions || [];
+  // الرواتب لا يغطيها دور المدير: تُمنح بالاسم فقط.
+  if (RESTRICTED_PERMISSIONS.includes(permission)) return permissions.includes(permission);
+  if (access?.role === 'admin') return true;
   if (permission === 'warehouse') {
     return permissions.some((item) => ['warehouse', 'warehouse_inventory', 'warehouse_products'].includes(item));
   }

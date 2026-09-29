@@ -147,14 +147,16 @@ function parseCsv(text, accountId) {
     const cleanNum = (v) => Number(String(v || '').replace(/,/g, '').replace(/\s/g, '')) || 0;
     const amount = ai >= 0 ? cleanNum(cols[ai]) : cleanNum(cols[credit]) - cleanNum(cols[debit]);
     const description = String(cols[dsi] || '').trim(); const reference = ri >= 0 ? String(cols[ri] || '').trim() : '';
-    if (!date || !description || !amount) throw new Error(`بيانات غير صالحة في السطر ${i + 2}`);
+    if (!date || !description) throw new Error(`بيانات غير صالحة في السطر ${i + 2}`);
+    // سطر بصفر ريال سطر إعلامي في كشوف كثيرة، وقاعدة البيانات ترفضه — نتجاوزه بدل إسقاط الملف كله.
+    if (!amount) return null;
     let external = ii >= 0 && cols[ii] ? String(cols[ii]).trim() : `${date}|${amount}|${reference}|${description}`;
     if (!(ii >= 0 && cols[ii])) {
       const occurrence = (seen.get(external) || 0) + 1; seen.set(external, occurrence);
       if (occurrence > 1) external = `${external}#${occurrence}`;
     }
     return { account_id: accountId, transaction_date: date, description, reference: reference || null, external_id: external, amount, import_batch: batch };
-  });
+  }).filter(Boolean);
 }
 
 function matchError(e) {
@@ -331,8 +333,8 @@ export default function BankReconciliationPage() {
   // القسط ليس سجلاً قابلاً للربط مباشرة: نُنشئ له دفعة قرض من الحركة ثم نربط الدفعة.
   async function match(tx, candidate, manualMatch) {
     setSaving(true);
+    let loanPaymentId = null;
     try {
-      let loanPaymentId = null;
       if (candidate.kind === 'loan_installment') {
         const created = await createLoanPayment({
           loan_id: candidate.loanId, installment_id: candidate.id,
@@ -349,17 +351,28 @@ export default function BankReconciliationPage() {
         matched_loan_payment_id: loanPaymentId,
       });
       setManual(null); toast(manualMatch ? 'تمت المطابقة اليدوية' : 'تم اعتماد المطابقة'); await load(accountId);
-    } catch (e) { toast(matchError(e), 'err'); }
+    } catch (e) {
+      // تراجع: لو فشل ربط الحركة بعد إنشاء دفعة القرض لبقي القسط مسدَّداً بلا حركة تقابله.
+      if (loanPaymentId) {
+        try { await deleteLoanPayment(loanPaymentId); }
+        catch { toast('تعذّر التراجع عن دفعة القرض — راجعها يدوياً', 'err'); }
+      }
+      toast(matchError(e), 'err');
+    }
     finally { setSaving(false); }
   }
   // فك الارتباط يحذف دفعة القرض التي أنشأتها المطابقة، وإلا بقي القسط مسدَّداً بلا حركة تقابله.
+  // الترتيب مقصود: قيد bank_transaction_matched_target يمنع حذف الدفعة قبل فك ارتباط الحركة.
   async function clearMatch(tx, status, message) {
     setSaving(true);
     try {
       await updateBankTransaction(tx.id, {
         status, confidence: null, matched_expense_id: null, matched_invoice_payment_id: null, matched_loan_payment_id: null,
       });
-      if (tx.matched_loan_payment_id) await deleteLoanPayment(tx.matched_loan_payment_id);
+      if (tx.matched_loan_payment_id) {
+        try { await deleteLoanPayment(tx.matched_loan_payment_id); }
+        catch { toast('فُكّ ارتباط الحركة، لكن دفعة القرض بقيت — احذفها من صفحة القروض', 'err'); }
+      }
       toast(message); await load(accountId);
     } catch (e) { toast(e.message || 'تعذّر تنفيذ الإجراء', 'err'); }
     finally { setSaving(false); }
@@ -492,8 +505,8 @@ export default function BankReconciliationPage() {
                       {r.suggestion && <button className="btn sm" disabled={saving} onClick={() => match(r, r.suggestion)}>اعتماد</button>}
                       {r.status === 'unmatched' && <button className="btn ghost sm" disabled={saving} onClick={() => openManual(r)}>طابق يدوياً</button>}
                       {r.status === 'unmatched' && Number(r.amount) < 0 && !r.suggestion && <button className="btn ghost sm" disabled={saving} onClick={() => expenseFromTransaction(r)}>إنشاء مصروف</button>}
-                      {r.status === 'unmatched' && <button className="btn ghost sm" onClick={() => exclude(r)}>استبعاد</button>}
-                      {['matched', 'excluded'].includes(r.status) && <button className="btn ghost sm" onClick={() => undo(r)}>تراجع</button>}
+                      {r.status === 'unmatched' && <button className="btn ghost sm" disabled={saving} onClick={() => exclude(r)}>استبعاد</button>}
+                      {['matched', 'excluded'].includes(r.status) && <button className="btn ghost sm" disabled={saving} onClick={() => undo(r)}>تراجع</button>}
                     </>}
                   <button className="btn ghost sm" onClick={() => openAudit(r)}>السجل</button>
                 </div>

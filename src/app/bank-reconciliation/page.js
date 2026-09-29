@@ -3,16 +3,23 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getBankAccounts, createBankAccount, getBankTransactions, importBankTransactions, updateBankTransaction,
   getCompanyExpenses, createCompanyExpense, getReconciliationInvoicePayments,
+  getReconciliationPeriods, closeReconciliationPeriod, reopenReconciliationPeriod, getBankTransactionAudit,
 } from '@/lib/data';
 import { fmtMoney, fmtNum } from '@/lib/format';
-import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill, KpiCard } from '@/components';
+import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Money, DateText, StatusPill, KpiCard } from '@/components';
 import { toast } from '@/app/toast';
 
 const STATUS = {
   unmatched: { label: 'غير مطابق', cls: 'p-wait' }, suggested: { label: 'مقترح', cls: 'p-prog' },
   matched: { label: 'مطابق', cls: 'p-done' }, excluded: { label: 'مستبعد', cls: 'p-cancel' },
 };
+const PERIOD_STATUS = { open: { label: 'مفتوح', cls: 'p-prog' }, closed: { label: 'مقفل', cls: 'p-done' } };
+const AUDIT_ACTION = {
+  import: 'استيراد', match: 'اعتماد اقتراح آلي', manual_match: 'مطابقة يدوية',
+  exclude: 'استبعاد', reopen: 'إعادة للمراجعة', edit: 'تعديل',
+};
 const ACCOUNT_EMPTY = { name: '', bank_name: '', last_four: '', opening_balance: '0' };
+const CLOSE_EMPTY = { statement_closing_balance: '', note: '' };
 
 // معايير المطابقة التلقائية: فرق المبلغ المسموح، ونافذة التاريخ، وأدنى ثقة تُقترح.
 const AMOUNT_TOLERANCE = 1;
@@ -22,6 +29,11 @@ const MANUAL_LIMIT = 40;
 
 function dateDistance(a, b) {
   return Math.abs(new Date(a).setHours(0, 0, 0, 0) - new Date(b).setHours(0, 0, 0, 0)) / 86400000;
+}
+function monthOf(date) { return `${String(date).slice(0, 7)}-01`; }
+function monthLabel(month) {
+  const [y, m] = String(month).split('-');
+  return `${['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'][Number(m) - 1] || m} ${y}`;
 }
 // تطبيع المرجع: إسقاط الفواصل والمسافات وتوحيد الحالة حتى يُطابَق «INV-1024» مع «inv 1024».
 function normalizeRef(value) {
@@ -141,31 +153,55 @@ export default function BankReconciliationPage() {
   const [manual, setManual] = useState(null);
   const [manualKind, setManualKind] = useState('expense');
   const [manualQuery, setManualQuery] = useState('');
+  const [closeMonth, setCloseMonth] = useState('');
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeForm, setCloseForm] = useState(CLOSE_EMPTY);
+  const [audit, setAudit] = useState(null);
   const [saving, setSaving] = useState(false);
 
   async function load(preferredAccount) {
     try {
       const accounts = await getBankAccounts();
       const chosen = preferredAccount || accountId || accounts[0]?.id || '';
-      const [transactions, expenses, payments] = await Promise.all([
+      const [transactions, expenses, payments, periods] = await Promise.all([
         chosen ? getBankTransactions(chosen) : Promise.resolve([]),
         getCompanyExpenses().catch(() => []), getReconciliationInvoicePayments().catch(() => []),
+        chosen ? getReconciliationPeriods(chosen).catch(() => []) : Promise.resolve([]),
       ]);
-      setAccountId(chosen); setState({ accounts, transactions, expenses, payments });
+      setAccountId(chosen); setState({ accounts, transactions, expenses, payments, periods });
     } catch (e) { setErr(e.message || 'تعذّر تحميل المطابقة البنكية'); }
   }
   useEffect(() => { load(); }, []);
-  async function changeAccount(id) { setAccountId(id); await load(id); }
+  async function changeAccount(id) { setAccountId(id); setCloseMonth(''); await load(id); }
 
   const matchedIds = useMemo(() => new Set((state?.transactions || []).flatMap((t) => [t.matched_expense_id, t.matched_invoice_payment_id]).filter(Boolean)), [state]);
   const expenseById = useMemo(() => new Map((state?.expenses || []).map((x) => [x.id, x])), [state]);
   const paymentById = useMemo(() => new Map((state?.payments || []).map((x) => [x.id, x])), [state]);
-  const rows = useMemo(() => (state?.transactions || []).map((tx) => ({ ...tx, suggestion: tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, matchedIds) : null })), [state, matchedIds]);
+  const periodByMonth = useMemo(() => new Map((state?.periods || []).map((p) => [p.month, p])), [state]);
+  const closedMonths = useMemo(() => new Set((state?.periods || []).filter((p) => p.status === 'closed').map((p) => p.month)), [state]);
+  const rows = useMemo(() => (state?.transactions || []).map((tx) => {
+    const locked = closedMonths.has(monthOf(tx.transaction_date));
+    return { ...tx, locked, suggestion: !locked && tx.status === 'unmatched' ? bestCandidate(tx, state.expenses, state.payments, matchedIds) : null };
+  }), [state, matchedIds, closedMonths]);
   const visible = rows.filter((r) => filter === 'all' || (filter === 'suggested' ? Boolean(r.suggestion) : r.status === filter));
   const matched = rows.filter((r) => r.status === 'matched').length;
   const pending = rows.filter((r) => r.status === 'unmatched').length;
   const suggested = rows.filter((r) => r.suggestion).length;
   const balance = (state?.accounts.find((a) => a.id === accountId)?.opening_balance || 0) + rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+
+  const months = useMemo(() => [...new Set(rows.map((r) => monthOf(r.transaction_date)))].sort().reverse(), [rows]);
+  const activeMonth = closeMonth && months.includes(closeMonth) ? closeMonth : months[0] || '';
+  const monthRows = rows.filter((r) => monthOf(r.transaction_date) === activeMonth);
+  const monthPending = monthRows.filter((r) => r.status === 'unmatched').length;
+  const openingBalance = Number(state?.accounts.find((a) => a.id === accountId)?.opening_balance || 0);
+  // الرصيد المحسوب حتى نهاية الشهر المختار — نفس ما تثبّته دالة الإقفال في القاعدة.
+  const monthBalance = openingBalance + rows.filter((r) => monthOf(r.transaction_date) <= activeMonth).reduce((s, r) => s + Number(r.amount || 0), 0);
+  const activePeriod = periodByMonth.get(activeMonth);
+  const periodClosed = activePeriod?.status === 'closed';
+  const statementInput = closeForm.statement_closing_balance === '' ? null : Number(closeForm.statement_closing_balance);
+  const liveGap = statementInput == null ? null : statementInput - monthBalance;
+  const closedGap = activePeriod?.statement_closing_balance == null ? null
+    : Number(activePeriod.statement_closing_balance) - Number(activePeriod.computed_balance);
 
   function matchedLabel(r) {
     if (r.matched_expense_id) return expenseById.get(r.matched_expense_id)?.description || 'مصروف مرتبط';
@@ -182,6 +218,11 @@ export default function BankReconciliationPage() {
     () => (manual && state ? manualCandidates(manual, manualKind, state.expenses, state.payments, matchedIds, manualQuery) : []),
     [manual, manualKind, state, matchedIds, manualQuery],
   );
+  async function openAudit(tx) {
+    setAudit({ tx, rows: null });
+    try { setAudit({ tx, rows: await getBankTransactionAudit(tx.id) }); }
+    catch (e) { setAudit(null); toast(e.message || 'تعذّر تحميل السجل', 'err'); }
+  }
 
   async function addAccount(e) {
     e.preventDefault(); if (!accountForm.name.trim()) return;
@@ -233,6 +274,21 @@ export default function BankReconciliationPage() {
     } catch (e) { toast(e.message || 'تعذّر إنشاء المصروف', 'err'); }
     finally { setSaving(false); }
   }
+  async function submitClose(e) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await closeReconciliationPeriod(accountId, activeMonth, statementInput, closeForm.note.trim() || null);
+      setCloseOpen(false); setCloseForm(CLOSE_EMPTY); toast(`تم إقفال ${monthLabel(activeMonth)}`); await load(accountId);
+    } catch (e2) { toast(e2.message || 'تعذّر الإقفال', 'err'); }
+    finally { setSaving(false); }
+  }
+  async function reopen() {
+    setSaving(true);
+    try { await reopenReconciliationPeriod(accountId, activeMonth); toast(`أُعيد فتح ${monthLabel(activeMonth)}`); await load(accountId); }
+    catch (e) { toast(e.message || 'تعذّرت إعادة الفتح', 'err'); }
+    finally { setSaving(false); }
+  }
 
   if (err) return <ErrorBar message={err} />;
   if (!state) return <Loading />;
@@ -251,8 +307,27 @@ export default function BankReconciliationPage() {
           <Select label="الحساب" value={accountId} onChange={(e) => changeAccount(e.target.value)} options={state.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.last_four ? ` • ${a.last_four}` : ''}` }))} />
           <div className="csv-hint">الأعمدة المدعومة: date, description, amount, reference — أو debit / credit<br />المطابقة التلقائية تقارن المبلغ (±{fmtNum(AMOUNT_TOLERANCE)}) والتاريخ (±{fmtNum(DATE_WINDOW)} يوم) والمرجع.</div>
         </div>
+
+        {months.length > 0 && <div className="card close-bar">
+          <Select label="شهر الإقفال" value={activeMonth} onChange={(e) => setCloseMonth(e.target.value)} options={months.map((m) => ({ value: m, label: `${monthLabel(m)}${closedMonths.has(m) ? ' — مقفل' : ''}` }))} />
+          <div className="close-stats">
+            <div><span>حركات الشهر</span><b>{fmtNum(monthRows.length)}</b></div>
+            <div><span>غير مطابقة</span><b className={monthPending ? 'bank-out' : 'bank-in'}>{fmtNum(monthPending)}</b></div>
+            <div><span>الرصيد حتى نهاية الشهر</span><b>{fmtMoney(monthBalance)} ⃁</b></div>
+            {periodClosed && closedGap != null && <div><span>فرق الكشف</span><b className={Math.abs(closedGap) < 0.01 ? 'bank-in' : 'bank-out'}>{fmtMoney(closedGap)} ⃁</b></div>}
+          </div>
+          <div className="close-cta">
+            <StatusPill status={periodClosed ? 'closed' : 'open'} map={PERIOD_STATUS} />
+            {periodClosed
+              ? <button className="btn ghost sm" disabled={saving} onClick={reopen}>إعادة فتح الشهر</button>
+              : <button className="btn sm" disabled={saving || monthPending > 0} onClick={() => { setCloseForm(CLOSE_EMPTY); setCloseOpen(true); }}>إقفال الشهر</button>}
+          </div>
+          {!periodClosed && monthPending > 0 && <p className="close-block">يتبقى {fmtNum(monthPending)} حركة غير مطابقة — طابقها أو استبعدها قبل الإقفال.</p>}
+          {periodClosed && <p className="close-block closed-note">حركات هذا الشهر مقفلة للتعديل. {activePeriod?.note}</p>}
+        </div>}
+
         <div className="kpis bank-kpis">
-          <KpiCard label="الرصيد المحسوب" value={`${fmtMoney(balance)} ⃁`} trend={account?.bank_name || account?.name} definition="الرصيد الافتتاحي للحساب مضافًا إليه صافي جميع الحركات المستوردة." period="جميع حركات الحساب المحدد" formula="الرصيد الافتتاحي + الإيداعات − المسحوبات" breakdown={[{ label: 'الرصيد الافتتاحي', value: `${fmtMoney(account?.opening_balance || 0)} ⃁` }, { label: 'صافي الحركات', value: `${fmtMoney(rows.reduce((s, r) => s + Number(r.amount || 0), 0))} ⃁` }, { label: 'الرصيد المحسوب', value: `${fmtMoney(balance)} ⃁` }]} note="يجب أن يطابق الرصيد الختامي في كشف البنك بعد استيراد جميع الحركات." />
+          <KpiCard label="الرصيد المحسوب" value={`${fmtMoney(balance)} ⃁`} trend={account?.bank_name || account?.name} definition="الرصيد الافتتاحي للحساب مضافًا إليه صافي جميع الحركات المستوردة." period="جميع حركات الحساب المحدد" formula="الرصيد الافتتاحي + الإيداعات − المسحوبات" breakdown={[{ label: 'الرصيد الافتتاحي', value: `${fmtMoney(openingBalance)} ⃁` }, { label: 'صافي الحركات', value: `${fmtMoney(rows.reduce((s, r) => s + Number(r.amount || 0), 0))} ⃁` }, { label: 'الرصيد المحسوب', value: `${fmtMoney(balance)} ⃁` }]} note="يجب أن يطابق الرصيد الختامي في كشف البنك بعد استيراد جميع الحركات." />
           <KpiCard tone="pos" label="حركات مطابقة" value={fmtNum(matched)} trend={`${rows.length ? fmtNum(Math.round(matched / rows.length * 100)) : '0'}% من الكشف`} definition="الحركات البنكية التي تم اعتماد ربطها بمصروف شركة أو دفعة فاتورة." period="كشف الحساب المحدد" formula="عدد الحركات المعتمدة ÷ إجمالي الحركات × 100" breakdown={[{ label: 'إجمالي الحركات', value: fmtNum(rows.length) }, { label: 'مطابقة', value: fmtNum(matched) }, { label: 'نسبة المطابقة', value: `${rows.length ? fmtNum(Math.round(matched / rows.length * 100)) : '0'}%` }]} />
           <KpiCard tone="alert" label="تحتاج مراجعة" value={fmtNum(pending)} trend={`${fmtNum(suggested)} اقتراح تلقائي`} definition="الحركات التي لم تُعتمد مطابقتها ولم تُستبعد بعد." period="كشف الحساب المحدد" formula="عدّ الحركات بالحالة «غير مطابق»" breakdown={[{ label: 'تحتاج مراجعة', value: fmtNum(pending) }, { label: 'لها اقتراح تلقائي', value: fmtNum(suggested) }, { label: 'بلا اقتراح', value: fmtNum(Math.max(pending - suggested, 0)) }]} />
         </div>
@@ -278,7 +353,25 @@ export default function BankReconciliationPage() {
                 return '—';
               },
             },
-            { key: 'actions', label: 'إجراء', align: 'left', render: (r) => <div className="row-actions">{r.suggestion && <button className="btn sm" disabled={saving} onClick={() => match(r, r.suggestion)}>اعتماد</button>}{r.status === 'unmatched' && <button className="btn ghost sm" disabled={saving} onClick={() => openManual(r)}>طابق يدوياً</button>}{r.status === 'unmatched' && Number(r.amount) < 0 && !r.suggestion && <button className="btn ghost sm" disabled={saving} onClick={() => expenseFromTransaction(r)}>إنشاء مصروف</button>}{r.status === 'unmatched' && <button className="btn ghost sm" onClick={() => exclude(r)}>استبعاد</button>}{['matched', 'excluded'].includes(r.status) && <button className="btn ghost sm" onClick={() => undo(r)}>تراجع</button>}</div> },
+            {
+              key: 'actions',
+              label: 'إجراء',
+              align: 'left',
+              render: (r) => (
+                <div className="row-actions">
+                  {r.locked
+                    ? <span className="lock-note">الشهر مقفل</span>
+                    : <>
+                      {r.suggestion && <button className="btn sm" disabled={saving} onClick={() => match(r, r.suggestion)}>اعتماد</button>}
+                      {r.status === 'unmatched' && <button className="btn ghost sm" disabled={saving} onClick={() => openManual(r)}>طابق يدوياً</button>}
+                      {r.status === 'unmatched' && Number(r.amount) < 0 && !r.suggestion && <button className="btn ghost sm" disabled={saving} onClick={() => expenseFromTransaction(r)}>إنشاء مصروف</button>}
+                      {r.status === 'unmatched' && <button className="btn ghost sm" onClick={() => exclude(r)}>استبعاد</button>}
+                      {['matched', 'excluded'].includes(r.status) && <button className="btn ghost sm" onClick={() => undo(r)}>تراجع</button>}
+                    </>}
+                  <button className="btn ghost sm" onClick={() => openAudit(r)}>السجل</button>
+                </div>
+              ),
+            },
           ]} />
         </div>
       </>}
@@ -316,6 +409,30 @@ export default function BankReconciliationPage() {
         </>}
       </Modal>
 
+      <Modal open={closeOpen} onClose={() => !saving && setCloseOpen(false)} title={`إقفال ${activeMonth ? monthLabel(activeMonth) : ''}`} subtitle="يُثبَّت الرصيد المحسوب وتُقفل حركات الشهر للتعديل" as="form" onSubmit={submitClose} size="sm" footer={<><button type="button" className="btn ghost" onClick={() => setCloseOpen(false)}>إلغاء</button><button className="btn" disabled={saving}>إقفال الشهر</button></>}>
+        <div className="manual-tx">
+          <div><span className="manual-lbl">حركات الشهر</span><b>{fmtNum(monthRows.length)}</b></div>
+          <div><span className="manual-lbl">الرصيد المحسوب</span><b>{fmtMoney(monthBalance)} ⃁</b></div>
+        </div>
+        <Input label="الرصيد الختامي في كشف البنك (اختياري)" type="number" step="0.01" ltr value={closeForm.statement_closing_balance} onChange={(e) => setCloseForm((f) => ({ ...f, statement_closing_balance: e.target.value }))} hint="أدخله ليُحفظ الفرق مع الإقفال" />
+        {liveGap != null && <p className={`gap-note ${Math.abs(liveGap) < 0.01 ? 'gap-ok' : 'gap-bad'}`}>{Math.abs(liveGap) < 0.01 ? 'الرصيدان متطابقان' : `فرق ${fmtMoney(Math.abs(liveGap))} ⃁ بين كشف البنك والرصيد المحسوب`}</p>}
+        <TextArea label="ملاحظة الإقفال" rows="2" value={closeForm.note} onChange={(e) => setCloseForm((f) => ({ ...f, note: e.target.value }))} />
+      </Modal>
+
+      <Modal open={Boolean(audit)} onClose={() => setAudit(null)} title="سجل المراجعة" subtitle={audit?.tx?.description} size="md" footer={<button type="button" className="btn ghost" onClick={() => setAudit(null)}>إغلاق</button>}>
+        {audit?.rows == null ? <Loading /> : audit.rows.length === 0
+          ? <Empty title="لا يوجد سجل" desc="السجل يبدأ من أول تغيير بعد تفعيل الإقفال الشهري." />
+          : <ul className="audit-list">
+            {audit.rows.map((a) => (
+              <li key={a.id}>
+                <b>{AUDIT_ACTION[a.action] || a.action}</b>
+                <small>{a.old_status ? `${STATUS[a.old_status]?.label || a.old_status} ← ${STATUS[a.new_status]?.label || a.new_status}` : STATUS[a.new_status]?.label || a.new_status}</small>
+                <small className="audit-time" dir="ltr">{new Date(a.created_at).toLocaleString('en-GB')}</small>
+              </li>
+            ))}
+          </ul>}
+      </Modal>
+
       <Modal open={accountOpen} onClose={() => !saving && setAccountOpen(false)} title="حساب بنكي جديد" subtitle="لا تُخزّن بيانات الدخول أو رقم الحساب الكامل" as="form" onSubmit={addAccount} size="sm" footer={<><button type="button" className="btn ghost" onClick={() => setAccountOpen(false)}>إلغاء</button><button className="btn" disabled={saving}>حفظ الحساب</button></>}>
         <Input label="اسم مختصر للحساب" value={accountForm.name} onChange={(e) => setAccountForm((f) => ({ ...f, name: e.target.value }))} placeholder="الحساب التشغيلي" required />
         <Input label="اسم البنك" value={accountForm.bank_name} onChange={(e) => setAccountForm((f) => ({ ...f, bank_name: e.target.value }))} />
@@ -327,8 +444,11 @@ export default function BankReconciliationPage() {
 }
 
 const CSS = `
-.bank-head{margin-bottom:16px;align-items:flex-end}.bank-head h2{margin:0}.bank-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.bank-actions,.row-actions{display:flex;gap:8px;flex-wrap:wrap}.bank-toolbar{display:flex;align-items:flex-end;gap:18px;margin-bottom:14px;padding:14px}.bank-toolbar .field{margin:0;min-width:250px}.csv-hint{color:var(--muted);font-size:12px;padding-bottom:10px;line-height:1.7}.bank-kpis{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px}.bank-tabs{margin-bottom:12px;width:max-content;max-width:100%;overflow:auto}.bank-out{color:var(--neg)}.bank-in{color:var(--green)}.match-suggestion{display:flex;flex-direction:column;gap:3px}.match-suggestion small{color:var(--green)}.match-suggestion .match-note{color:var(--muted)}.empty-action{text-align:center;padding-bottom:20px}
+.bank-head{margin-bottom:16px;align-items:flex-end}.bank-head h2{margin:0}.bank-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.bank-actions,.row-actions{display:flex;gap:8px;flex-wrap:wrap}.bank-toolbar{display:flex;align-items:flex-end;gap:18px;margin-bottom:14px;padding:14px}.bank-toolbar .field{margin:0;min-width:250px}.csv-hint{color:var(--muted);font-size:12px;padding-bottom:10px;line-height:1.7}.bank-kpis{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px}.bank-tabs{margin-bottom:12px;width:max-content;max-width:100%;overflow:auto}.bank-out{color:var(--neg)}.bank-in{color:var(--green)}.match-suggestion{display:flex;flex-direction:column;gap:3px}.match-suggestion small{color:var(--green)}.match-suggestion .match-note{color:var(--muted)}.empty-action{text-align:center;padding-bottom:20px}.lock-note{color:var(--muted);font-size:12px;align-self:center}
+.close-bar{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;padding:14px;margin-bottom:14px}.close-bar .field{margin:0;min-width:210px}.close-stats{display:flex;gap:22px;flex-wrap:wrap;padding-bottom:6px}.close-stats>div{display:flex;flex-direction:column;gap:2px}.close-stats span{color:var(--muted);font-size:11px}.close-cta{display:flex;align-items:center;gap:10px;margin-inline-start:auto;padding-bottom:4px}.close-block{flex-basis:100%;margin:2px 0 0;color:var(--neg);font-size:12px}.close-block.closed-note{color:var(--muted)}
 .manual-tx{display:flex;flex-wrap:wrap;gap:8px 22px;padding:12px 14px;margin-bottom:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-soft,transparent)}.manual-tx>div{display:flex;flex-direction:column;gap:2px}.manual-lbl{color:var(--muted);font-size:11px}.manual-filters{display:flex;gap:14px;flex-wrap:wrap}.manual-filters .field{flex:1;min-width:200px}
 .cand-list{list-style:none;margin:6px 0 0;padding:0;max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}.cand-list li+li{border-top:1px solid var(--line)}.cand{display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%;padding:11px 13px;background:none;border:0;cursor:pointer;text-align:start;font:inherit;color:inherit}.cand:hover:not(:disabled){background:var(--hover,rgba(0,0,0,.04))}.cand:disabled{opacity:.6;cursor:default}.cand-main,.cand-side{display:flex;flex-direction:column;gap:3px}.cand-side{align-items:flex-end;text-align:end;white-space:nowrap}.cand-main small{color:var(--muted);font-size:12px}.cand-ok{color:var(--green);font-size:11px}.cand-diff{color:var(--muted);font-size:11px}.cand-more{color:var(--muted);font-size:12px;margin:8px 0 0}
-@media(max-width:850px){.bank-kpis{grid-template-columns:1fr}.bank-toolbar{align-items:stretch;flex-direction:column}.bank-toolbar .field{min-width:0}.bank-head{align-items:flex-start}.cand{flex-direction:column;align-items:flex-start;gap:6px}.cand-side{align-items:flex-start;text-align:start}}
+.gap-note{margin:2px 0 10px;font-size:12px}.gap-ok{color:var(--green)}.gap-bad{color:var(--neg)}
+.audit-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px;max-height:50vh;overflow:auto}.audit-list li{display:flex;flex-direction:column;gap:3px;padding:10px 13px}.audit-list li+li{border-top:1px solid var(--line)}.audit-list small{color:var(--muted);font-size:12px}.audit-list .audit-time{font-size:11px}
+@media(max-width:850px){.bank-kpis{grid-template-columns:1fr}.bank-toolbar{align-items:stretch;flex-direction:column}.bank-toolbar .field{min-width:0}.bank-head{align-items:flex-start}.close-bar{align-items:stretch;flex-direction:column}.close-bar .field{min-width:0}.close-cta{margin-inline-start:0}.cand{flex-direction:column;align-items:flex-start;gap:6px}.cand-side{align-items:flex-start;text-align:start}}
 `;

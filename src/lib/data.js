@@ -227,6 +227,31 @@ export async function getReconciliationInvoicePayments() {
     .neq('invoices.status', 'refunded').order('paid_at', { ascending: false });
   if (error) throw error; return data || [];
 }
+export async function getReconciliationPeriods(accountId) {
+  if (!accountId) return [];
+  const { data, error } = await supabase.from('reconciliation_periods')
+    .select('*').eq('account_id', accountId).order('month', { ascending: false });
+  if (error) throw error; return data || [];
+}
+// الإقفال يمر عبر RPC لأن التحقق من الحركات غير المطابقة وتثبيت الرصيد يجب أن يتما داخل القاعدة.
+export async function closeReconciliationPeriod(accountId, month, statementClosingBalance, note) {
+  const { data, error } = await supabase.rpc('close_reconciliation_period', {
+    p_account_id: accountId,
+    p_month: month,
+    p_statement_closing_balance: statementClosingBalance ?? null,
+    p_note: note || null,
+  });
+  if (error) throw error; return Array.isArray(data) ? data[0] : data;
+}
+export async function reopenReconciliationPeriod(accountId, month) {
+  const { data, error } = await supabase.rpc('reopen_reconciliation_period', { p_account_id: accountId, p_month: month });
+  if (error) throw error; return Array.isArray(data) ? data[0] : data;
+}
+export async function getBankTransactionAudit(transactionId) {
+  const { data, error } = await supabase.from('bank_transaction_audit')
+    .select('*').eq('transaction_id', transactionId).order('created_at', { ascending: false });
+  if (error) throw error; return data || [];
+}
 // بنود «الجدول التقديري» (عمالة/إشراف/مواد/نقل/أخرى بلا وصف مخصّص) مقابل بنود التكلفة الحرة
 // التي يضيفها المستخدم يدوياً بنوع ووصف ومبلغ من اختياره.
 // يستبدل بنود الجدول التقديري فقط دون المساس ببنود التكلفة المخصّصة التي يضيفها المستخدم يدوياً

@@ -129,8 +129,7 @@ as $$
       and p.status = 'closed'
   );
 $$;
-revoke execute on function public.bank_period_is_closed(uuid, date) from public, anon;
-grant execute on function public.bank_period_is_closed(uuid, date) to authenticated;
+revoke execute on function public.bank_period_is_closed(uuid, date) from public, anon, authenticated;
 
 create or replace function public.bank_audit(p_account uuid, p_tx uuid, p_month date, p_action text, p_details jsonb)
 returns void

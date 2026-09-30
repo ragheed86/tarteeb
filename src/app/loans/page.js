@@ -6,7 +6,7 @@ import {
   getLoans, createLoan, updateLoan, removeLoan,
   getLoanInstallments, replaceLoanInstallments,
   getLoanPayments, createLoanPayment, removeLoanPayment,
-  getBankAccounts, getBankTransactions, updateBankTransaction,
+  getBankAccounts, getBankTransactions, createBankMatches,
 } from '@/lib/data';
 import { fmtMoney, fmtNum } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, TextArea, Money, DateText, StatusPill, KpiCard } from '@/components';
@@ -199,7 +199,12 @@ export default function LoansPage() {
     if (!state) return [];
     return state.bankTx.filter((t) => n(t.amount) < 0 && t.status !== 'matched' && t.status !== 'excluded');
   }, [state]);
-  const txById = useMemo(() => new Map((state?.bankTx || []).map((t) => [t.matched_loan_payment_id, t])), [state]);
+  // دفعة القرض ← الحركة البنكية المطابقة لها (من جدول المطابقات)
+  const txById = useMemo(() => {
+    const map = new Map();
+    for (const t of state?.bankTx || []) for (const m of t.bank_reconciliation_matches || []) if (m.loan_payment_id) map.set(m.loan_payment_id, t);
+    return map;
+  }, [state]);
 
   // ---------- القرض ----------
   function openNewLoan() {
@@ -250,15 +255,10 @@ export default function LoansPage() {
   async function deleteLoan(loan) {
     if (!confirm(`حذف القرض «${loan.name}» مع كل أقساطه ودفعاته؟`)) return;
     try {
-      // فك ارتباط الحركات البنكية أولاً كي لا تبقى حركة «مطابقة» بلا مرجع.
-      const linked = state.bankTx.filter((t) => loanPaymentIds(loan.id).has(t.matched_loan_payment_id));
-      for (const tx of linked) await updateBankTransaction(tx.id, { status: 'unmatched', confidence: null, matched_loan_payment_id: null });
+      // حذف الدفعات يفك مطابقاتها البنكية تلقائياً وتعود الحركات للمراجعة (ما لم يكن الشهر مقفلاً).
       await removeLoan(loan.id);
       toast('تم حذف القرض'); await load('');
     } catch (e) { toast(e.message || 'تعذّر الحذف', 'err'); }
-  }
-  function loanPaymentIds(loanId) {
-    return new Set(state.payments.filter((p) => p.loan_id === loanId).map((p) => p.id));
   }
 
   // ---------- السداد ----------
@@ -285,10 +285,12 @@ export default function LoansPage() {
         reference: payForm.reference.trim() || null, note: payForm.note.trim() || null,
       });
       if (payForm.bank_transaction_id) {
-        await updateBankTransaction(payForm.bank_transaction_id, {
-          status: 'matched', confidence: 100,
-          matched_expense_id: null, matched_invoice_payment_id: null, matched_loan_payment_id: created.id,
-        });
+        const tx = linkableTx.find((t) => t.id === payForm.bank_transaction_id);
+        const open = tx ? Math.abs(n(tx.amount)) - n(tx.matched_amount) : n(payForm.amount);
+        await createBankMatches([{
+          bank_transaction_id: payForm.bank_transaction_id, loan_payment_id: created.id,
+          amount: r2(Math.min(n(payForm.amount), open)), method: 'manual', confidence: 100,
+        }]);
       }
       setPayOpen(false); toast('تم تسجيل السداد وتحديث الرصيد');
       await load(payForm.loan_id);
@@ -301,9 +303,7 @@ export default function LoansPage() {
   async function deletePayment(payment) {
     if (!confirm(`حذف دفعة بقيمة ${fmtMoney(payment.amount)}؟`)) return;
     try {
-      const tx = state.bankTx.find((t) => t.matched_loan_payment_id === payment.id);
-      if (tx) await updateBankTransaction(tx.id, { status: 'unmatched', confidence: null, matched_loan_payment_id: null });
-      await removeLoanPayment(payment.id);
+      await removeLoanPayment(payment.id); // المطابقة البنكية تُحذف معها تلقائياً
       toast('تم حذف الدفعة'); await load(selectedId);
     } catch (e) { toast(e.message || 'تعذّر حذف الدفعة', 'err'); }
   }

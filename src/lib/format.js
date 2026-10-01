@@ -81,19 +81,10 @@ export const SOURCE_LABEL = {
   referral: 'توصية صديق',
   client_referral: 'عن طريق عميل',
   employee_referral: 'عن طريق موظف',
+  whatsapp: 'واتساب',
+  google: 'جوجل',
+  website: 'الموقع',
+  snapchat: 'سناب شات',
+  campaign: 'حملة إعلانية',
   other: 'أخرى',
 };
-
-export const SOURCE_LABEL_EN = {
-  instagram: 'Instagram',
-  tiktok: 'TikTok',
-  referral: 'Friend Referral',
-  client_referral: 'Client Referral',
-  employee_referral: 'Employee Referral',
-  other: 'Other',
-};
-
-export function localizedLabel(entry, language = 'ar') {
-  if (!entry) return '';
-  return language === 'en' ? (entry.labelEn || entry.label || '') : (entry.label || '');
-}

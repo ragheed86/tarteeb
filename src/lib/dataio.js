@@ -78,7 +78,7 @@ const num = (v) => {
 };
 const round2 = (n) => Math.round(n * 100) / 100;
 
-const CLIENT_SOURCES = ['instagram', 'tiktok', 'referral', 'client_referral', 'employee_referral', 'other'];
+const CLIENT_SOURCES = ['instagram', 'tiktok', 'referral', 'client_referral', 'employee_referral', 'whatsapp', 'google', 'website', 'snapchat', 'campaign', 'other'];
 const CLIENT_STATUSES = ['lead', 'active', 'completed', 'waiting'];
 const PROJECT_STATUSES = ['quote', 'preparing', 'in_progress', 'delivered', 'completed', 'cancelled'];
 const EMP_WAGES = ['fixed', 'daily', 'hourly'];

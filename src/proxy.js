@@ -1,22 +1,55 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-// حدّ معدّل بسيط في الذاكرة لمسارات إدارة المستخدمين (إنشاء/حذف/كلمات مرور).
-// كافٍ لتطبيق داخلي بمنطقة واحدة على Vercel؛ استبدلوه بـUpstash Redis لو انتقلتم لعدة مناطق.
-const RATE_LIMIT_WINDOW_MS = 60_000;
+// حد المحاولات لمسارات إدارة المستخدمين (CRM-AUD-06).
+// العدّاد مشترك في Postgres (rate_limit_hit) فيصح بين كل نسخ السيرفر وبعد إعادة التشغيل.
+// المفتاح hash لعنوان IP — لا نخزّن العنوان نفسه. على Vercel رأس x-forwarded-for
+// يضبطه Vercel نفسه (يستبدل أي قيمة يرسلها العميل)، فلا يمكن تزويره من المتصفح.
+// إن تعذّر الوصول لقاعدة البيانات نرجع لعدّاد محلي محدود الحجم: المسار نفسه
+// يتحقق من جلسة المدير وصلاحيته، فالحد طبقة إضافية لا الحارس الوحيد.
+const RATE_LIMIT_WINDOW_SECONDS = 60;
 const RATE_LIMIT_MAX = 20;
-const rateLimitHits = new Map();
+const LOCAL_FALLBACK_MAX_KEYS = 5000;
+const localHits = new Map();
 
-function isRateLimited(ip) {
+function localHit(key) {
   const now = Date.now();
-  const entry = rateLimitHits.get(ip) ?? { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
-  if (now > entry.resetAt) {
-    entry.count = 0;
-    entry.resetAt = now + RATE_LIMIT_WINDOW_MS;
-  }
+  const windowMs = RATE_LIMIT_WINDOW_SECONDS * 1000;
+  let entry = localHits.get(key);
+  if (!entry || now > entry.resetAt) entry = { count: 0, resetAt: now + windowMs };
   entry.count += 1;
-  rateLimitHits.set(ip, entry);
-  return entry.count > RATE_LIMIT_MAX;
+  localHits.delete(key); localHits.set(key, entry); // الأحدث في الآخر
+  if (localHits.size > LOCAL_FALLBACK_MAX_KEYS) {
+    for (const [k, v] of localHits) { if (now > v.resetAt || localHits.size > LOCAL_FALLBACK_MAX_KEYS) localHits.delete(k); else break; }
+  }
+  return { hits: entry.count, retryAfter: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)) };
+}
+
+async function hashKey(value) {
+  const bytes = new TextEncoder().encode(`admin-api:${value}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function rateLimit(ip) {
+  const key = await hashKey(ip);
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (url && serviceKey) {
+    try {
+      const res = await fetch(`${url}/rest/v1/rpc/rate_limit_hit`, {
+        method: 'POST',
+        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_key: key, p_window_seconds: RATE_LIMIT_WINDOW_SECONDS }),
+        signal: AbortSignal.timeout(1500),
+      });
+      if (res.ok) {
+        const [row] = await res.json();
+        if (row) return { hits: row.hits, retryAfter: row.retry_after };
+      }
+    } catch { /* نرجع للعدّاد المحلي */ }
+  }
+  return localHit(key);
 }
 
 // مسارات تُعرض قبل حسم المصادقة أو لا تحتاجها: الجذر (يعرض تسجيل الدخول أو
@@ -59,8 +92,12 @@ export async function proxy(request) {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim()
       || request.headers.get('x-real-ip')
       || 'unknown';
-    if (isRateLimited(ip)) {
-      return NextResponse.json({ error: 'محاولات كثيرة، حاول لاحقاً' }, { status: 429 });
+    const { hits, retryAfter } = await rateLimit(ip);
+    if (hits > RATE_LIMIT_MAX) {
+      return NextResponse.json(
+        { error: 'محاولات كثيرة، حاول لاحقاً' },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+      );
     }
     return NextResponse.next();
   }

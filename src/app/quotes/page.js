@@ -224,7 +224,11 @@ export default function QuotesPage() {
     setAddingClient(false);
   }
 
+  // قفل فوري ضد النقر المزدوج: حالة saving تتأخر حتى إعادة الرسم، والـref لا (CRM-AUD-04).
+  const savingRef = useRef(false);
   async function save() {
+    if (savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       const rec = { ...q, defaultVatRate: vatCfg.rate };
@@ -233,6 +237,7 @@ export default function QuotesPage() {
       await refreshList();
       ping('تم حفظ العرض');
     } catch (e) { ping(e instanceof QuoteConflictError ? e.message : 'تعذّر الحفظ، حاول لاحقاً'); }
+    savingRef.current = false;
     setSaving(false);
   }
   // تصدير PDF باسم «عرض سعر - اسم العميل» (المتصفح يشتق اسم الملف من document.title)

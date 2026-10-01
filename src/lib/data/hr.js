@@ -19,6 +19,18 @@ export async function getEmployeeCosts() {
   }));
 }
 
+// سعر ساعة كل موظف أساسي (التكلفة الشهرية الكاملة ÷ ساعات العمل). يُحمَّل على المشاريع داخلياً.
+export async function getEmployeeHourlyRates() {
+  const { data, error } = await supabase.from('employee_hourly_rates').select('*');
+  if (error) throw error; return data || [];
+}
+
+// نسبة تشغيل الأساسيين لشهر: ساعات المشاريع ÷ ساعات العمل المدفوعة.
+export async function getSalariedUtilization(periodMonth) {
+  const { data, error } = await supabase.rpc('salaried_utilization', { p_month: periodMonth });
+  if (error) throw error; return data || [];
+}
+
 export async function getEmployeeContract(employeeId) {
   const { data, error } = await supabase.from('employment_contracts')
     .select('*, salary_components(*)')

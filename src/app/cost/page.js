@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  getProjects, getClients, getSuppliers, getEmployeesBasic, updateProject,
+  getProjects, getClients, getSuppliers, getEmployeesBasic, getEmployeeHourlyRates, updateProject,
   getProjectCosts, getProjectInvoices, saveProjectCosts, estimateToCostRows, costRowsToEstimate,
   getProjectCostAttachments, uploadProjectCostAttachment, removeProjectCostAttachment,
 } from '@/lib/data';
@@ -43,7 +43,7 @@ function plannedProjectDays(project) {
   return Array.from({ length: count }, (_, i) => addDaysISO(start, i));
 }
 
-const emptyLabor = () => ({ id: makeId('labor'), workerCount: '', worker: '', hours: '', rate: '' });
+const emptyLabor = () => ({ id: makeId('labor'), workerCount: '', worker: '', workerType: '', employeeId: '', hours: '', rate: '' });
 const emptyProduct = () => ({ id: makeId('product'), product: '', supplierId: '', supplierName: '', purchasePrice: '', markupPercent: '', salePrice: '' });
 const emptyMoney = (prefix) => ({ id: makeId(prefix), note: '', amount: '' });
 const emptyDay = (date) => ({ date, laborRows: [emptyLabor()], productRows: [emptyProduct()], transportRows: [], otherRows: [] });
@@ -111,15 +111,41 @@ function updateRow(rows, id, key, value, suppliers) {
   });
 }
 
-function updateLaborRow(rows, id, key, value) {
+// الأساسي: سعر الساعة تلقائي من تكلفته الشهرية الكاملة ÷ ساعات العمل (يُحمَّل داخلياً على المشروع).
+// بالساعة: سعر يدوي (الافتراضي للفريلانسر 20).
+function updateLaborRow(rows, id, key, value, employees = [], rates = {}) {
   return rows.map((r) => {
     if (r.id !== id) return r;
     const next = { ...r, [key]: value };
     if (key === 'worker') {
       next.role = isSupervisorLaborRow({ worker: value }) ? 'supervisor' : 'worker';
-      if (value && !isFreelanceWorker(value)) next.workerCount = '1';
-      const defaultRate = defaultHourlyRateForWorker(value);
-      if (defaultRate) next.rate = defaultRate;
+      const employee = employees.find((em) => em.name === value);
+      if (employee) {
+        next.workerType = 'employee';
+        next.employeeId = employee.id;
+        next.workerCount = '1';
+        const auto = rates[employee.id];
+        const fallback = defaultHourlyRateForWorker(value);
+        if (auto) next.rate = String(auto);
+        else if (fallback) next.rate = fallback;
+      } else {
+        next.employeeId = '';
+        next.workerType = value ? 'part_time' : '';
+        if (value && !isFreelanceWorker(value)) next.workerCount = '1';
+        const defaultRate = defaultHourlyRateForWorker(value);
+        if (defaultRate) next.rate = defaultRate;
+      }
+    }
+    if (key === 'workerType') {
+      if (value === 'part_time') {
+        next.employeeId = '';
+      } else if (value === 'employee') {
+        const employee = employees.find((em) => em.name === r.worker);
+        if (employee) {
+          next.employeeId = employee.id;
+          if (rates[employee.id]) next.rate = String(rates[employee.id]);
+        }
+      }
     }
     return next;
   });
@@ -142,10 +168,11 @@ export default function CostPage() {
   const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
-    Promise.all([getProjects(), getClients(), getSuppliers(), getEmployeesBasic().catch(() => [])])
-      .then(([projects, clients, suppliers, employees]) => {
+    Promise.all([getProjects(), getClients(), getSuppliers(), getEmployeesBasic().catch(() => []), getEmployeeHourlyRates().catch(() => [])])
+      .then(([projects, clients, suppliers, employees, hourlyRates]) => {
+        const rates = Object.fromEntries((hourlyRates || []).map((r) => [r.employee_id, Number(r.hourly_cost) || 0]));
         const byId = Object.fromEntries(clients.map((c) => [c.id, c.name]));
-        setState({ projects, suppliers, employees: employees || [], byId });
+        setState({ projects, suppliers, employees: employees || [], rates, byId });
         // تُفتح الصفحة فارغة: يبحث المستخدم عن المشروع بنفسه بدل اختيار أول مشروع تلقائياً
       })
       .catch((e) => setErr(e.message || 'تعذّر التحميل'));
@@ -200,7 +227,7 @@ export default function CostPage() {
   }
 
   function updateLabor(date, id, key, value) {
-    updateDay(date, (day) => ({ ...day, laborRows: updateLaborRow(day.laborRows, id, key, value) }));
+    updateDay(date, (day) => ({ ...day, laborRows: updateLaborRow(day.laborRows, id, key, value, state.employees || [], state.rates || {}) }));
   }
 
   function updateProduct(date, id, key, value) {
@@ -265,10 +292,12 @@ export default function CostPage() {
       }
       summary.hours += rowHours;
       summary.amount += amount;
+      if (row.workerType === 'employee') { summary.salariedAmount += amount; summary.salariedHours += rowHours; }
+      else { summary.partTimeAmount += amount; summary.partTimeHours += rowHours; }
     }
     if (hasLabor) summary.days += 1;
     return summary;
-  }, { days: 0, workerDays: 0, supervisorDays: 0, workerHours: 0, supervisorHours: 0, workerAmount: 0, supervisorAmount: 0, hours: 0, amount: 0 });
+  }, { days: 0, workerDays: 0, supervisorDays: 0, workerHours: 0, supervisorHours: 0, workerAmount: 0, supervisorAmount: 0, hours: 0, amount: 0, salariedAmount: 0, salariedHours: 0, partTimeAmount: 0, partTimeHours: 0 });
 
   const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024; // حد Supabase الافتراضي 50 ميجابايت
 
@@ -428,6 +457,16 @@ export default function CostPage() {
                   <strong className="amt">{fmtMoney(laborSummary.supervisorAmount)} ⃁</strong>
                 </div>
                 <div className="person-due">
+                  <b>أساسيون (تحميل داخلي)</b>
+                  <span>{fmtNum(laborSummary.salariedHours)} ساعة · تكلفتهم الفعلية بالرواتب</span>
+                  <strong className="amt">{fmtMoney(laborSummary.salariedAmount)} ⃁</strong>
+                </div>
+                <div className="person-due">
+                  <b>بالساعة / غير مصنّف</b>
+                  <span>{fmtNum(laborSummary.partTimeHours)} ساعة · تكلفة نقدية</span>
+                  <strong className="amt">{fmtMoney(laborSummary.partTimeAmount)} ⃁</strong>
+                </div>
+                <div className="person-due">
                   <b>إجمالي الساعات</b>
                   <span>{fmtNum(laborSummary.hours)} ساعة محسوبة</span>
                   <strong className="amt">{fmtMoney(laborSummary.amount)} ⃁</strong>
@@ -496,7 +535,13 @@ export default function CostPage() {
                               )}
                               <option value="فريلانسر">فريلانسر (مستقل)</option>
                             </select>
-                            {row.worker && <small className="more">{isSupervisor ? 'مشرف' : 'عامل'}</small>}
+                            {row.worker && (
+                              <select className="worker-type-select" value={row.workerType || ''} onChange={(e) => updateLabor(day.date, row.id, 'workerType', e.target.value)} aria-label="نوع العامل">
+                                <option value="">{isSupervisor ? 'مشرف' : 'غير مصنّف'}</option>
+                                <option value="employee">أساسي (براتب)</option>
+                                <option value="part_time">بالساعة</option>
+                              </select>
+                            )}
                           </span>
                           <span className="dcell" data-label={isSupervisor ? 'ساعات المشرف' : 'ساعات العامل'}><input type="number" min="0" step="0.5" value={row.hours} onChange={(e) => updateLabor(day.date, row.id, 'hours', e.target.value)} dir="ltr" aria-label={isSupervisor ? 'ساعات المشرف' : 'ساعات العامل'} /></span>
                           <span className="dcell" data-label="إجمالي الساعات"><span className="row-total amt">{fmtNum(num(row.workerCount) * num(row.hours))}</span></span>

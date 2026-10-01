@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   getPayrollRuns, getPayrollLines, generatePayroll, lockPayroll, updatePayrollLine,
-  markPayrollExported, getHrSettings, createHrSetting,
+  markPayrollExported, getHrSettings, createHrSetting, getSalariedUtilization,
 } from '@/lib/data';
 import { toCSV, downloadBlob } from '@/lib/dataio';
 import { fmtMoney, fmtNum } from '@/lib/format';
@@ -59,6 +59,13 @@ function RunTab() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [util, setUtil] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    getSalariedUtilization(`${month}-01`).then((rows) => { if (alive) setUtil(rows); }).catch(() => { if (alive) setUtil([]); });
+    return () => { alive = false; };
+  }, [month]);
 
   const run = useMemo(() => (runs || []).find((r) => r.period_month?.slice(0, 7) === month) || null, [runs, month]);
 
@@ -131,6 +138,24 @@ function RunTab() {
           <KpiCard tone="alert" label="تكلفة المنشأة" value={`${fmtMoney(run.total_employer_cost)} ⃁`} definition="ما تتحمله ترتيب فعلياً عن الموظفين هذا الشهر: الأجر المستحق + تأمينات المنشأة + التأمين الطبي + الرسوم الحكومية + مخصص نهاية الخدمة والتذاكر." period={monthLabel(month)} formula="الأجر المستحق + كل تكاليف المنشأة الشهرية" />
         </div>
       )}
+
+      {util.length > 0 && (() => {
+        const paid = util.reduce((t, u) => t + n(u.paid_hours), 0);
+        const used = util.reduce((t, u) => t + n(u.project_hours), 0);
+        const pct = paid ? Math.round((used / paid) * 1000) / 10 : 0;
+        return (
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="sec-head"><h2>نسبة تشغيل الأساسيين</h2><span className="more">{fmtNum(pct)}% من الساعات المدفوعة اشتغلت على مشاريع</span></div>
+            <DataTable rows={util} columns={[
+              { key: 'name', label: 'الموظف', primary: true, render: (u) => <span className="nm">{u.name}</span> },
+              { key: 'paid_hours', label: 'ساعات مدفوعة', render: (u) => fmtNum(u.paid_hours) },
+              { key: 'project_hours', label: 'ساعات مشاريع', render: (u) => fmtNum(u.project_hours) },
+              { key: 'utilization_pct', label: 'النسبة', render: (u) => <b>{fmtNum(u.utilization_pct)}%</b> },
+            ]} />
+            <p className="muted" style={{ padding: '0 16px 12px', margin: 0 }}>الباقي وقت مكتبي أو غير محمّل على مشروع؛ سجّل ساعات الأساسيين من صفحة التكاليف حتى تكتمل النسبة.</p>
+          </div>
+        );
+      })()}
 
       <div className="card" style={{ padding: '6px 0' }}>
         <DataTable rows={lines} empty={

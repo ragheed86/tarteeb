@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   getClients, getProjects, getInvoices, getAllInvoicePayments, getAllInvoiceItems,
-  getAllProjectCosts, getInventory, getCompanyExpenses, getSuppliers,
+  getAllProjectCosts, getPayrollRuns, getInventory, getCompanyExpenses, getSuppliers,
   getBankAccounts, getBankTransactions, getLoanPayments,
 } from '@/lib/data';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS, PROJECT_STATUS } from '@/lib/format';
@@ -33,14 +33,14 @@ export default function ReportsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts, bankTransactions, loanPayments] = await Promise.all([
+        const [clients, projects, invoices, payments, invoiceItems, costs, payrollRuns, inventory, expenses, suppliers, bankAccounts, bankTransactions, loanPayments] = await Promise.all([
           getClients(), getProjects(), getInvoices(), getAllInvoicePayments(), getAllInvoiceItems(),
-          getAllProjectCosts(), getInventory(), getCompanyExpenses().catch(() => []), getSuppliers().catch(() => []), getBankAccounts().catch(() => []),
+          getAllProjectCosts(), getPayrollRuns().catch(() => []), getInventory(), getCompanyExpenses().catch(() => []), getSuppliers().catch(() => []), getBankAccounts().catch(() => []),
           // كل الحسابات باستعلام واحد بدل حلقة N+1 (بلا accountId تجلب كل الحركات دفعة واحدة).
           getBankTransactions().catch(() => []),
           getLoanPayments().catch(() => []),
         ]);
-        setData({ clients, projects, invoices, payments, invoiceItems, costs, inventory, expenses, suppliers, bankAccounts, bankTransactions, loanPayments });
+        setData({ clients, projects, invoices, payments, invoiceItems, costs, payrollRuns, inventory, expenses, suppliers, bankAccounts, bankTransactions, loanPayments });
       } catch (loadError) {
         setError(loadError.message || 'تعذّر تحميل التقارير');
       }
@@ -57,9 +57,13 @@ export default function ReportsPage() {
     const periodItems = data.invoiceItems.filter((item) => inRange(item.invoices?.issue_at, from, to));
     const collected = sum(periodPayments, (payment) => payment.amount);
     const billed = sum(periodInvoices, (invoice) => invoice.total);
-    const projectCosts = sum(periodCosts, (cost) => cost.amount);
+    // عمالة الأساسيين تُحمَّل على المشروع داخلياً فقط؛ تكلفتها الفعلية في المسيّر المقفل فتُحسب مرة واحدة.
+    const isInternalLabor = (cost) => cost.kind === 'labor' && cost.worker_type === 'employee';
+    const internalLabor = sum(periodCosts.filter(isInternalLabor), (cost) => cost.amount);
+    const projectCosts = sum(periodCosts, (cost) => cost.amount) - internalLabor;
     const companyExpenses = sum(periodExpenses, (expense) => expense.amount);
-    const netProfit = collected - projectCosts - companyExpenses;
+    const payrollCost = sum((data.payrollRuns || []).filter((run) => run.status === 'locked' && inRange(run.period_month, from, to)), (run) => run.total_employer_cost);
+    const netProfit = collected - projectCosts - companyExpenses - payrollCost;
     const organizersSales = sum(periodItems.filter((item) => isOrganizers(item.description)), (item) => n(item.qty) * n(item.unit_price));
     const serviceSales = sum(periodItems.filter((item) => !isOrganizers(item.description)), (item) => n(item.qty) * n(item.unit_price));
     const organizersCosts = sum(periodCosts.filter((cost) => isOrganizers(`${cost.product_name || ''} ${cost.label || ''} ${cost.note || ''}`)), (cost) => cost.amount);
@@ -101,7 +105,7 @@ export default function ReportsPage() {
     const receivables = sum(invoices, (invoice) => invoice.remaining_amount);
     const overdue = invoices.filter((invoice) => invoice.status === 'overdue');
     return {
-      periodInvoices, periodCosts, periodExpenses, collected, billed, projectCosts, companyExpenses, netProfit,
+      periodInvoices, periodCosts, periodExpenses, collected, billed, projectCosts, companyExpenses, internalLabor, payrollCost, netProfit,
       serviceSales, serviceCosts, organizersSales, organizersCosts, clientRows, projectRows, supplierRows,
       lowStock, inventoryValue, bankBalance, bankFlow, loanRepaid, receivables, overdue,
     };
@@ -154,6 +158,7 @@ function Overview({ report, scope }) {
       <Metric label="المبالغ المفوترة" value={report.billed} />
       <Metric label="تكاليف المشاريع" value={report.projectCosts} tone="alert" />
       <Metric label="مصاريف الشركة" value={report.companyExpenses} tone="alert" />
+      <Metric label="رواتب الأساسيين" value={report.payrollCost} tone="alert" />
       <Metric label="صافي الربح النقدي" value={report.netProfit} tone={report.netProfit >= 0 ? 'pos' : 'alert'} />
       <Metric label="حصة كل شريك" value={report.netProfit / 2} tone={report.netProfit >= 0 ? 'pos' : 'alert'} />
     </div>
@@ -224,7 +229,7 @@ function Inventory({ report, scope }) {
 }
 
 function Statement({ report }) {
-  return <div className="card report-statement"><h3>قائمة الدخل النقدية</h3><p>تعتمد على الدفعات المحصلة والتكاليف والمصاريف المدفوعة.</p><Line label="الإيرادات المحصّلة" value={report.collected} /><Line label="تكاليف المشاريع" value={-report.projectCosts} negative /><Line label="مصاريف الشركة" value={-report.companyExpenses} negative /><Line label="صافي الربح النقدي" value={report.netProfit} total /></div>;
+  return <div className="card report-statement"><h3>قائمة الدخل النقدية</h3><p>تعتمد على الدفعات المحصلة والتكاليف والمصاريف المدفوعة.</p><Line label="الإيرادات المحصّلة" value={report.collected} /><Line label="تكاليف المشاريع" value={-report.projectCosts} negative /><Line label="مصاريف الشركة" value={-report.companyExpenses} negative /><Line label="رواتب الأساسيين (مسيّر مقفل)" value={-report.payrollCost} negative /><Line label="صافي الربح النقدي" value={report.netProfit} total /></div>;
 }
 function CashFlow({ report }) {
   return <div className="card report-statement"><h3>التدفق النقدي والبنك</h3><p>حركة نقدية الفترة مع الرصيد البنكي بعد الحركات المستوردة.</p><Line label="داخل الفترة" value={report.collected} /><Line label="خارج الفترة" value={-(report.projectCosts + report.companyExpenses)} negative /><Line label="سداد أقساط القروض" value={-report.loanRepaid} negative /><Line label="صافي حركة البنك" value={report.bankFlow} total /><Line label="الرصيد الحالي بالبنك" value={report.bankBalance} total /></div>;

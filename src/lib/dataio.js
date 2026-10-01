@@ -1,7 +1,7 @@
 // طبقة استيراد/تصدير البيانات — CSV (يفتح في Excel) و JSON. بلا مكتبات خارجية.
 import {
   getClients, getProjects, getSuppliers, getEmployees, getInvoices, getGovernmentAccounts,
-  getAllProjectCostsDetailed,
+  getAllProjectCostsDetailed, getCompanyExpenses,
   createClient, createSupplier, createEmployee, createProject, createProjectCost,
 } from '@/lib/data';
 import { SOURCE_LABEL, CLIENT_STATUS, PROJECT_STATUS, INVOICE_STATUS } from '@/lib/format';
@@ -123,6 +123,28 @@ export const ENTITIES = {
       name: 'سارة البراهيم', phone: '0501234567', source: 'انستقرام', district: 'النرجس',
       status: 'عميل نشط', first_contact_at: '2026-07-01', code: '', notes: 'عميلة مميزة',
     },
+  },
+  company_expenses: {
+    label: 'مصاريف الشركة',
+    importable: false,
+    columns: [
+      { k: 'expense_date', label: 'التاريخ' },
+      { k: 'description', label: 'المصروف' },
+      { k: 'category', label: 'التصنيف' },
+      { k: 'cost_nature', label: 'النوع' },
+      { k: 'vendor', label: 'المورد' },
+      { k: 'amount', label: 'الإجمالي' },
+      { k: 'vat_amount', label: 'الضريبة' },
+      { k: 'payment_status', label: 'حالة الدفع' },
+      { k: 'payment_method', label: 'طريقة الدفع' },
+      { k: 'paid_by', label: 'الدافع' },
+      { k: 'project_id', label: 'معرّف المشروع' },
+      { k: 'employee_id', label: 'معرّف الموظف' },
+      { k: 'account_id', label: 'معرّف الحساب' },
+      { k: 'source', label: 'المصدر' },
+      { k: 'note', label: 'ملاحظات' },
+    ],
+    fetchExport: getCompanyExpenses,
   },
   suppliers: {
     label: 'الموردون',

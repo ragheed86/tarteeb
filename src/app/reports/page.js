@@ -78,6 +78,8 @@ export default function ReportsPage() {
     const clientNames = Object.fromEntries(data.clients.map((client) => [client.id, client.name]));
     const clientRows = [...byClient.values()].map((row) => ({ ...row, client: clientNames[row.client_id] || 'عميل محذوف' })).sort((a, b) => b.billed - a.billed);
     const projectCostsById = data.costs.reduce((all, cost) => ({ ...all, [cost.project_id]: n(all[cost.project_id]) + n(cost.amount) }), {});
+    // مصاريف الشركة المربوطة بمشروع تدخل في ربحية المشروع (وتبقى محسوبة مرة واحدة ضمن مصاريف الشركة في الإجمالي).
+    for (const expense of data.expenses) if (expense.project_id) projectCostsById[expense.project_id] = n(projectCostsById[expense.project_id]) + n(expense.amount);
     const projectRows = data.projects.filter((project) => inRange(project.start_date || project.created_at, from, to)).map((project) => {
       const cost = n(projectCostsById[project.id]);
       const sale = n(project.sale_price);

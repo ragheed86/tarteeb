@@ -227,7 +227,7 @@ export default function BankReconciliationPage() {
     if (n(tx.amount) >= 0 || amount <= 0) return;
     setSaving(true);
     try {
-      const expense = await createCompanyExpense({ description: tx.description, category: 'other', amount, vat_amount: 0, expense_date: tx.transaction_date, payment_status: 'paid', payment_method: 'bank_transfer', recurrence: 'none', note: tx.reference ? `مرجع البنك: ${tx.reference}` : 'أُنشئ من المطابقة البنكية' });
+      const expense = await createCompanyExpense({ description: tx.description, category: 'other', amount, vat_amount: 0, expense_date: tx.transaction_date, payment_status: 'paid', payment_method: 'bank_transfer', recurrence: 'none', source: 'bank_reconciliation', account_id: tx.account_id || null, note: tx.reference ? `مرجع البنك: ${tx.reference}` : 'أُنشئ من المطابقة البنكية' });
       await createBankMatches([{ bank_transaction_id: tx.id, expense_id: expense.id, amount, method: 'created', confidence: 100 }]);
       toast('تم إنشاء المصروف ومطابقته'); await load(accountId);
     } catch (e) { toast(e.message || 'تعذّر إنشاء المصروف', 'err'); }

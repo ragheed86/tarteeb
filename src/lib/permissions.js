@@ -120,6 +120,7 @@ export function permissionForPath(pathname) {
   if (path.startsWith('/company-expenses')) return 'expenses';
   if (path.startsWith('/bank-reconciliation')) return 'bank_reconciliation';
   if (path.startsWith('/loans')) return 'loans';
+  if (path.startsWith('/payroll')) return 'payroll';
   if (path.startsWith('/partners')) return 'expenses';
   if (path.startsWith('/government')) return 'government';
   if (path.startsWith('/suppliers')) return 'warehouse';

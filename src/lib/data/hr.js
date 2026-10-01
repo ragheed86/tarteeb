@@ -144,6 +144,11 @@ export async function lockPayroll(runId) {
   const { error } = await supabase.rpc('payroll_lock', { p_run: runId });
   if (error) throw error;
 }
+// يسجّل وقت تصدير ملف التحويل للبنك (لا يغيّر الأرقام؛ مسموح على المسيّر المقفل)
+export async function markPayrollExported(runId) {
+  const { error } = await supabase.from('payroll_runs').update({ exported_at: new Date().toISOString() }).eq('id', runId);
+  if (error) throw error;
+}
 export async function updatePayrollLine(id, payload) {
   const { data, error } = await supabase.from('payroll_lines').update(payload).eq('id', id).select('*').single();
   if (error) throw error; return data;

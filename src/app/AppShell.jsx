@@ -34,6 +34,7 @@ const NAV = [
     { href: '/company-expenses', labelKey: 'nav.expenses', icon: IconCost, subKey: 'nav.expensesSub' },
     { href: '/bank-reconciliation', labelKey: 'nav.bank', icon: IconDoc, subKey: 'nav.bankSub' },
     { href: '/loans', labelKey: 'nav.loans', icon: IconCost, subKey: 'nav.loansSub' },
+    { href: '/payroll', labelKey: 'nav.payroll', icon: IconPrice, subKey: 'nav.payrollSub' },
     { href: '/reports', labelKey: 'nav.reports', icon: IconDash, subKey: 'nav.reportsSub' },
   ] },
   { groupKey: 'nav.system', items: [

@@ -8,6 +8,7 @@ import {
   getEmployeeLeaves, createLeaveRecord, removeLeaveRecord,
   getEmployeeAdvances, createEmployeeAdvance, updateEmployeeAdvance,
   getEosEntitlement,
+  getEmployeeAllocations, upsertEmployeeAllocation, removeEmployeeAllocation, getProjects,
 } from '@/lib/data';
 import { fmtMoney, fmtDate, CURRENCY } from '@/lib/format';
 import { Loading, Empty } from '../ui';
@@ -43,6 +44,7 @@ const TABS = [
   ['leaves', 'الإجازات والغياب'],
   ['advances', 'السلف'],
   ['eos', 'نهاية الخدمة'],
+  ['allocations', 'توزيع على المشاريع'],
 ];
 
 function daysBetween(from, to) {
@@ -108,6 +110,7 @@ export default function PayrollModal({ employee, cost, onClose, onChanged }) {
               {tab === 'leaves' && <LeavesTab employee={employee} onChanged={onChanged} />}
               {tab === 'advances' && <AdvancesTab employee={employee} cost={cost} onChanged={onChanged} />}
               {tab === 'eos' && <EosTab employee={employee} cost={cost} />}
+              {tab === 'allocations' && <AllocationsTab employee={employee} cost={cost} />}
             </>
           )}
         </div>
@@ -541,6 +544,81 @@ function EosTab({ employee, cost }) {
           </p>
         )}
       </div>
+    </>
+  );
+}
+
+// توزيع وقت الموظف على المشاريع لشهر محدد — يحدد كم من تكلفته الشهرية تُحمَّل
+// على كل مشروع. قاعدة البيانات تمنع تجاوز 100% لنفس الشهر.
+function AllocationsTab({ employee, cost }) {
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [rows, setRows] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [form, setForm] = useState({ project_id: '', percent: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function load() {
+    try { setRows(await getEmployeeAllocations(employee.id, `${month}-01`)); setErr(''); }
+    catch (e) { setErr(e.message || 'تعذّر التحميل'); setRows([]); }
+  }
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [employee.id, month]);
+  useEffect(() => { getProjects().then((p) => setProjects(p || [])).catch(() => setProjects([])); }, []);
+
+  const used = (rows || []).reduce((sum, r) => sum + num(r.allocation_percent), 0);
+  const remaining = Math.max(0, 100 - used);
+  const monthlyCost = num(cost?.total_employer_cost);
+
+  async function add(e) {
+    e.preventDefault();
+    const pct = num(form.percent);
+    if (!form.project_id) { setErr('اختر المشروع'); return; }
+    if (pct <= 0 || pct > 100) { setErr('النسبة بين 1 و100'); return; }
+    setBusy(true); setErr('');
+    try {
+      await upsertEmployeeAllocation({ employee_id: employee.id, project_id: form.project_id, period_month: `${month}-01`, allocation_percent: pct });
+      setForm({ project_id: '', percent: '' }); await load();
+    } catch (e2) { setErr(e2.message || 'تعذّر الحفظ'); }
+    finally { setBusy(false); }
+  }
+  async function del(id) {
+    try { await removeEmployeeAllocation(id); await load(); }
+    catch (e2) { setErr(e2.message || 'تعذّر الحذف'); }
+  }
+
+  if (rows === null) return <Loading />;
+  return (
+    <>
+      {err && <div className="errbar">{err}</div>}
+      <div className="inline-add" style={{ gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <input type="month" lang="en-GB" dir="ltr" value={month} onChange={(e) => setMonth(e.target.value || month)} style={{ maxWidth: 160 }} aria-label="الشهر" />
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>موزّع {used.toFixed(0)}% · المتبقي {remaining.toFixed(0)}%</span>
+      </div>
+      {rows.length === 0 ? <Empty title="لا توزيع لهذا الشهر" desc="وزّع وقت الموظف على المشاريع ليُحمَّل جزء من تكلفته على كل مشروع." /> : (
+        <table>
+          <thead><tr><th>المشروع</th><th>النسبة</th><th>من التكلفة الشهرية</th><th /></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td>{r.projects?.title || '—'}</td>
+                <td dir="ltr">{num(r.allocation_percent).toFixed(0)}%</td>
+                <td dir="ltr">{monthlyCost ? `${fmtMoney(monthlyCost * num(r.allocation_percent) / 100)} ${CURRENCY}` : '—'}</td>
+                <td style={{ textAlign: 'left' }}><button className="btn ghost sm" type="button" onClick={() => del(r.id)}>حذف</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {remaining > 0 && (
+        <form onSubmit={add} className="inline-add" style={{ marginTop: 12, flexWrap: 'wrap', gap: 8 }}>
+          <select value={form.project_id} onChange={(e) => setForm((f) => ({ ...f, project_id: e.target.value }))} style={{ maxWidth: 240 }} aria-label="المشروع">
+            <option value="">— اختر المشروع —</option>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+          </select>
+          <input type="number" min="1" max={remaining} step="1" dir="ltr" placeholder={`النسبة (حتى ${remaining.toFixed(0)}%)`} value={form.percent} onChange={(e) => setForm((f) => ({ ...f, percent: e.target.value }))} style={{ maxWidth: 150 }} />
+          <button className="btn sm" disabled={busy}>إضافة</button>
+        </form>
+      )}
     </>
   );
 }

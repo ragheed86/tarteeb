@@ -339,7 +339,7 @@ end $$;
 insert into public.company_settings
   (name_ar, name_en, vat_number, city)
 values
-  ('ترتيب لتنظيم المساحات','Tartib Space Organizing','300123456700003','الرياض');
+  ('ترتيب لتنظيم المساحات','Tartib Space Organizing',null,'الرياض'); -- الرقم الضريبي يُدخل من الإعدادات
 
 insert into public.warehouses (name) values
   ('مستودع دلال'), ('مستودع رغيد'), ('مستودع الرياض');
@@ -347,7 +347,6 @@ insert into public.warehouses (name) values
 insert into public.categories (name) values
   ('تخزين'), ('منظمات'), ('أدوات');
 
-insert into public.partners (name, share_percent) values
-  ('راغد', 50), ('سلطان', 30), ('نواف', 20);
+-- لا بيانات شركاء تجريبية: يُضاف الشركاء الفعليون من التطبيق.
 
 -- تم. شغّل الملف كاملًا في Supabase SQL Editor.

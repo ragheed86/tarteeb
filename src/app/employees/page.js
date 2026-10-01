@@ -452,7 +452,7 @@ function CalendarModal({ employee, onClose }) {
       });
       const p = await res.json();
       if (!res.ok) throw new Error(p.error);
-      setStatus(null); toast('تم فصل التقويم');
+      setStatus(null); toast(p.revoked === false ? 'تم إيقاف المزامنة — سيُكمل إلغاء الصلاحية لدى Google تلقائياً' : 'تم فصل التقويم وإلغاء الصلاحية لدى Google');
     } catch (e) { setErr(e.message || 'تعذّر الفصل'); }
     finally { setBusy(false); }
   }

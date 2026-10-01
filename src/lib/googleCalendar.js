@@ -104,36 +104,78 @@ export async function connectEmployeeCalendar({ employeeId, code, redirectUri, c
   }
   const profile = await fetchGoogleProfile(tokens.access_token);
   const expiresAt = new Date(Date.now() + (Number(tokens.expires_in) || 3600) * 1000).toISOString();
-  const { error } = await supabaseAdmin.from('employee_calendar_connections').upsert({
-    employee_id: employeeId,
-    google_email: profile?.email || null,
-    refresh_token: tokens.refresh_token,
-    access_token: tokens.access_token,
-    access_token_expires_at: expiresAt,
-    connected_by: connectedBy || null,
-  }, { onConflict: 'employee_id' });
+  // التوكنات تُخزَّن مشفّرة في Supabase Vault عبر دالة لا يستدعيها إلا السيرفر (CRM-AUD-05).
+  const { error } = await supabaseAdmin.rpc('gcal_store_tokens', {
+    p_employee: employeeId,
+    p_refresh: tokens.refresh_token,
+    p_access: tokens.access_token,
+    p_expires: expiresAt,
+    p_email: profile?.email || null,
+    p_connected_by: connectedBy || null,
+  });
   if (error) throw error;
 }
 
-export async function disconnectEmployeeCalendar(employeeId) {
-  const { error } = await supabaseAdmin.from('employee_calendar_connections').delete().eq('employee_id', employeeId);
+// إلغاء التفويض لدى Google. نجاح، أو توكن ملغى مسبقاً (invalid_token) = تم الإلغاء.
+async function revokeAtGoogle(token) {
+  if (!token) return true;
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token }),
+    });
+    if (res.ok) return true;
+    const payload = await res.json().catch(() => ({}));
+    return payload.error === 'invalid_token';
+  } catch {
+    return false; // خطأ شبكة مؤقت — يبقى الطلب معلّقاً ونعيد المحاولة لاحقاً
+  }
+}
+
+async function finishRevoke(employeeId) {
+  const { data, error } = await supabaseAdmin.rpc('gcal_get_tokens', { p_employee: employeeId });
   if (error) throw error;
+  const row = data?.[0];
+  if (!row) return true; // لا اتصال
+  const revoked = await revokeAtGoogle(row.refresh_token || row.access_token);
+  if (!revoked) return false;
+  const { error: delErr } = await supabaseAdmin.rpc('gcal_delete', { p_employee: employeeId });
+  if (delErr) throw delErr;
+  return true;
+}
+
+// الفصل: نوقف المزامنة فوراً (revoke_status=pending) ثم نلغي التفويض لدى Google.
+// إن فشل الإلغاء مؤقتاً يبقى الاتصال معلّقاً (لا مزامنة) ويُعاد المحاولة عند فتح صفحة الموظفين.
+export async function disconnectEmployeeCalendar(employeeId) {
+  const { error } = await supabaseAdmin.rpc('gcal_mark_revoking', { p_employee: employeeId });
+  if (error) throw error;
+  return { revoked: await finishRevoke(employeeId) };
+}
+
+export async function retryPendingRevocations() {
+  const { data, error } = await supabaseAdmin
+    .from('employee_calendar_connections').select('employee_id').eq('revoke_status', 'pending');
+  if (error) throw error;
+  for (const row of data || []) await finishRevoke(row.employee_id).catch(() => false);
 }
 
 export async function getEmployeeCalendarConnections() {
   const { data, error } = await supabaseAdmin
     .from('employee_calendar_connections')
-    .select('employee_id,google_email,calendar_id,created_at');
+    .select('employee_id,google_email,calendar_id,created_at')
+    .is('revoke_status', null);
   if (error) throw error;
   return data;
 }
 
+// يعيد null لموظف غير متصل أو بدأ فصله — فلا مزامنة بعد طلب الفصل.
 async function getConnection(employeeId) {
-  const { data, error } = await supabaseAdmin
-    .from('employee_calendar_connections')
-    .select('*').eq('employee_id', employeeId).maybeSingle();
+  const { data, error } = await supabaseAdmin.rpc('gcal_get_tokens', { p_employee: employeeId });
   if (error) throw error;
-  return data;
+  const row = data?.[0];
+  if (!row || row.revoke_status) return null;
+  return row;
 }
 
 async function getValidAccessToken(employeeId) {
@@ -151,17 +193,16 @@ async function getValidAccessToken(employeeId) {
   });
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // رفض جوجل للتوكن (مثلاً ألغى الموظف الصلاحية من حسابه) — نحذف الاتصال بدل تكرار المحاولة الفاشلة
-    if (payload.error === 'invalid_grant') await supabaseAdmin.from('employee_calendar_connections').delete().eq('employee_id', employeeId);
+    // رفض جوجل للتوكن (مثلاً ألغى الموظف الصلاحية من حسابه) — التفويض ملغى أصلاً، فنحذف الاتصال
+    if (payload.error === 'invalid_grant') await supabaseAdmin.rpc('gcal_delete', { p_employee: employeeId });
     throw new Error(payload.error_description || payload.error || 'تعذّر تجديد الاتصال بتقويم Google');
   }
   const accessTokenExpiresAt = new Date(Date.now() + (Number(payload.expires_in) || 3600) * 1000).toISOString();
-  const { data: updated, error } = await supabaseAdmin
-    .from('employee_calendar_connections')
-    .update({ access_token: payload.access_token, access_token_expires_at: accessTokenExpiresAt })
-    .eq('employee_id', employeeId).select('*').single();
+  const { error } = await supabaseAdmin.rpc('gcal_update_access', {
+    p_employee: employeeId, p_access: payload.access_token, p_expires: accessTokenExpiresAt,
+  });
   if (error) throw error;
-  return updated;
+  return { ...conn, access_token: payload.access_token, access_token_expires_at: accessTokenExpiresAt };
 }
 
 function toGoogleEvent(appointment) {

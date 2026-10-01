@@ -10,8 +10,9 @@ export async function POST(request) {
   if (!employeeId) return apiError('employee_id مطلوب', 400);
 
   try {
-    await disconnectEmployeeCalendar(employeeId);
-    return NextResponse.json({ ok: true });
+    const { revoked } = await disconnectEmployeeCalendar(employeeId);
+    // المزامنة توقفت في الحالتين؛ revoked=false يعني أن إلغاء Google سيُعاد تلقائياً لاحقاً
+    return NextResponse.json({ ok: true, revoked });
   } catch (error) {
     return apiError(error.message || 'تعذّر فصل التقويم', 500);
   }

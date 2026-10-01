@@ -165,7 +165,7 @@ export default function WarehousePage() {
       }
       if (editing) {
         const up = await updateInventoryItem(editing.id, payload);
-        if (payload.image_path && editing.image_path) removeProductImage(editing.image_path);
+        // الصورة القديمة تُحذف تلقائياً عبر طابور التنظيف بعد نجاح الحفظ
         setD((s) => ({ ...s, items: s.items.map((x) => (x.id === up.id ? up : x)) }));
       } else {
         const ni = await createInventoryItem(payload);

@@ -140,6 +140,28 @@ export async function getAllProjectCostsDetailed() {
   if (error) throw error; return data;
 }
 
+// ---------- تنظيف ملفات Storage (CRM-AUD-07) ----------
+// حذف السجل أو تبديل ملفه يضع المسار القديم في طابور داخل نفس عملية قاعدة البيانات
+// (triggers)، ثم تأخذ هذه الدالة العناصر المستحقة وتحذف ملفاتها. الملف لا يُحذف أبداً
+// وهو ما زال مرتبطاً بسجل، والفشل يُعاد لاحقاً بدل أن يُبتلع بصمت.
+export async function processStorageCleanup(limit = 20) {
+  const { data: items, error } = await supabase.rpc('storage_cleanup_claim', { p_limit: limit });
+  if (error) return { done: 0, failed: 0, error: error.message };
+  let done = 0; const failures = [];
+  for (const item of items || []) {
+    const { error: rmErr } = await supabase.storage.from(item.bucket).remove([item.path]);
+    await supabase.rpc('storage_cleanup_finish', { p_id: item.id, p_error: rmErr ? rmErr.message || 'remove failed' : null });
+    if (rmErr) failures.push(rmErr.message); else done += 1;
+  }
+  return { done, failed: failures.length, error: failures.join('، ') };
+}
+// ملف رُفع ثم فشل حفظ سجله: نحاول حذفه فوراً، وإن فشل نضعه في الطابور.
+async function discardUploadedFile(bucket, path) {
+  if (!path) return;
+  const { error } = await supabase.storage.from(bucket).remove([path]);
+  if (error) await supabase.rpc('storage_cleanup_enqueue', { p_bucket: bucket, p_path: path });
+}
+
 // ---------- مصاريف الشركة العامة ----------
 const COMPANY_EXPENSE_RECEIPTS_BUCKET = 'company-expense-receipts';
 
@@ -154,11 +176,14 @@ export async function createCompanyExpense(p) {
 }
 export async function updateCompanyExpense(id, p) {
   const { data, error } = await supabase.from('company_expenses').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  if ('receipt_path' in p) processStorageCleanup().catch(() => {}); // الفاتورة القديمة دخلت الطابور
+  return data;
 }
 export async function removeCompanyExpense(id) {
   const { error } = await supabase.from('company_expenses').delete().eq('id', id);
   if (error) throw error;
+  processStorageCleanup().catch(() => {});
 }
 export async function uploadCompanyExpenseReceipt(expenseId, file) {
   const rawExt = (file.name.split('.').pop() || (file.type === 'application/pdf' ? 'pdf' : 'jpg')).toLowerCase();
@@ -180,10 +205,9 @@ export async function getCompanyExpenseReceiptUrl(path) {
   if (error) throw error;
   return data.signedUrl;
 }
+// لملف رُفع ولم يُحفظ سجله. حذف/استبدال فاتورة محفوظة يتم تلقائياً عبر طابور التنظيف.
 export async function removeCompanyExpenseReceipt(path) {
-  if (!path) return;
-  const { error } = await supabase.storage.from(COMPANY_EXPENSE_RECEIPTS_BUCKET).remove([path]);
-  if (error) throw error;
+  await discardUploadedFile(COMPANY_EXPENSE_RECEIPTS_BUCKET, path);
 }
 export async function getCompanyExpenseBudgets() {
   const { data, error } = await supabase.from('company_expense_budgets').select('*').order('month', { ascending: false });
@@ -627,21 +651,10 @@ export async function removeProject(id) {
   if (!deleted) throw new Error('لم يتم حذف المشروع. تحقق من صلاحية الحذف ثم حاول مجدداً.');
   clearSupabaseReadCache('projects', 'invoices');
 
-  // حذف الملفات الفعلية من Storage بعد نجاح حذف قاعدة البيانات. فشل تنظيف
-  // ملف لا يعيد المشروع المحذوف، لكنه يُعاد كتحذير واضح للمستخدم.
-  const cleanupErrors = [];
-  const mediaPaths = (media || []).map((row) => row.file_path).filter(Boolean);
-  const attachmentPaths = (attachments || []).map((row) => row.file_path).filter(Boolean);
-  if (mediaPaths.length) {
-    const { error: storageError } = await supabase.storage.from(PROJECT_MEDIA_BUCKET).remove(mediaPaths);
-    if (storageError) cleanupErrors.push(storageError.message);
-  }
-  if (attachmentPaths.length) {
-    const { error: storageError } = await supabase.storage.from(COST_ATTACHMENTS_BUCKET).remove(attachmentPaths);
-    if (storageError) cleanupErrors.push(storageError.message);
-  }
-
-  return { cleanupWarning: cleanupErrors.length ? cleanupErrors.join('، ') : '' };
+  // ملفات المشروع (الوسائط والمرفقات) دخلت طابور التنظيف ضمن نفس عملية الحذف؛
+  // نحذفها الآن، وما يفشل يبقى في الطابور ويُعاد لاحقاً.
+  const cleanup = await processStorageCleanup(100);
+  return { cleanupWarning: cleanup.failed ? `${cleanup.failed} ملف سيُعاد حذفه لاحقاً تلقائياً` : '' };
 }
 
 // الفريق (project_team — مفتاح مركّب) — مع أسماء الموظفين
@@ -700,13 +713,16 @@ export async function uploadProjectMedia(projectId, kind, file) {
   const { error: upErr } = await supabase.storage.from(PROJECT_MEDIA_BUCKET)
     .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type || undefined });
   if (upErr) throw upErr;
-  const row = await createProjectMedia({ project_id: projectId, kind, file_url: path, file_path: path });
+  let row;
+  try { row = await createProjectMedia({ project_id: projectId, kind, file_url: path, file_path: path }); }
+  catch (e) { await discardUploadedFile(PROJECT_MEDIA_BUCKET, path); throw e; }
   return signStoredFile(row, PROJECT_MEDIA_BUCKET);
 }
-export async function removeProjectMedia(id, filePath) {
-  if (filePath) await supabase.storage.from(PROJECT_MEDIA_BUCKET).remove([filePath]).catch(() => {});
+export async function removeProjectMedia(id) {
+  // السجل أولاً؛ الملف يدخل طابور التنظيف تلقائياً ثم يُحذف
   const { error } = await supabase.from('project_media').delete().eq('id', id);
   if (error) throw error;
+  await processStorageCleanup();
 }
 
 // ---------- وسائط لوحة المعلومات (رفع فعلي إلى Supabase Storage) ----------
@@ -730,14 +746,14 @@ export async function uploadDashboardMedia(file, caption = '') {
   if (upErr) throw upErr;
   const row = { kind, file_url: path, file_path: path, caption: caption?.trim() || null };
   const { data, error } = await supabase.from('dashboard_media').insert(row).select().single();
-  if (error) throw error;
+  if (error) { await discardUploadedFile(DASHBOARD_MEDIA_BUCKET, path); throw error; }
   return signStoredFile(data, DASHBOARD_MEDIA_BUCKET);
 }
 
-export async function removeDashboardMedia(id, filePath) {
-  if (filePath) await supabase.storage.from(DASHBOARD_MEDIA_BUCKET).remove([filePath]).catch(() => {});
+export async function removeDashboardMedia(id) {
   const { error } = await supabase.from('dashboard_media').delete().eq('id', id);
   if (error) throw error;
+  await processStorageCleanup();
 }
 
 // ---------- مرفقات تكلفة المشروع (مستندات: فواتير موردين، إيصالات...) ----------
@@ -769,14 +785,14 @@ export async function uploadProjectCostAttachment(projectId, file, note = '') {
     note: note?.trim() || null,
   };
   const { data, error } = await supabase.from('project_cost_attachments').insert(row).select().single();
-  if (error) throw error;
+  if (error) { await discardUploadedFile(COST_ATTACHMENTS_BUCKET, path); throw error; }
   return signStoredFile(data, COST_ATTACHMENTS_BUCKET);
 }
 
-export async function removeProjectCostAttachment(id, filePath) {
-  if (filePath) await supabase.storage.from(COST_ATTACHMENTS_BUCKET).remove([filePath]).catch(() => {});
+export async function removeProjectCostAttachment(id) {
   const { error } = await supabase.from('project_cost_attachments').delete().eq('id', id);
   if (error) throw error;
+  await processStorageCleanup();
 }
 
 // تكلفة المشروع — بنود
@@ -800,12 +816,14 @@ export async function createInventoryItem(p) {
 }
 export async function updateInventoryItem(id, p) {
   const { data, error } = await supabase.from('inventory_items').update(p).eq('id', id).select('*').single();
-  if (error) throw error; return data;
+  if (error) throw error;
+  if ('image_path' in p) processStorageCleanup().catch(() => {});
+  return data;
 }
-export async function removeInventoryItem(id, imagePath) {
-  if (imagePath) await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([imagePath]).catch(() => {});
+export async function removeInventoryItem(id) {
   const { error } = await supabase.from('inventory_items').delete().eq('id', id);
   if (error) throw error;
+  await processStorageCleanup();
 }
 
 // يرفع صورة المنتج إلى حاوية التخزين العامة ويعيد الرابط والمسار
@@ -819,8 +837,9 @@ export async function uploadProductImage(file) {
   const { data: pub } = supabase.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(path);
   return { url: pub.publicUrl, path };
 }
+// لصورة رُفعت ولم تُحفظ في سجل المنتج. استبدال صورة محفوظة يتم عبر طابور التنظيف.
 export async function removeProductImage(path) {
-  if (path) await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove([path]).catch(() => {});
+  await discardUploadedFile(PRODUCT_IMAGES_BUCKET, path);
 }
 
 // ============================================================
@@ -848,6 +867,7 @@ export async function updateEmployee(id, p) {
   const { data, error } = await supabase.from('employees').update(p).eq('id', id).select('*').single();
   if (error) throw error;
   clearSupabaseReadCache('employees');
+  if ('photo_path' in p) processStorageCleanup().catch(() => {});
   return signStoredFile(data, EMPLOYEE_PHOTOS_BUCKET, 'photo_path', 'photo_url');
 }
 export async function removeEmployee(id) {
@@ -1056,6 +1076,7 @@ export async function createGovernmentAccount(p) {
 export async function updateGovernmentAccount(id, p) {
   const { data, error } = await supabase.from('government_accounts').update(p).eq('id', id).select('*').single();
   if (error) throw error;
+  if ('doc_path' in p) processStorageCleanup().catch(() => {});
   return signStoredFile(data, GOV_DOCUMENTS_BUCKET, 'doc_path', 'doc_url');
 }
 export async function removeGovernmentAccount(id) {

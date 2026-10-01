@@ -191,9 +191,7 @@ export default function CompanyExpensesPage() {
       };
       const saved = editing ? await updateCompanyExpense(editing.id, payload) : await createCompanyExpense(payload);
       setRows((all) => editing ? all.map((r) => r.id === saved.id ? saved : r) : [saved, ...all]);
-      if (editing?.receipt_path && (uploadedReceipt || removeReceipt)) {
-        removeCompanyExpenseReceipt(editing.receipt_path).catch(() => {});
-      }
+      // الفاتورة القديمة (إن استُبدلت أو أُزيلت) تُحذف تلقائياً عبر طابور التنظيف
       setOpen(false); resetReceipt(); toast(editing ? 'تم تحديث المصروف' : 'تمت إضافة المصروف');
     } catch (e2) {
       if (uploadedReceipt?.receipt_path) removeCompanyExpenseReceipt(uploadedReceipt.receipt_path).catch(() => {});
@@ -205,7 +203,6 @@ export default function CompanyExpensesPage() {
     if (!confirm(`حذف مصروف «${r.description}»؟`)) return;
     try {
       await removeCompanyExpense(r.id);
-      if (r.receipt_path) removeCompanyExpenseReceipt(r.receipt_path).catch(() => {});
       setRows((all) => all.filter((x) => x.id !== r.id)); toast('تم حذف المصروف');
     }
     catch (e) { toast(e.message || 'تعذّر الحذف', 'err'); }

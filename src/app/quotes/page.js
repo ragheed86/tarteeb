@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { fmtNum } from '@/lib/format';
-import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber, getCompanySettings, getServices } from '@/lib/data';
+import { getClients, createClient, getQuotes, getQuote, createQuote, updateQuote, removeQuote, nextQuoteNumber, QuoteConflictError, getCompanySettings, getServices } from '@/lib/data';
 import { toast } from '../toast';
 import { KpiCard } from '@/components';
 
@@ -188,7 +188,7 @@ export default function QuotesPage() {
     const patch = withStatus(q, ns);
     setQ(patch);
     if (patch.id) {
-      try { await updateQuote(patch.id, { ...patch, defaultVatRate: vatCfg.rate }); await refreshList(); } catch (e) { ping('تعذّر تحديث الحالة'); }
+      try { const saved = await updateQuote(patch.id, { ...patch, defaultVatRate: vatCfg.rate }); setQ(saved); await refreshList(); } catch (e) { ping(e instanceof QuoteConflictError ? e.message : 'تعذّر تحديث الحالة'); }
     }
   }
   // عند تغيير الحالة إلى «مقبول»: اقترح إضافة العميل لقائمة العملاء (مرة واحدة)
@@ -200,7 +200,7 @@ export default function QuotesPage() {
   async function linkClient(clientId) {
     const patch = { ...q, linked_client_id: clientId };
     setQ(patch);
-    if (patch.id) { try { await updateQuote(patch.id, { ...patch, defaultVatRate: vatCfg.rate }); await refreshList(); } catch (e) { /* يُحفظ لاحقاً */ } }
+    if (patch.id) { try { const saved = await updateQuote(patch.id, { ...patch, defaultVatRate: vatCfg.rate }); setQ(saved); await refreshList(); } catch (e) { if (e instanceof QuoteConflictError) ping(e.message); /* غير ذلك يُحفظ لاحقاً */ } }
   }
   // إضافة العميل إلى Supabase (بنقرة واحدة) مع فحص التكرار بالاسم
   async function addClientFromQuote() {
@@ -232,7 +232,7 @@ export default function QuotesPage() {
       setQ(saved);
       await refreshList();
       ping('تم حفظ العرض');
-    } catch (e) { ping('تعذّر الحفظ، حاول لاحقاً'); }
+    } catch (e) { ping(e instanceof QuoteConflictError ? e.message : 'تعذّر الحفظ، حاول لاحقاً'); }
     setSaving(false);
   }
   // تصدير PDF باسم «عرض سعر - اسم العميل» (المتصفح يشتق اسم الملف من document.title)

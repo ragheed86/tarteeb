@@ -1182,6 +1182,7 @@ function mapQuoteRow(row, items) {
     sent_at: row.sent_at ? Date.parse(row.sent_at) : null,
     decided_at: (row.accepted_at || row.rejected_at) ? Date.parse(row.accepted_at || row.rejected_at) : null,
     updatedAt: row.updated_at ? Date.parse(row.updated_at) : 0,
+    updatedAtRaw: row.updated_at || null,
     applyVat: !!row.apply_vat,
     items: (items || [])
       .slice()
@@ -1270,33 +1271,30 @@ export async function getQuote(id) {
   return mapQuoteRow(row, items || []);
 }
 
-export async function createQuote(app) {
-  const { data: row, error } = await supabase.from('quotes').insert(fromAppQuote(app)).select('id').single();
-  if (error) throw error;
-  const rows = itemRows(row.id, app.items);
-  if (rows.length) {
-    const { error: e2 } = await supabase.from('quote_items').insert(rows);
-    if (e2) { await supabase.from('quotes').delete().eq('id', row.id); throw e2; }
+// الحفظ عبر RPC واحد داخل transaction (CRM-AUD-03): الرأس والبنود ينجحان معاً أو يفشلان معاً،
+// والإجماليات تُعاد حسابها على السيرفر. updatedAtRaw يمنع مسح تعديل مستخدم آخر بصمت.
+export class QuoteConflictError extends Error {}
+async function saveQuoteRpc(id, app) {
+  const header = fromAppQuote(app);
+  const { data, error } = await supabase.rpc('save_quote_with_items', {
+    p_quote_id: id,
+    p_quote: header,
+    p_items: itemRows(null, app.items).map(({ quote_id, ...it }) => it), // eslint-disable-line no-unused-vars
+    p_default_vat_rate: Number.isFinite(Number(app.defaultVatRate)) ? Number(app.defaultVatRate) : 15,
+    p_expected_updated_at: id ? (app.updatedAtRaw || null) : null,
+  });
+  if (error) {
+    if (error.code === '40001') throw new QuoteConflictError(error.message);
+    throw error;
   }
   clearSupabaseReadCache('quotes');
-  return getQuote(row.id);
+  return getQuote(data);
 }
-
-export async function updateQuote(id, app) {
-  const { error } = await supabase.from('quotes').update(fromAppQuote(app)).eq('id', id);
-  if (error) throw error;
-  await supabase.from('quote_items').delete().eq('quote_id', id);
-  const rows = itemRows(id, app.items);
-  if (rows.length) {
-    const { error: e2 } = await supabase.from('quote_items').insert(rows);
-    if (e2) throw e2;
-  }
-  clearSupabaseReadCache('quotes');
-  return getQuote(id);
-}
+export async function createQuote(app) { return saveQuoteRpc(null, app); }
+export async function updateQuote(id, app) { return saveQuoteRpc(id, app); }
 
 export async function removeQuote(id) {
-  await supabase.from('quote_items').delete().eq('quote_id', id);
+  // البنود تُحذف تلقائياً (on delete cascade) ضمن نفس العملية
   const { error } = await supabase.from('quotes').delete().eq('id', id);
   if (error) throw error;
   clearSupabaseReadCache('quotes');

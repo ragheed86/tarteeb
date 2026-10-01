@@ -35,6 +35,29 @@ alter table public.company_expenses
   add constraint company_expenses_project_link_check
     check (cost_nature <> 'project' or project_id is not null);
 
+-- Deleting a project nulls project_id (on delete set null). Without this the
+-- project-link check would reject that update and block the project delete,
+-- so a project expense whose project is gone becomes a variable expense.
+create or replace function public.company_expense_unlink_project()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.project_id is null and new.cost_nature = 'project' then
+    new.cost_nature := 'variable';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists company_expenses_unlink_project on public.company_expenses;
+create trigger company_expenses_unlink_project
+  before update of project_id on public.company_expenses
+  for each row execute function public.company_expense_unlink_project();
+
+revoke execute on function public.company_expense_unlink_project() from public, anon, authenticated;
+
 create index if not exists company_expenses_project_idx on public.company_expenses(project_id) where project_id is not null;
 create index if not exists company_expenses_employee_idx on public.company_expenses(employee_id) where employee_id is not null;
 create index if not exists company_expenses_supplier_idx on public.company_expenses(supplier_id) where supplier_id is not null;

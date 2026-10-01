@@ -56,7 +56,7 @@ export default function ProjectDetail() {
 
   async function deleteCurrentProject() {
     if (deleting || !d?.project) return;
-    if (!confirm(`هل أنت متأكد من حذف المشروع «${d.project.title}»؟\n\nسيتم حذف المهام والفريق والتكاليف والصور والمرفقات نهائياً. ستبقى الفواتير الصادرة محفوظة كسجلات مالية ولكن بدون ربط بالمشروع.\n\nلا يمكن التراجع عن هذا الإجراء.`)) return;
+    if (!confirm(`هل أنت متأكد من حذف المشروع «${d.project.title}»؟\n\nسيتم حذف المهام والفريق والتكاليف والصور والمرفقات نهائياً. ستبقى الفواتير الصادرة ومصاريف الشركة المرتبطة به محفوظة كسجلات مالية ولكن بدون ربط بالمشروع.\n\nلا يمكن التراجع عن هذا الإجراء.`)) return;
     setDeleting(true);
     setErr('');
     try {
@@ -77,6 +77,8 @@ export default function ProjectDetail() {
   const supervisor = employees.find((e) => e.id === project.supervisor_id);
   const teamIds = new Set(team.map((t) => t.employee_id));
   const totalCost = fin ? fin.total_cost : costs.reduce((s, c) => s + Number(c.amount || 0), 0);
+  // الفرق بين إجمالي الـ view وبنود التكلفة = مصاريف شركة مربوطة بالمشروع من صفحة المصاريف
+  const linkedExpenses = Math.max(0, Number(totalCost || 0) - costs.reduce((s, c) => s + Number(c.amount || 0), 0));
   const netProfit = fin ? fin.net_profit : Number(project.sale_price || 0) - totalCost;
   const marginPct = fin ? fin.margin_pct : (project.sale_price > 0 ? Math.round(netProfit / project.sale_price * 100) : 0);
 
@@ -109,7 +111,7 @@ export default function ProjectDetail() {
       {/* المؤشرات المالية من view */}
       <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
         <KpiCard label="قيمة العقد" value={`${fmtMoney(project.sale_price)} ⃁`} definition="قيمة بيع المشروع المسجلة في بيانات المشروع." period="هذا المشروع" formula="قيمة العقد المتفق عليها" note="لا تعني بالضرورة أن كامل المبلغ تم تحصيله من العميل." />
-        <KpiCard label="إجمالي التكاليف" value={`${fmtMoney(totalCost)} ⃁`} definition="مجموع جميع بنود التكلفة المرتبطة بهذا المشروع." period="هذا المشروع" formula="جمع العمالة والمواد والنقل والحوافز والتكاليف الأخرى" breakdown={costs.slice(0, 6).map((cost) => ({ label: costDescription(cost), value: `${fmtMoney(cost.amount)} ⃁` }))} note={costs.length > 6 ? `يظهر أول 6 بنود من أصل ${fmtNum(costs.length)}.` : undefined} />
+        <KpiCard label="إجمالي التكاليف" value={`${fmtMoney(totalCost)} ⃁`} definition="مجموع جميع بنود التكلفة المرتبطة بهذا المشروع." period="هذا المشروع" formula="جمع العمالة والمواد والنقل والحوافز والتكاليف الأخرى + مصاريف الشركة المرتبطة بالمشروع" breakdown={[...(linkedExpenses > 0.005 ? [{ label: 'مصاريف مرتبطة من صفحة المصاريف', value: `${fmtMoney(linkedExpenses)} ⃁` }] : []), ...costs.slice(0, 6).map((cost) => ({ label: costDescription(cost), value: `${fmtMoney(cost.amount)} ⃁` }))]} note={costs.length > 6 ? `يظهر أول 6 بنود من أصل ${fmtNum(costs.length)}.` : undefined} />
         <KpiCard label="صافي الربح" value={`${fmtMoney(netProfit)} ⃁`} definition="الربح المتوقع للمشروع بعد خصم جميع تكاليفه المسجلة من قيمة العقد." period="هذا المشروع" formula="قيمة العقد − إجمالي التكاليف" breakdown={[{ label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }, { label: 'إجمالي التكاليف', value: `− ${fmtMoney(totalCost)} ⃁` }, { label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }]} />
         <KpiCard label="هامش الربح" value={`${fmtNum(marginPct)}%`} definition="النسبة التي يمثلها صافي الربح من قيمة عقد المشروع." period="هذا المشروع" formula="صافي الربح ÷ قيمة العقد × 100" breakdown={[{ label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }, { label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }]} />
       </div>

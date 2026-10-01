@@ -1,5 +1,6 @@
 // تكامل Google Calendar — سيرفر فقط (يُستورد حصراً من src/app/api/**)، يحمل أسرار OAuth
 // ولا يجوز استيراده من أي مكوّن 'use client'. مزامنة أحادية الاتجاه: ترتيب → Google، بلا قراءة عكسية.
+import crypto from 'node:crypto';
 import { supabaseAdmin } from './supabaseAdmin';
 
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
@@ -11,7 +12,55 @@ const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API_BASE = 'https://www.googleapis.com/calendar/v3';
 
-export function buildAuthUrl({ employeeId, redirectUri }) {
+// ---------- OAuth state (CRM-AUD-01) ----------
+// state عشوائي لمرة واحدة، مربوط بالمستخدم البادئ وبكوكي في متصفحه، مع PKCE.
+// نخزّن hash للـ state وللكوكي فقط؛ تسريب الجدول لا يكفي لإكمال ربط.
+export const OAUTH_STATE_TTL_SECONDS = 600;
+export const OAUTH_BROWSER_COOKIE = 'gcal_oauth_nonce';
+const randomToken = () => crypto.randomBytes(32).toString('base64url');
+const sha256 = (value) => crypto.createHash('sha256').update(value).digest('base64url');
+
+export async function createOAuthState({ employeeId, userId }) {
+  const { data: employee, error: empErr } = await supabaseAdmin.from('employees').select('id').eq('id', employeeId).maybeSingle();
+  if (empErr) throw empErr;
+  if (!employee) throw new Error('الموظف غير موجود');
+  const state = randomToken();
+  const browserNonce = randomToken();
+  const codeVerifier = randomToken();
+  // تنظيف المحاولات المنتهية قبل الإضافة — الجدول يبقى صغيراً
+  await supabaseAdmin.from('google_oauth_states').delete().lt('expires_at', new Date().toISOString());
+  const { error } = await supabaseAdmin.from('google_oauth_states').insert({
+    state_hash: sha256(state),
+    browser_hash: sha256(browserNonce),
+    employee_id: employeeId,
+    user_id: userId,
+    code_verifier: codeVerifier,
+    expires_at: new Date(Date.now() + OAUTH_STATE_TTL_SECONDS * 1000).toISOString(),
+  });
+  if (error) throw error;
+  return { state, browserNonce, codeChallenge: sha256(codeVerifier) };
+}
+
+// استهلاك ذرّي: UPDATE واحد بشرط used_at is null — طلبان متزامنان لنفس state، واحد فقط ينجح.
+export async function consumeOAuthState({ state, browserNonce }) {
+  if (!state || !browserNonce) return null;
+  const { data, error } = await supabaseAdmin.from('google_oauth_states')
+    .update({ used_at: new Date().toISOString() })
+    .eq('state_hash', sha256(state))
+    .is('used_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .select('employee_id,user_id,code_verifier,browser_hash');
+  if (error) throw error;
+  const row = data?.[0];
+  if (!row) return null;
+  // مقارنة بزمن ثابت لكوكي المتصفح البادئ
+  const expected = Buffer.from(row.browser_hash);
+  const actual = Buffer.from(sha256(browserNonce));
+  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) return null;
+  return { employeeId: row.employee_id, userId: row.user_id, codeVerifier: row.code_verifier };
+}
+
+export function buildAuthUrl({ state, codeChallenge, redirectUri }) {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: redirectUri,
@@ -19,18 +68,20 @@ export function buildAuthUrl({ employeeId, redirectUri }) {
     access_type: 'offline',
     prompt: 'consent',
     scope: SCOPE,
-    state: employeeId,
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
   return `${AUTH_URL}?${params.toString()}`;
 }
 
-export async function exchangeCode({ code, redirectUri }) {
+export async function exchangeCode({ code, redirectUri, codeVerifier }) {
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code, client_id: CLIENT_ID, client_secret: CLIENT_SECRET,
-      redirect_uri: redirectUri, grant_type: 'authorization_code',
+      redirect_uri: redirectUri, grant_type: 'authorization_code', code_verifier: codeVerifier,
     }),
   });
   const payload = await res.json().catch(() => ({}));
@@ -46,8 +97,8 @@ async function fetchGoogleProfile(accessToken) {
   return res.json().catch(() => null);
 }
 
-export async function connectEmployeeCalendar({ employeeId, code, redirectUri, connectedBy }) {
-  const tokens = await exchangeCode({ code, redirectUri });
+export async function connectEmployeeCalendar({ employeeId, code, redirectUri, connectedBy, codeVerifier }) {
+  const tokens = await exchangeCode({ code, redirectUri, codeVerifier });
   if (!tokens.refresh_token) {
     throw new Error('لم توافق Google على منح صلاحية دائمة — أعد المحاولة واختر «السماح» عند الطلب');
   }

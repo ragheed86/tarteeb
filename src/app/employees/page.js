@@ -102,7 +102,8 @@ function EmployeesPageInner() {
   useEffect(() => {
     const calendar = searchParams.get('calendar');
     if (!calendar) return;
-    toast(calendar === 'connected' ? 'تم ربط تقويم Google بنجاح' : 'تعذّر ربط تقويم Google', calendar === 'connected' ? 'ok' : 'err');
+    const msg = { connected: 'تم ربط تقويم Google بنجاح', cancelled: 'تم إلغاء ربط تقويم Google' }[calendar] || 'تعذّر ربط تقويم Google — ابدأ الربط من جديد من نفس المتصفح';
+    toast(msg, calendar === 'connected' ? 'ok' : 'err');
     router.replace('/employees');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);

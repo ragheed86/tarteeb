@@ -11,7 +11,7 @@ if (missingEnv) {
   console.warn('Supabase env vars missing — set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local');
 }
 
-// عبر كوكيز لا localStorage: كي يقرأ middleware.js الجلسة على الخادم (تدقيق M-1).
+// عبر كوكيز لا localStorage: كي يقرأ proxy.js الجلسة على الخادم (تدقيق M-1).
 export const supabase = createBrowserClient(
   url || 'https://placeholder.supabase.co',
   anon || 'placeholder-anon-key'

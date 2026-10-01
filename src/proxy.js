@@ -52,7 +52,7 @@ function buildCsp(nonce) {
   ].join('; ');
 }
 
-export async function middleware(request) {
+export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith('/api/admin/')) {

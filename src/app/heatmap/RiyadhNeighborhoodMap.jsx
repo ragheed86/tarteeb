@@ -122,10 +122,22 @@ export default function RiyadhNeighborhoodMap({ geojson, statsById, metric, scal
 
         const props = e.features[0].properties;
         const s = statsByIdRef.current.get(String(props.district_id));
-        const rows = s
-          ? `<div>عملاء: ${s.clients}</div><div>مشاريع: ${s.projects}</div><div>قيمة العقود: ${Math.round(s.revenue).toLocaleString('en-US')}</div>`
-          : '<div>لا نشاط مسجَّل</div>';
-        tooltip.setLngLat(e.lngLat).setHTML(`<div style="font:13px 'IBM Plex Sans Arabic',sans-serif;direction:rtl;min-width:120px"><b>${props.name_ar}</b>${rows}</div>`).addTo(map);
+        // نبني التلميح كعناصر DOM نصية بدل setHTML: لا HTML من البيانات، ولا اعتماد على
+        // DOM.sanitize في maplibre (ثغرة GHSA-jrc7-96c5-q579 في <=6.4.0).
+        const box = document.createElement('div');
+        box.style.cssText = "font:13px 'IBM Plex Sans Arabic',sans-serif;direction:rtl;min-width:120px";
+        const title = document.createElement('b');
+        title.textContent = props.name_ar ?? '';
+        box.appendChild(title);
+        const lines = s
+          ? [`عملاء: ${s.clients}`, `مشاريع: ${s.projects}`, `قيمة العقود: ${Math.round(s.revenue).toLocaleString('en-US')}`]
+          : ['لا نشاط مسجَّل'];
+        for (const text of lines) {
+          const line = document.createElement('div');
+          line.textContent = text;
+          box.appendChild(line);
+        }
+        tooltip.setLngLat(e.lngLat).setDOMContent(box).addTo(map);
       });
       map.on('mouseleave', 'nh-fill', () => {
         if (hoveredIdRef.current !== null) {

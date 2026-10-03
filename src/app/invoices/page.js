@@ -207,7 +207,7 @@ export default function InvoicesPage() {
       return {
         ...it,
         description: val,
-        unit: 'غرفة',
+        unit: isOrganizersItem(it.description) ? 'غرفة' : it.unit,
         unit_price: svc ? (Number(svc.default_rate) || 0) : it.unit_price,
         internal_base_price: '',
         markup_percent: '',

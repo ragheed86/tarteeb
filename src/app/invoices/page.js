@@ -248,7 +248,7 @@ export default function InvoicesPage() {
     const rows = validItems.map((it) => ({
       description: it.description.trim(),
       qty: Number(it.qty) || 1,
-      unit: unitForDescription(it.description),
+      unit: it.unit || unitForDescription(it.description),
       unit_price: Number(it.unit_price) || 0,
       internal_base_price: isOrganizersItem(it.description) && it.internal_base_price !== '' ? Number(it.internal_base_price) : null,
       markup_percent: isOrganizersItem(it.description) && it.markup_percent !== '' ? Number(it.markup_percent) : null,
@@ -500,7 +500,11 @@ export default function InvoicesPage() {
               <div className="inline-add" style={{ marginTop: 8 }}>
                 <input list="inv-svclist" placeholder="الوصف" value={it.description} onChange={(e) => setDesc(idx, e.target.value)} style={{ flex: 2 }} />
                 <input type="number" min="0" step="1" placeholder="الكمية" dir="ltr" style={{ maxWidth: 90 }} value={it.qty} onChange={(e) => setItem(idx, 'qty', e.target.value)} />
-                <span className="invoice-unit" title="الوحدة">{it.unit || unitForDescription(it.description)}</span>
+                <select className="invoice-unit" title="الوحدة" value={it.unit || unitForDescription(it.description)} onChange={(e) => setItem(idx, 'unit', e.target.value)}>
+                  <option value="غرفة">غرفة</option>
+                  <option value="قطعة">قطعة</option>
+                  <option value="مجموعة">مجموعة</option>
+                </select>
                 {!isOrganizersItem(it.description) && (
                   <input type="number" min="0" step="0.01" placeholder="سعر الوحدة" dir="ltr" style={{ maxWidth: 120 }} value={it.unit_price} onChange={(e) => setItem(idx, 'unit_price', e.target.value)} />
                 )}
@@ -549,7 +553,7 @@ const CSS = `
 .organizer-pricing input{width:100%}
 .organizer-pricing input[readonly]{background:var(--surface-2);font-weight:700;color:var(--ink)}
 .organizer-pricing small{grid-column:1 / -1;color:var(--faint)}
-.invoice-unit{display:inline-flex;align-items:center;justify-content:center;min-width:66px;padding:7px 9px;border-radius:9px;background:var(--surface-2);color:var(--muted);font-size:12.5px;font-weight:600}
+.invoice-unit{display:inline-flex;align-items:center;justify-content:center;min-width:66px;padding:7px 9px;border-radius:9px;background:var(--surface-2);color:var(--muted);font-size:12.5px;font-weight:600;border:0;cursor:pointer}
 .pricing-import-note{margin-top:10px;padding:9px 11px;border-radius:9px;background:var(--surface-2);color:var(--muted);font-size:12.5px}
 .pricing-import-note.success{background:color-mix(in srgb,var(--green) 9%,var(--surface));color:var(--green)}
 .billing-coverage{padding:0;margin-bottom:18px;overflow:hidden}

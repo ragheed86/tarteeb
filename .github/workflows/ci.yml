@@ -38,6 +38,31 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
 
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # بلا SUPABASE_SERVICE_ROLE_KEY/PW_TEST_EMAIL (أسرار غير مُعرَّفة هنا): اختبارات
+      # smoke.spec.js وscreens.spec.js المصادَقة تتخطى نفسها تلقائياً (auth.setup.js)،
+      # بينما security.spec.js تُشغَّل فعلياً وتتحقق من رؤوس الأمان ورفض المسارات الحساسة.
+      - run: npx playwright test --project=desktop
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
   migration-smoke:
     name: Migration smoke (local Supabase stack)
     runs-on: ubuntu-latest

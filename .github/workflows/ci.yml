@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # متغيرات وهمية فقط لإتمام البناء (لا اتصال فعلي بأي Supabase) — لا أسرار حقيقية هنا.
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+  migration-smoke:
+    name: Migration smoke (local Supabase stack)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # يشغّل Postgres + Auth + كل خدمات Supabase محلياً عبر Docker داخل المُشغِّل
+      # (مجاني بالكامل، بلا أي مشروع سحابي)، ويطبّق supabase/migrations/*.sql تلقائياً.
+      # هذا يثبت أن الهجرات تُطبَّق بنجاح على مخطط Supabase الحقيقي (auth, roles, RLS)
+      # لا على Postgres عادي ينقصه auth schema والأدوار.
+      - run: supabase start
+      - run: supabase db reset --local
+      - name: إيقاف الحاوية
+        if: always()
+        run: supabase stop --no-backup
+
+  dependency-audit:
+    name: Dependency audit (تقرير فقط — لا يمنع الدمج حالياً)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --audit-level=high
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

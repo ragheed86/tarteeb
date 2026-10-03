@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
-import maplibregl from 'maplibre-gl';
+// v6 أزالت default export (كسر توافق)؛ استيراد namespace يبقي maplibregl.Map/.Popup/... كما هي.
+import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { colorFor } from '@/lib/heatmap/colors';
 

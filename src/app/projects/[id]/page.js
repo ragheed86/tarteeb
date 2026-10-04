@@ -319,7 +319,7 @@ export default function ProjectDetail() {
 
       <DatesCard project={project} onChange={(p) => setD((s) => ({ ...s, project: p }))} />
 
-      <div className="grid2">
+      <div className="grid2" style={{ alignItems: 'start' }}>
         <TeamCard projectId={id} employees={employees} team={team} teamIds={teamIds}
           onChange={(t) => setD((s) => ({ ...s, team: t }))} />
         <MediaCard projectId={id} media={media} onChange={(m) => setD((s) => ({ ...s, media: m }))} />

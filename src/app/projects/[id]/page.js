@@ -506,9 +506,6 @@ export default function ProjectDetail() {
                               {costCtx.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                           </div>
-                          <button className="x-btn cost-row-remove" type="button" onClick={() => removeRow(day.date, 'productRows', row.id)} aria-label="حذف المنتج">✕</button>
-                        </div>
-                        <div className="cost-row-bottom">
                           <div className="cost-field xs">
                             <label>سعر الشراء</label>
                             <input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(e) => updateProduct(day.date, row.id, 'purchasePrice', e.target.value)} dir="ltr" />
@@ -521,6 +518,7 @@ export default function ProjectDetail() {
                             <span className="lbl">سعر البيع</span>
                             <span className="val">{fmtMoney(row.salePrice)} ⃁</span>
                           </div>
+                          <button className="x-btn cost-row-remove" type="button" onClick={() => removeRow(day.date, 'productRows', row.id)} aria-label="حذف المنتج">✕</button>
                         </div>
                       </div>
                     ))}

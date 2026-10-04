@@ -290,7 +290,17 @@ export default function ProjectDetail() {
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="sec-head" style={{ marginBottom: 10 }}>
             <h2>{project.title}</h2>
-            <span className={`pill ${st.cls}`} style={{ marginInlineStart: 'auto' }}>{st.label}</span>
+            <select
+              className={`status-select pill ${st.cls}`}
+              style={{ marginInlineStart: 'auto' }}
+              value={project.status || 'quote'}
+              onChange={(e) => changeStatus(e.target.value)}
+              aria-label="حالة المشروع"
+            >
+              {Object.entries(PROJECT_STATUS).map(([value, meta]) => (
+                <option key={value} value={value}>{meta.label}</option>
+              ))}
+            </select>
           </div>
           <div className="kv"><span className="k">العميل</span><span className="v">{client?.name || '—'}</span></div>
           <div className="kv"><span className="k">نوع الخدمة</span><span className="v">{project.service_type || '—'}</span></div>
@@ -319,25 +329,10 @@ export default function ProjectDetail() {
 
       {canSeeCost && (
         <>
-          <div className="daily-cost-summary" style={{ marginTop: 16 }}>
-            <div className="card">
-              <div className="uid">حالة المشروع</div>
-              <select
-                className={`status-select pill ${(PROJECT_STATUS[project.status] || { cls: 'p-wait' }).cls}`}
-                value={project.status || 'quote'}
-                onChange={(e) => changeStatus(e.target.value)}
-                aria-label="حالة المشروع"
-              >
-                {Object.entries(PROJECT_STATUS).map(([value, meta]) => (
-                  <option key={value} value={value}>{meta.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="card">
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>سعر بيع الخدمة (بدون المنظمات)</label>
-                <input type="number" min="0" step="0.01" value={salePrice} dir="ltr" onChange={(e) => setSalePrice(e.target.value)} />
-              </div>
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>سعر بيع الخدمة (بدون المنظمات)</label>
+              <input type="number" min="0" step="0.01" value={salePrice} dir="ltr" onChange={(e) => setSalePrice(e.target.value)} />
             </div>
           </div>
 

@@ -317,9 +317,8 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <DatesCard project={project} onChange={(p) => setD((s) => ({ ...s, project: p }))} />
-
-      <div className="grid2" style={{ alignItems: 'start' }}>
+      <div className="pgrid" style={{ alignItems: 'start', marginBottom: 16 }}>
+        <DatesCard project={project} onChange={(p) => setD((s) => ({ ...s, project: p }))} />
         <TeamCard projectId={id} employees={employees} team={team} teamIds={teamIds}
           onChange={(t) => setD((s) => ({ ...s, team: t }))} />
         <MediaCard projectId={id} media={media} onChange={(m) => setD((s) => ({ ...s, media: m }))} />
@@ -565,7 +564,7 @@ function DatesCard({ project, onChange }) {
   }
 
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div className="card">
       <div className="sec-head"><h2>تواريخ المشروع</h2><span className="more">{fmtDate(project.start_date)} ← {fmtDate(project.due_date)}</span></div>
       {msg && <div className={msg.startsWith('تم') ? 'okbar' : 'errbar'}>{msg}</div>}
       <form onSubmit={save} className="form-grid">

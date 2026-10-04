@@ -99,26 +99,6 @@ export async function removeProjectTeam(projectId, employeeId) {
   if (error) throw error;
 }
 
-// المهام
-export async function getProjectTasks(projectId) {
-  const { data, error } = await supabase.from('project_tasks')
-    .select('id,project_id,title,done,sort_order').eq('project_id', projectId)
-    .order('sort_order', { ascending: true });
-  if (error) throw error; return data;
-}
-export async function createProjectTask(p) {
-  const { data, error } = await supabase.from('project_tasks').insert(p).select().single();
-  if (error) throw error; return data;
-}
-export async function updateProjectTask(id, p) {
-  const { data, error } = await supabase.from('project_tasks').update(p).eq('id', id).select().single();
-  if (error) throw error; return data;
-}
-export async function removeProjectTask(id) {
-  const { error } = await supabase.from('project_tasks').delete().eq('id', id);
-  if (error) throw error;
-}
-
 // الوسائط (قبل/بعد)
 const PROJECT_MEDIA_BUCKET = 'project-media';
 

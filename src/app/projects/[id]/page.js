@@ -430,38 +430,57 @@ export default function ProjectDetail() {
                   <DailyTable
                     title="العمالة والإشراف"
                     total={totals.labor}
-                    columns={['العدد', 'الموظف/المشرف', 'ساعات الفرد', 'إجمالي الساعات', 'سعر الساعة', 'الإجمالي', '']}
-                    headClass="labor-head"
                     onAdd={() => addRow(day.date, 'laborRows')}
                     addLabel="+ إضافة عامل/مشرف"
                   >
                     {day.laborRows.map((row) => {
                       const isSupervisor = isSupervisorLaborRow(row);
+                      const rowHours = num(row.workerCount) * num(row.hours);
+                      const rowAmount = rowHours * num(row.rate);
                       return (
-                        <div className="daily-table-row labor-row" key={row.id}>
-                          <span className="dcell" data-label={isSupervisor ? 'عدد المشرفين' : 'عدد العمال'}><input type="number" min="0" step="1" value={row.workerCount} onChange={(e) => updateLabor(day.date, row.id, 'workerCount', e.target.value)} dir="ltr" aria-label={isSupervisor ? 'عدد المشرفين' : 'عدد العمال'} /></span>
-                          <span className="dcell" data-label="الموظف/المشرف">
-                            <select value={row.worker || ''} onChange={(e) => updateLabor(day.date, row.id, 'worker', e.target.value)} aria-label="الموظف أو المشرف">
-                              <option value="">— بدون —</option>
-                              {(employees || []).map((em) => <option key={em.id} value={em.name}>{em.name}</option>)}
-                              {row.worker && row.worker !== 'فريلانسر' && !(employees || []).some((em) => em.name === row.worker) && (
-                                <option value={row.worker}>{row.worker}</option>
-                              )}
-                              <option value="فريلانسر">فريلانسر (مستقل)</option>
-                            </select>
-                            {row.worker && (
-                              <select className="worker-type-select" value={row.workerType || ''} onChange={(e) => updateLabor(day.date, row.id, 'workerType', e.target.value)} aria-label="نوع العامل">
-                                <option value="">{isSupervisor ? 'مشرف' : 'غير مصنّف'}</option>
-                                <option value="employee">أساسي (براتب)</option>
-                                <option value="part_time">بالساعة</option>
+                        <div className="cost-row" key={row.id}>
+                          <div className="cost-row-top">
+                            <div className="cost-field grow">
+                              <label>الموظف / المشرف</label>
+                              <select value={row.worker || ''} onChange={(e) => updateLabor(day.date, row.id, 'worker', e.target.value)} aria-label="الموظف أو المشرف">
+                                <option value="">— بدون —</option>
+                                {(employees || []).map((em) => <option key={em.id} value={em.name}>{em.name}</option>)}
+                                {row.worker && row.worker !== 'فريلانسر' && !(employees || []).some((em) => em.name === row.worker) && (
+                                  <option value={row.worker}>{row.worker}</option>
+                                )}
+                                <option value="فريلانسر">فريلانسر (مستقل)</option>
                               </select>
+                            </div>
+                            {row.worker && (
+                              <div className="cost-field">
+                                <label>النوع</label>
+                                <select value={row.workerType || ''} onChange={(e) => updateLabor(day.date, row.id, 'workerType', e.target.value)} aria-label="نوع العامل">
+                                  <option value="">{isSupervisor ? 'مشرف' : 'غير مصنّف'}</option>
+                                  <option value="employee">أساسي (براتب)</option>
+                                  <option value="part_time">بالساعة</option>
+                                </select>
+                              </div>
                             )}
-                          </span>
-                          <span className="dcell" data-label={isSupervisor ? 'ساعات المشرف' : 'ساعات العامل'}><input type="number" min="0" step="0.5" value={row.hours} onChange={(e) => updateLabor(day.date, row.id, 'hours', e.target.value)} dir="ltr" aria-label={isSupervisor ? 'ساعات المشرف' : 'ساعات العامل'} /></span>
-                          <span className="dcell" data-label="إجمالي الساعات"><span className="row-total amt">{fmtNum(num(row.workerCount) * num(row.hours))}</span></span>
-                          <span className="dcell" data-label="سعر الساعة"><input type="number" min="0" step="0.01" value={row.rate} onChange={(e) => updateLabor(day.date, row.id, 'rate', e.target.value)} dir="ltr" aria-label="سعر الساعة" /></span>
-                          <span className="dcell" data-label="الإجمالي"><span className="row-total amt">{fmtMoney(num(row.workerCount) * num(row.hours) * num(row.rate))} ⃁</span></span>
-                          <span className="dcell dcell-action"><button className="x-btn" type="button" onClick={() => removeRow(day.date, 'laborRows', row.id)} aria-label="حذف البند">✕</button></span>
+                            <button className="x-btn cost-row-remove" type="button" onClick={() => removeRow(day.date, 'laborRows', row.id)} aria-label="حذف البند">✕</button>
+                          </div>
+                          <div className="cost-row-bottom">
+                            <div className="cost-field xs">
+                              <label>{isSupervisor ? 'عدد المشرفين' : 'عدد العمال'}</label>
+                              <input type="number" min="0" step="1" value={row.workerCount} onChange={(e) => updateLabor(day.date, row.id, 'workerCount', e.target.value)} dir="ltr" />
+                            </div>
+                            <div className="cost-field xs">
+                              <label>{isSupervisor ? 'ساعات المشرف' : 'ساعات العامل'}</label>
+                              <input type="number" min="0" step="0.5" value={row.hours} onChange={(e) => updateLabor(day.date, row.id, 'hours', e.target.value)} dir="ltr" />
+                            </div>
+                            <div className="cost-field xs">
+                              <label>سعر الساعة</label>
+                              <input type="number" min="0" step="0.01" value={row.rate} onChange={(e) => updateLabor(day.date, row.id, 'rate', e.target.value)} dir="ltr" />
+                            </div>
+                            <div className="cost-row-total">
+                              <span className="lbl">{fmtNum(rowHours)} ساعة</span>
+                              <span className="val">{fmtMoney(rowAmount)} ⃁</span>
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -470,24 +489,39 @@ export default function ProjectDetail() {
                   <DailyTable
                     title="المنتجات"
                     total={totals.productsCost}
-                    columns={['المنتج', 'المورد', 'سعر الشراء', 'نسبة البيع %', 'الإجمالي', '']}
-                    headClass="product-head"
                     onAdd={() => addRow(day.date, 'productRows')}
                     addLabel="+ إضافة منتج"
                   >
                     {day.productRows.map((row) => (
-                      <div className="daily-table-row product-row" key={row.id}>
-                        <span className="dcell" data-label="المنتج"><input value={row.product} onChange={(e) => updateProduct(day.date, row.id, 'product', e.target.value)} placeholder="اسم المنتج" aria-label="المنتج" /></span>
-                        <span className="dcell" data-label="المورد">
-                          <select value={row.supplierId} onChange={(e) => updateProduct(day.date, row.id, 'supplierId', e.target.value)} aria-label="المورد">
-                            <option value="">اختر مورداً…</option>
-                            {costCtx.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                          </select>
-                        </span>
-                        <span className="dcell" data-label="سعر الشراء"><input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(e) => updateProduct(day.date, row.id, 'purchasePrice', e.target.value)} dir="ltr" aria-label="سعر الشراء" /></span>
-                        <span className="dcell" data-label="نسبة البيع %"><input type="number" min="0" step="0.01" value={row.markupPercent} onChange={(e) => updateProduct(day.date, row.id, 'markupPercent', e.target.value)} dir="ltr" aria-label="نسبة البيع" /></span>
-                        <span className="dcell" data-label="الإجمالي"><span className="row-total amt">{fmtMoney(row.salePrice)} ⃁</span></span>
-                        <span className="dcell dcell-action"><button className="x-btn" type="button" onClick={() => removeRow(day.date, 'productRows', row.id)} aria-label="حذف المنتج">✕</button></span>
+                      <div className="cost-row" key={row.id}>
+                        <div className="cost-row-top">
+                          <div className="cost-field grow">
+                            <label>المنتج</label>
+                            <input value={row.product} onChange={(e) => updateProduct(day.date, row.id, 'product', e.target.value)} placeholder="اسم المنتج" />
+                          </div>
+                          <div className="cost-field grow">
+                            <label>المورد</label>
+                            <select value={row.supplierId} onChange={(e) => updateProduct(day.date, row.id, 'supplierId', e.target.value)}>
+                              <option value="">اختر مورداً…</option>
+                              {costCtx.suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                          </div>
+                          <button className="x-btn cost-row-remove" type="button" onClick={() => removeRow(day.date, 'productRows', row.id)} aria-label="حذف المنتج">✕</button>
+                        </div>
+                        <div className="cost-row-bottom">
+                          <div className="cost-field xs">
+                            <label>سعر الشراء</label>
+                            <input type="number" min="0" step="0.01" value={row.purchasePrice} onChange={(e) => updateProduct(day.date, row.id, 'purchasePrice', e.target.value)} dir="ltr" />
+                          </div>
+                          <div className="cost-field xs">
+                            <label>نسبة البيع %</label>
+                            <input type="number" min="0" step="0.01" value={row.markupPercent} onChange={(e) => updateProduct(day.date, row.id, 'markupPercent', e.target.value)} dir="ltr" />
+                          </div>
+                          <div className="cost-row-total">
+                            <span className="lbl">سعر البيع</span>
+                            <span className="val">{fmtMoney(row.salePrice)} ⃁</span>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </DailyTable>
@@ -779,19 +813,14 @@ function InvoiceAttachmentsModal({
 }
 
 // ---------- الجدول اليومي (مدمج من /cost) ----------
-function DailyTable({ title, total, columns, onAdd, addLabel, children, headClass = '' }) {
+function DailyTable({ title, total, onAdd, addLabel, children }) {
   return (
     <div className="daily-table-wrap">
       <div className="daily-subhead">
         <b>{title}</b>
         <span className="amt">{fmtMoney(total)} ⃁</span>
       </div>
-      <div className="daily-table">
-        <div className={`daily-table-head${headClass ? ` ${headClass}` : ''}`}>
-          {columns.map((c) => <span key={c}>{c}</span>)}
-        </div>
-        {children}
-      </div>
+      <div className="cost-row-list">{children}</div>
       <button className="add-row-btn" type="button" onClick={onAdd}>{addLabel}</button>
     </div>
   );
@@ -805,9 +834,13 @@ function MoneyRows({ title, rows, total, onAdd, onChange, onRemove }) {
         <span className="amt">{fmtMoney(total)} ⃁</span>
       </div>
       {rows.map((row) => (
-        <div className="money-row" key={row.id}>
-          <input value={row.note} onChange={(e) => onChange(row.id, 'note', e.target.value)} placeholder="وصف" />
-          <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => onChange(row.id, 'amount', e.target.value)} dir="ltr" placeholder="المبلغ" />
+        <div className="cost-row cost-row-compact" key={row.id}>
+          <div className="cost-field grow">
+            <input value={row.note} onChange={(e) => onChange(row.id, 'note', e.target.value)} placeholder="وصف" />
+          </div>
+          <div className="cost-field xs">
+            <input type="number" min="0" step="0.01" value={row.amount} onChange={(e) => onChange(row.id, 'amount', e.target.value)} dir="ltr" placeholder="المبلغ" />
+          </div>
           <button className="x-btn" type="button" onClick={() => onRemove(row.id)} aria-label="حذف السطر">✕</button>
         </div>
       ))}

@@ -78,6 +78,12 @@ export async function removeProjectCost(id) {
   if (error) throw error;
 }
 
+// فرق كل المشاريع دفعة واحدة (لعرض صور الفريق في التقويم الموحّد دون استعلام لكل مشروع)
+export async function getAllProjectTeams() {
+  const { data, error } = await supabase.from('project_team').select('project_id, employee_id');
+  if (error) throw error; return data || [];
+}
+
 // الفريق (project_team — مفتاح مركّب) — مع أسماء الموظفين
 export async function getProjectTeam(projectId) {
   const { data, error } = await supabase.from('project_team')

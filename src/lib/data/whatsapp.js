@@ -70,6 +70,17 @@ export async function getBookingRequests() {
   return data || [];
 }
 
+// مواعيد العملاء المؤكدة (لعرضها في التقويم الموحّد إلى جانب اجتماعات الفريق)
+export async function getConfirmedBookings() {
+  const { data, error } = await supabase
+    .from('booking_requests')
+    .select('id,status,requested_date,requested_time,requested_datetime,suggested_datetime,notes,client:client_id(id,name,phone,district)')
+    .eq('status', 'CONFIRMED')
+    .order('requested_datetime', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
 // قرار الحجز: confirm | reject | reschedule (محكوم بصلاحية whatsapp_booking)
 export async function decideBooking(bookingId, decision, { suggested = null, notes = null, calendarEventId = null } = {}) {
   const { data, error } = await supabase.rpc('wa_decide_booking', {

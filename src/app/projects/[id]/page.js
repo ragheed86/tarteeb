@@ -4,7 +4,6 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   getProject, getClient, getEmployeesBasic, getProjectFinancials,
-  getProjectTasks, createProjectTask, updateProjectTask, removeProjectTask,
   getProjectTeam, addProjectTeam, removeProjectTeam,
   getProjectMedia, uploadProjectMedia, removeProjectMedia, updateProject,
   getProjectCosts, createProjectCost, removeProjectCost, removeProject,
@@ -71,17 +70,17 @@ export default function ProjectDetail() {
     setErr('');
     try {
       const project = await getProject(id);
-      const [client, employees, fin, tasks, team, media, costs, suppliers, hourlyRates, invoices, files] = await Promise.all([
+      const [client, employees, fin, team, media, costs, suppliers, hourlyRates, invoices, files] = await Promise.all([
         project.client_id ? getClient(project.client_id) : Promise.resolve(null),
         getEmployeesBasic(),
         getProjectFinancials(id).catch(() => null),
-        getProjectTasks(id), getProjectTeam(id), getProjectMedia(id), getProjectCosts(id),
+        getProjectTeam(id), getProjectMedia(id), getProjectCosts(id),
         getSuppliers().catch(() => []),
         getEmployeeHourlyRates().catch(() => []),
         getProjectInvoices(id).catch(() => []),
         getProjectCostAttachments(id).catch(() => []),
       ]);
-      setD({ project, client, employees, fin, tasks, team, media, costs });
+      setD({ project, client, employees, fin, team, media, costs });
 
       const rates = Object.fromEntries((hourlyRates || []).map((r) => [r.employee_id, Number(r.hourly_cost) || 0]));
       setCostCtx({ suppliers: suppliers || [], rates });
@@ -224,7 +223,7 @@ export default function ProjectDetail() {
   if (err) return <ErrorBar message={err} />;
   if (!d) return <Loading />;
 
-  const { project, client, employees, fin, tasks, team, media, costs } = d;
+  const { project, client, employees, fin, team, media, costs } = d;
   const st = PROJECT_STATUS[project.status] || { label: project.status, cls: 'p-wait' };
   const supervisor = employees.find((e) => e.id === project.supervisor_id);
   const teamIds = new Set(team.map((t) => t.employee_id));
@@ -286,31 +285,29 @@ export default function ProjectDetail() {
         {deleting ? 'جارٍ حذف المشروع…' : 'حذف المشروع'}
       </button>
 
-      {/* رأس */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="sec-head" style={{ marginBottom: 10 }}>
-          <h2>{project.title}</h2>
-          <span className={`pill ${st.cls}`} style={{ marginInlineStart: 'auto' }}>{st.label}</span>
-        </div>
-        <div className="kv"><span className="k">العميل</span><span className="v">{client?.name || '—'}</span></div>
-        <div className="kv"><span className="k">نوع الخدمة</span><span className="v">{project.service_type || '—'}</span></div>
-        <div className="kv"><span className="k">المشرف</span><span className="v">{supervisor?.name || '—'}</span></div>
-        <div className="kv"><span className="k">البدء / التسليم</span><span className="v">{fmtDate(project.start_date)} ← {fmtDate(project.due_date)}</span></div>
-        <div className="kv"><span className="k">التقدّم</span><span className="v amt">{fmtNum(displayProgress(project))}%</span></div>
-      </div>
-
-      {/* المؤشرات المالية من view */}
-      <div className="kpis" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
-        <KpiCard label="قيمة العقد" value={`${fmtMoney(project.sale_price)} ⃁`} definition="قيمة بيع المشروع المسجلة في بيانات المشروع." period="هذا المشروع" formula="قيمة العقد المتفق عليها" note="لا تعني بالضرورة أن كامل المبلغ تم تحصيله من العميل." />
-        <KpiCard label="إجمالي التكاليف" value={`${fmtMoney(totalCost)} ⃁`} definition="مجموع جميع بنود التكلفة المرتبطة بهذا المشروع." period="هذا المشروع" formula="جمع العمالة والمواد والنقل والحوافز والتكاليف الأخرى + مصاريف الشركة المرتبطة بالمشروع" breakdown={[...(linkedExpenses > 0.005 ? [{ label: 'مصاريف مرتبطة من صفحة المصاريف', value: `${fmtMoney(linkedExpenses)} ⃁` }] : []), ...costs.slice(0, 6).map((cost) => ({ label: costDescription(cost), value: `${fmtMoney(cost.amount)} ⃁` }))]} note={costs.length > 6 ? `يظهر أول 6 بنود من أصل ${fmtNum(costs.length)}.` : undefined} />
-        <KpiCard label="صافي الربح" value={`${fmtMoney(netProfit)} ⃁`} definition="الربح المتوقع للمشروع بعد خصم جميع تكاليفه المسجلة من قيمة العقد." period="هذا المشروع" formula="قيمة العقد − إجمالي التكاليف" breakdown={[{ label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }, { label: 'إجمالي التكاليف', value: `− ${fmtMoney(totalCost)} ⃁` }, { label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }]} />
-        <KpiCard label="هامش الربح" value={`${fmtNum(marginPct)}%`} definition="النسبة التي يمثلها صافي الربح من قيمة عقد المشروع." period="هذا المشروع" formula="صافي الربح ÷ قيمة العقد × 100" breakdown={[{ label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }, { label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }]} />
-      </div>
-
+      {/* رأس + المؤشرات المالية جنباً إلى جنب */}
       <div className="grid2">
-        <DatesCard project={project} onChange={(p) => setD((s) => ({ ...s, project: p }))} />
-        <TasksCard projectId={id} tasks={tasks} onChange={(t) => setD((s) => ({ ...s, tasks: t }))} />
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="sec-head" style={{ marginBottom: 10 }}>
+            <h2>{project.title}</h2>
+            <span className={`pill ${st.cls}`} style={{ marginInlineStart: 'auto' }}>{st.label}</span>
+          </div>
+          <div className="kv"><span className="k">العميل</span><span className="v">{client?.name || '—'}</span></div>
+          <div className="kv"><span className="k">نوع الخدمة</span><span className="v">{project.service_type || '—'}</span></div>
+          <div className="kv"><span className="k">المشرف</span><span className="v">{supervisor?.name || '—'}</span></div>
+          <div className="kv"><span className="k">البدء / التسليم</span><span className="v">{fmtDate(project.start_date)} ← {fmtDate(project.due_date)}</span></div>
+          <div className="kv"><span className="k">التقدّم</span><span className="v amt">{fmtNum(displayProgress(project))}%</span></div>
+        </div>
+
+        <div className="kpis" style={{ gridTemplateColumns: '1fr', marginBottom: 0 }}>
+          <KpiCard label="قيمة العقد" value={`${fmtMoney(project.sale_price)} ⃁`} definition="قيمة بيع المشروع المسجلة في بيانات المشروع." period="هذا المشروع" formula="قيمة العقد المتفق عليها" note="لا تعني بالضرورة أن كامل المبلغ تم تحصيله من العميل." />
+          <KpiCard label="إجمالي التكاليف" value={`${fmtMoney(totalCost)} ⃁`} definition="مجموع جميع بنود التكلفة المرتبطة بهذا المشروع." period="هذا المشروع" formula="جمع العمالة والمواد والنقل والحوافز والتكاليف الأخرى + مصاريف الشركة المرتبطة بالمشروع" breakdown={[...(linkedExpenses > 0.005 ? [{ label: 'مصاريف مرتبطة من صفحة المصاريف', value: `${fmtMoney(linkedExpenses)} ⃁` }] : []), ...costs.slice(0, 6).map((cost) => ({ label: costDescription(cost), value: `${fmtMoney(cost.amount)} ⃁` }))]} note={costs.length > 6 ? `يظهر أول 6 بنود من أصل ${fmtNum(costs.length)}.` : undefined} />
+          <KpiCard label="صافي الربح" value={`${fmtMoney(netProfit)} ⃁`} definition="الربح المتوقع للمشروع بعد خصم جميع تكاليفه المسجلة من قيمة العقد." period="هذا المشروع" formula="قيمة العقد − إجمالي التكاليف" breakdown={[{ label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }, { label: 'إجمالي التكاليف', value: `− ${fmtMoney(totalCost)} ⃁` }, { label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }]} />
+          <KpiCard label="هامش الربح" value={`${fmtNum(marginPct)}%`} definition="النسبة التي يمثلها صافي الربح من قيمة عقد المشروع." period="هذا المشروع" formula="صافي الربح ÷ قيمة العقد × 100" breakdown={[{ label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }, { label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }]} />
+        </div>
       </div>
+
+      <DatesCard project={project} onChange={(p) => setD((s) => ({ ...s, project: p }))} />
 
       <div className="grid2">
         <TeamCard projectId={id} employees={employees} team={team} teamIds={teamIds}
@@ -541,7 +538,7 @@ function DatesCard({ project, onChange }) {
   }
 
   return (
-    <div className="card">
+    <div className="card" style={{ marginBottom: 16 }}>
       <div className="sec-head"><h2>تواريخ المشروع</h2><span className="more">{fmtDate(project.start_date)} ← {fmtDate(project.due_date)}</span></div>
       {msg && <div className={msg.startsWith('تم') ? 'okbar' : 'errbar'}>{msg}</div>}
       <form onSubmit={save} className="form-grid">
@@ -556,53 +553,6 @@ function DatesCard({ project, onChange }) {
 }
 
 // ---------- المهام ----------
-function TasksCard({ projectId, tasks, onChange }) {
-  const [title, setTitle] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function add(e) {
-    e.preventDefault();
-    if (!title.trim()) return;
-    setBusy(true);
-    try {
-      const t = await createProjectTask({ project_id: projectId, title: title.trim(), sort_order: tasks.length });
-      onChange([...tasks, t]); setTitle('');
-    } finally { setBusy(false); }
-  }
-  async function toggle(t) {
-    const up = await updateProjectTask(t.id, { done: !t.done });
-    onChange(tasks.map((x) => (x.id === up.id ? up : x)));
-  }
-  async function del(t) {
-    await removeProjectTask(t.id);
-    onChange(tasks.filter((x) => x.id !== t.id));
-  }
-  const done = tasks.filter((t) => t.done).length;
-
-  return (
-    <div className="card">
-      <div className="sec-head"><h2>المهام</h2><span className="more">{fmtNum(done)}/{fmtNum(tasks.length)}</span></div>
-      {tasks.length === 0 ? <Empty title="لا مهام" desc="أضف أول مهمة." /> : (
-        <div className="checklist">
-          {tasks.map((t) => (
-            <div className="check-row" key={t.id}>
-              <label>
-                <input type="checkbox" checked={t.done} onChange={() => toggle(t)} />
-                <span className={t.done ? 'done' : ''}>{t.title}</span>
-              </label>
-              <button className="x-btn" onClick={() => del(t)} aria-label="حذف">✕</button>
-            </div>
-          ))}
-        </div>
-      )}
-      <form onSubmit={add} className="inline-add">
-        <input placeholder="مهمة جديدة…" value={title} onChange={(e) => setTitle(e.target.value)} />
-        <button className="btn sm" disabled={busy}>إضافة</button>
-      </form>
-    </div>
-  );
-}
-
 // ---------- الفريق ----------
 function TeamCard({ projectId, employees, team, teamIds, onChange }) {
   const [sel, setSel] = useState('');

@@ -20,7 +20,6 @@ const NAV = [
   { groupKey: 'nav.operations', items: [
     { href: '/clients', labelKey: 'nav.clients', icon: IconUsers, subKey: 'nav.clientsSub' },
     { href: '/projects', labelKey: 'nav.projects', icon: IconBox, subKey: 'nav.projectsSub' },
-    { href: '/cost', labelKey: 'nav.cost', icon: IconCost, subKey: 'nav.costSub' },
     { href: '/warehouse', labelKey: 'nav.warehouse', icon: IconWarehouse, subKey: 'nav.warehouseSub' },
     { href: '/employees', labelKey: 'nav.employees', icon: IconBadge, subKey: 'nav.employeesSub' },
     { href: '/appointments', labelKey: 'nav.appointments', icon: IconCalendar, subKey: 'nav.appointmentsSub' },

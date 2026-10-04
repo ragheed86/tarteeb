@@ -433,12 +433,26 @@ export default function CostPage() {
                 <input type="number" min="0" step="0.01" value={salePrice} dir="ltr" onChange={(e) => setSalePrice(e.target.value)} />
               </div>
             </div>
-            <div className="result">
+          </div>
+
+          <div className="cost-breakdown-grid">
+            <div className="result cb-box">
+              <div className="cb-title">تكلفة المشروع بدون المنظمات</div>
               <div className="mg">ربح الخدمة</div>
               <div className="big">{fmtMoney(serviceProfit)} ⃁</div>
               <div className="mg">تكلفة الخدمة {fmtMoney(serviceCost)} ⃁ · هامش {serviceMargin}%</div>
-              <div className="mg" style={{ marginTop: 8 }}>المنظمات: تكلفة {fmtMoney(organizersCost)} ⃁ · بيع {fmtMoney(organizersSale)} ⃁ · ربح {fmtMoney(organizersProfit)} ⃁</div>
-              <div className="mg">إجمالي المشروع: بيع {fmtMoney(projectSale)} ⃁ · تكلفة {fmtMoney(total)} ⃁ · ربح {fmtMoney(projectProfit)} ⃁</div>
+            </div>
+            <div className="result cb-box">
+              <div className="cb-title">تكلفة وربح المنظمات</div>
+              <div className="mg">ربح المنظمات</div>
+              <div className="big">{fmtMoney(organizersProfit)} ⃁</div>
+              <div className="mg">تكلفة {fmtMoney(organizersCost)} ⃁ · بيع {fmtMoney(organizersSale)} ⃁</div>
+            </div>
+            <div className="result cb-box cb-total">
+              <div className="cb-title">إجمالي الربح من المشروع</div>
+              <div className="mg">ربح المشروع كاملاً</div>
+              <div className="big">{fmtMoney(projectProfit)} ⃁</div>
+              <div className="mg">بيع {fmtMoney(projectSale)} ⃁ · تكلفة {fmtMoney(total)} ⃁</div>
             </div>
           </div>
 

@@ -480,12 +480,16 @@ tr.clickable{cursor:pointer}
 .project-total-strip span{font-size:13.5px;color:rgba(255,255,255,.9)}
 .project-total-strip strong{font-family:var(--display);font-size:18px}
 
-.daily-cost-summary{display:grid;grid-template-columns:1.4fr .7fr 1fr;gap:16px;margin-bottom:16px}
+.daily-cost-summary{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px}
 .cost-search-card{position:relative;z-index:45;overflow:visible}
 .cost-search-card .ac{z-index:50}
 .daily-cost-summary h2{font-family:var(--display);font-size:18px;font-weight:600}
 .daily-cost-summary small{display:block;color:var(--muted);font-size:12.5px;margin-top:4px}
 .daily-cost-summary .field input{font-family:var(--display);font-size:20px;font-weight:600}
+.cost-breakdown-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+.cb-box{padding:18px}
+.cb-title{font-size:12.5px;color:var(--sage);font-weight:600;margin-bottom:8px}
+.cb-total{background:var(--pine-2)}
 .daily-actions{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
 .daily-actions span{font-size:13px;color:var(--muted)}
 .daily-people-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
@@ -933,6 +937,7 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .date-pair{grid-template-columns:1fr;gap:10px}
   .project-total-strip{align-items:flex-start;flex-direction:column;gap:4px}
   .daily-cost-summary{grid-template-columns:1fr;gap:12px}
+  .cost-breakdown-grid{grid-template-columns:1fr;gap:12px}
   .daily-actions{align-items:stretch;flex-direction:column}
   .daily-actions .btn{width:100%}
   .daily-people-grid,.daily-two-cols{grid-template-columns:1fr}

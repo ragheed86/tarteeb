@@ -86,8 +86,9 @@ const EMP_STATUSES = ['active', 'on_project', 'inactive'];
 const WAGE_LABELS = { fixed: 'ثابت', daily: 'يومي', hourly: 'بالساعة' };
 const EMP_STATUS_LABELS = { active: 'نشط', on_project: 'في مشروع', inactive: 'غير نشط' };
 
-const COST_KINDS = ['labor', 'materials', 'transport', 'other'];
-const COST_KIND_LABELS = { labor: 'عمالة', materials: 'منظمات', transport: 'نقل', other: 'أخرى' };
+// بلا "منظمات" عمداً: تلك بنود ذات ربح/عمولة تُدار يدوياً من صفحة المشروع، لا عبر استيراد دفعي
+const COST_KINDS = ['labor', 'transport', 'other'];
+const COST_KIND_LABELS = { labor: 'عمالة', transport: 'نقل', other: 'أخرى' };
 
 const normTitle = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
@@ -409,7 +410,8 @@ export const ENTITIES = {
     },
   },
 
-  // بنود مصاريف تفصيلية (عمالة/منظمات/نقل/أخرى) تُضاف إلى مشروع موجود مسبقاً بالاسم
+  // بنود مصاريف تفصيلية (عمالة/نقل/أخرى) تُضاف إلى مشروع موجود مسبقاً بالاسم — بدون بنود
+  // المنظمات (تلك ذات الربح/العمولة تبقى تُدار يدوياً من صفحة المشروع، ليس عبر هذا الاستيراد)
   // كل صف = بند واحد (عاملة واحدة، رحلة أوبر واحدة...)؛ إضافة فقط، لا تمسح بنوداً سابقة
   project_cost_items: {
     label: 'مصاريف المشاريع (بنود تفصيلية)',
@@ -422,49 +424,47 @@ export const ENTITIES = {
       { k: 'name_desc', label: 'الاسم أو الوصف' },
       { k: 'qty', label: 'العدد' },
       { k: 'hours', label: 'الساعات' },
-      { k: 'rate', label: 'سعر الساعة / سعر الشراء' },
-      { k: 'markup_percent', label: 'نسبة البيع % (منظمات فقط)' },
+      { k: 'rate', label: 'سعر الساعة' },
       { k: 'amount', label: 'المبلغ' },
     ],
-    fetchExport: async () => (await getAllProjectCostItemsDetailed()).map((r) => ({
-      project: r.projects?.title || '',
-      client: r.projects?.clients?.name || '',
-      work_date: r.work_date || '',
-      kind: COST_KIND_LABELS[r.kind] || r.kind || '',
-      name_desc: r.worker_name || r.product_name || r.note || '',
-      qty: r.qty ?? '',
-      hours: r.hours ?? '',
-      rate: r.rate ?? '',
-      markup_percent: r.markup_percent ?? '',
-      amount: r.amount ?? '',
-    })),
+    fetchExport: async () => (await getAllProjectCostItemsDetailed())
+      .filter((r) => r.kind !== 'materials')
+      .map((r) => ({
+        project: r.projects?.title || '',
+        client: r.projects?.clients?.name || '',
+        work_date: r.work_date || '',
+        kind: COST_KIND_LABELS[r.kind] || r.kind || '',
+        name_desc: r.worker_name || r.note || '',
+        qty: r.qty ?? '',
+        hours: r.hours ?? '',
+        rate: r.rate ?? '',
+        amount: r.amount ?? '',
+      })),
     fetchExisting: getAllProjectCostItemsDetailed,
     dedupeKey: (r) => {
       // صفوف fetchExisting (project_id + projects متداخل) أو صفوف buildPayload (project/client نص خام) — كلاهما مدعوم
       const project = r.projects?.title ?? r.project ?? '';
       const client = r.projects?.clients?.name ?? r.client ?? '';
       const date = String(r.work_date || '').slice(0, 10);
-      const desc = r.worker_name || r.product_name || r.note || r.name_desc || '';
+      const desc = r.worker_name || r.note || r.name_desc || '';
       const amount = Number(r.amount ?? 0);
       return [normTitle(project), normTitle(client), date, r.kind || '', normTitle(desc), amount].join('|');
     },
     buildPayload: (raw) => {
       const kind = normEnum(raw.kind, COST_KINDS, COST_KIND_LABELS, '');
       const qty = num(raw.qty); const hours = num(raw.hours); const rate = num(raw.rate);
-      const markup = num(raw.markup_percent);
       let amount = num(raw.amount);
       if (kind === 'labor' && amount <= 0 && qty > 0 && hours > 0 && rate > 0) amount = round2(qty * hours * rate);
-      if ((kind === 'materials' || kind === 'transport' || kind === 'other') && amount <= 0 && rate > 0) amount = rate;
-      const salePrice = kind === 'materials' && markup > 0 && amount > 0 ? round2(amount * (1 + markup / 100)) : null;
+      if ((kind === 'transport' || kind === 'other') && amount <= 0 && rate > 0) amount = rate;
       return {
         project: clean(raw.project), client: clean(raw.client), work_date: clean(raw.work_date),
-        kind, name_desc: clean(raw.name_desc), qty, hours, rate, markup_percent: markup, amount, sale_price: salePrice,
+        kind, name_desc: clean(raw.name_desc), qty, hours, rate, amount,
       };
     },
     validate: (p) => {
       if (!p.project) return 'اسم المشروع مطلوب';
-      if (!p.kind) return 'النوع مطلوب (عمالة/منظمات/نقل/أخرى)';
-      if (!(p.amount > 0)) return 'المبلغ مطلوب (أو عبّئي العدد+الساعات+السعر للعمالة، أو السعر للمنظمات/النقل)';
+      if (!p.kind) return 'النوع مطلوب (عمالة/نقل/أخرى)';
+      if (!(p.amount > 0)) return 'المبلغ مطلوب (أو عبّئي العدد+الساعات+السعر للعمالة)';
       return null;
     },
     create: async (p) => {
@@ -479,13 +479,6 @@ export const ENTITIES = {
           worker_name: p.name_desc || null, qty: p.qty || null, hours: p.hours || null, rate: p.rate || null, amount: p.amount,
         });
       }
-      if (p.kind === 'materials') {
-        return createProjectCost({
-          project_id: project.id, kind: 'materials', work_date,
-          product_name: p.name_desc || 'منظمات', amount: p.amount,
-          markup_percent: p.markup_percent || null, sale_price: p.sale_price,
-        });
-      }
       return createProjectCost({
         project_id: project.id, kind: p.kind, work_date,
         note: p.name_desc || (p.kind === 'transport' ? 'نقل' : 'مصروف'), amount: p.amount,
@@ -493,7 +486,7 @@ export const ENTITIES = {
     },
     example: {
       project: 'ترتيب مخزن', client: 'هتاف السعيدان', work_date: '2026-10-10', kind: 'عمالة',
-      name_desc: 'هيام الكردي', qty: '1', hours: '1', rate: '400', markup_percent: '', amount: '',
+      name_desc: 'هيام الكردي', qty: '1', hours: '1', rate: '400', amount: '',
     },
   },
 };

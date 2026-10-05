@@ -6,11 +6,27 @@
 import { cachedSupabaseRead, clearSupabaseReadCache, supabase } from '../supabase';
 import { attachInvoiceSummaries } from './invoices';
 
+// أفضل جهد فقط: لا يوقف حفظ العميل في ترتيب إن فشلت أو تأخرت دفترة
+async function syncClientToDaftra(clientId) {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    await fetch('/api/integrations/daftra/sync-client', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ client_id: clientId }),
+    });
+  } catch {
+    // صامت عمداً — المزامنة الدفعية من الإعدادات تلتقط أي عميل تعذّرت مزامنته
+  }
+}
+
 export async function getClients() {
   return cachedSupabaseRead('clients', async () => {
     const { data, error } = await supabase
       .from('clients')
-      .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
+      .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at,daftra_client_id,daftra_sync_error')
       .eq('in_crm', true) // جهات الواتساب غير المصنّفة تبقى في الصندوق فقط حتى تُضاف للـCRM يدوياً
       .order('created_at', { ascending: false });
     if (error) throw error; return data;
@@ -45,10 +61,11 @@ export async function createClient(input) {
   const { data, error } = await supabase
     .from('clients')
     .insert(payload)
-    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at,daftra_client_id,daftra_sync_error')
     .single();
   if (error) throw error;
   clearSupabaseReadCache('clients');
+  syncClientToDaftra(data.id);
   return data;
 }
 export async function updateClient(id, input) {
@@ -67,10 +84,13 @@ export async function updateClient(id, input) {
     .from('clients')
     .update(payload)
     .eq('id', id)
-    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at,daftra_client_id,daftra_sync_error')
     .single();
   if (error) throw error;
   clearSupabaseReadCache('clients');
+  if (input.name !== undefined || input.phone !== undefined || input.notes !== undefined) {
+    syncClientToDaftra(data.id); // لا داعٍ لإزعاج دفترة عند تغيير الحالة فقط من القائمة السريعة
+  }
   return data;
 }
 export async function removeClient(id) {

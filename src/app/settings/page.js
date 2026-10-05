@@ -54,6 +54,10 @@ const NAV = [
     ],
   },
   {
+    label: 'التكاملات',
+    items: [{ key: 'daftra', label: 'دفترة (محاسبة)', icon: IconLink }],
+  },
+  {
     label: 'النظام',
     items: [{ key: 'data', label: 'الاستيراد والتصدير', icon: IconData }],
   },
@@ -145,6 +149,7 @@ export default function SettingsPage() {
       {tab === 'company' && <CompanyForm row={company} setRow={setCompany} />}
       {tab === 'services' && <ServicesPanel rows={services} setRows={setServices} />}
       {tab === 'vat' && <VatForm row={company} setRow={setCompany} />}
+      {tab === 'daftra' && <DaftraPanel />}
       {tab === 'data' && <ImportExportPanel />}
     </div>
   );
@@ -594,6 +599,156 @@ function VatForm({ row, setRow }) {
         <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ الإعدادات'}</button>
       </div>
       </div>
+      </form>
+    </>
+  );
+}
+
+/* ============================ دفترة (محاسبة) ============================ */
+
+const EMPTY_DAFTRA = { subdomain: '', api_key: '', default_country_code: 'SA', default_currency_code: 'SAR', enabled: true };
+
+function DaftraPanel() {
+  const [status, setStatus] = useState(null); // null = جارٍ التحميل
+  const [form, setForm] = useState(EMPTY_DAFTRA);
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+
+  async function load() {
+    try {
+      const res = await fetch('/api/integrations/daftra/status', { headers: await authHeaders() });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'تعذّر جلب حالة الربط');
+      setStatus(json);
+      setForm((f) => ({
+        ...f,
+        subdomain: json.subdomain || '',
+        api_key: '',
+        default_country_code: json.default_country_code || 'SA',
+        default_currency_code: json.default_currency_code || 'SAR',
+        enabled: json.enabled,
+      }));
+    } catch (e) { setErr(e.message || 'تعذّر جلب حالة الربط'); setStatus({ connected: false }); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!form.subdomain.trim()) { setErr('اسم النطاق الفرعي مطلوب'); return; }
+    if (!status?.connected && !form.api_key.trim()) { setErr('مفتاح API مطلوب'); return; }
+    setSaving(true); setErr(''); setMsg('');
+    try {
+      const res = await fetch('/api/integrations/daftra/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+        body: JSON.stringify({
+          subdomain: form.subdomain.trim(),
+          api_key: form.api_key.trim() || undefined,
+          default_country_code: form.default_country_code,
+          default_currency_code: form.default_currency_code,
+          enabled: form.enabled,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'تعذّر الحفظ');
+      setMsg('تم الاتصال بدفترة وحفظ الإعدادات بنجاح ✓');
+      await load();
+    } catch (e2) { setErr(e2.message || 'تعذّر الحفظ'); }
+    finally { setSaving(false); }
+  }
+
+  async function disconnect() {
+    if (!confirm('فصل الربط مع دفترة؟ لن تُزامَن بيانات العملاء الجديدة بعد ذلك.')) return;
+    setSaving(true); setErr(''); setMsg('');
+    try {
+      const res = await fetch('/api/integrations/daftra/disconnect', { method: 'POST', headers: await authHeaders() });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'تعذّر فصل الربط');
+      setForm(EMPTY_DAFTRA);
+      setMsg('تم فصل الربط');
+      await load();
+    } catch (e2) { setErr(e2.message || 'تعذّر فصل الربط'); }
+    finally { setSaving(false); }
+  }
+
+  async function syncNow() {
+    setSyncing(true); setErr(''); setMsg('');
+    try {
+      const res = await fetch('/api/integrations/daftra/sync-clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'تعذّرت المزامنة');
+      setMsg(`تمت مزامنة ${fmtNum(json.synced || 0)} من ${fmtNum(json.total || 0)} عميلاً${json.errors?.length ? ` — ${fmtNum(json.errors.length)} فشل` : ''}`);
+      await load();
+    } catch (e2) { setErr(e2.message || 'تعذّرت المزامنة'); }
+    finally { setSyncing(false); }
+  }
+
+  if (!status) return <Loading />;
+
+  return (
+    <>
+      <PanelHead icon={IconLink} title="دفترة (محاسبة)" />
+      <form className="set-body" onSubmit={submit}>
+        <div className="card" style={{ maxWidth: 760 }}>
+          <div className="notebar">
+            يُزامن ترتيب بيانات العملاء تلقائياً إلى حساب دفترة المحاسبي عند إضافة أو تعديل عميل (اتجاه واحد: من ترتيب إلى دفترة). ترتيب يبقى هو مصدر الحقيقة لبيانات CRM.
+          </div>
+          {err && <div className="errbar">{err}</div>}
+          {msg && <div className="okbar">{msg}</div>}
+
+          <div className="form-grid">
+            <div className="field">
+              <label>
+                {status.connected ? <span className="pill p-done">متصل ✓</span> : <span className="pill p-cancel">غير متصل</span>}
+              </label>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <Input label="النطاق الفرعي لدفترة (subdomain)" ltr value={form.subdomain} onChange={(e) => set('subdomain', e.target.value)} placeholder="yourcompany" required />
+            <Input
+              label={status.connected ? 'مفتاح API — اتركه فارغاً للإبقاء على الحالي' : 'مفتاح API'}
+              ltr type="password" value={form.api_key} onChange={(e) => set('api_key', e.target.value)}
+              placeholder={status.connected ? '••••••••' : ''} required={!status.connected}
+            />
+            <Input label="رمز الدولة الافتراضي" ltr value={form.default_country_code} onChange={(e) => set('default_country_code', e.target.value.toUpperCase())} placeholder="SA" />
+            <Input label="رمز العملة الافتراضي" ltr value={form.default_currency_code} onChange={(e) => set('default_currency_code', e.target.value.toUpperCase())} placeholder="SAR" />
+            <div className="field span-2">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!form.enabled} onChange={(e) => set('enabled', e.target.checked)} style={{ width: 'auto' }} />
+                تفعيل المزامنة التلقائية
+              </label>
+            </div>
+          </div>
+
+          {status.connected && (
+            <p style={{ fontSize: 12, color: 'var(--tx-3, #7A8A92)', margin: '6px 0 0' }}>
+              آخر مزامنة: {status.last_sync_at ? fmtDate(status.last_sync_at) : '—'}
+              {status.last_sync_error && <span style={{ color: 'var(--neg)' }}> — خطأ: {status.last_sync_error}</span>}
+            </p>
+          )}
+
+          <div className="modal-actions" style={{ marginTop: 18 }}>
+            {status.connected && (
+              <>
+                <button className="btn ghost" type="button" disabled={saving || syncing} onClick={disconnect}>فصل الربط</button>
+                <button className="btn ghost" type="button" disabled={saving || syncing} onClick={syncNow}>
+                  {syncing ? 'جارٍ المزامنة…' : 'مزامنة كل العملاء الآن'}
+                </button>
+              </>
+            )}
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ واختبار الاتصال'}</button>
+          </div>
+        </div>
       </form>
     </>
   );
@@ -1163,4 +1318,7 @@ function IconPercent() {
 }
 function IconData() {
   return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>;
+}
+function IconLink() {
+  return <svg className="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 15 15 9M10 6l1.1-1.1a4 4 0 0 1 5.7 5.7L15.7 11.8M14 18l-1.1 1.1a4 4 0 0 1-5.7-5.7L8.3 12.2" /></svg>;
 }

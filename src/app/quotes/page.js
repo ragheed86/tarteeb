@@ -86,6 +86,7 @@ export default function QuotesPage() {
   const [scale, setScale] = useState(1);
   const [contentScale, setContentScale] = useState(1);
   const [formW, setFormW] = useState(360); // عرض نموذج الإدخال (قابل للسحب)
+  const [dragCol, setDragCol] = useState(null); // العمود المستهدف حالياً أثناء سحب بطاقة في لوحة المتابعة
   // إعدادات الضريبة على مستوى المنشأة (من company_settings)
   const [vatCfg, setVatCfg] = useState({ enabled: false, rate: 15, note: '' });
   const [services, setServices] = useState([]); // كتالوج الخدمات لاقتراحات البنود
@@ -189,6 +190,23 @@ export default function QuotesPage() {
     setQ(patch);
     if (patch.id) {
       try { const saved = await updateQuote(patch.id, { ...patch, defaultVatRate: vatCfg.rate }); setQ(saved); await refreshList(); } catch (e) { ping(e instanceof QuoteConflictError ? e.message : 'تعذّر تحديث الحالة'); }
+    }
+  }
+  // سحب بطاقة في لوحة المتابعة لتغيير حالتها (تحديث متفائل + مزامنة فورية)
+  async function moveQuoteStatus(id, ns) {
+    const current = list.find((r) => r.id === id);
+    if (!current || current.status === ns) return;
+    const patch = withStatus(current, ns);
+    setList((s) => s.map((r) => (r.id === id ? patch : r)));
+    if (q.id === id) setQ(patch);
+    try {
+      const saved = await updateQuote(id, { ...patch, defaultVatRate: vatCfg.rate });
+      setList((s) => s.map((r) => (r.id === id ? saved : r)));
+      if (q.id === id) setQ(saved);
+    } catch (e) {
+      setList((s) => s.map((r) => (r.id === id ? current : r)));
+      if (q.id === id) setQ(current);
+      ping(e instanceof QuoteConflictError ? e.message : 'تعذّر تحديث الحالة');
     }
   }
   // عند تغيير الحالة إلى «مقبول»: اقترح إضافة العميل لقائمة العملاء (مرة واحدة)
@@ -330,7 +348,7 @@ export default function QuotesPage() {
 
       {view === 'board' ? (
         <Board byColumn={byColumn} stats={{ followup: followupList.length, winRate, pipeline, total: list.length }}
-          onOpen={openFromBoard} activeId={q.id} />
+          onOpen={openFromBoard} activeId={q.id} onMove={moveQuoteStatus} dragCol={dragCol} setDragCol={setDragCol} />
       ) : (
       <>
       <div className="qg-workspace" style={{ '--qg-formw': `${formW}px` }}>
@@ -521,7 +539,7 @@ function Kpi({ label, value, tone, definition, formula, breakdown }) {
   return <KpiCard baseClass="qg-kpi" labelClass="qg-kpil" valueClass="qg-kpiv" label={label} value={value} tone={tone} definition={definition} formula={formula} period="كل عروض الأسعار المسجلة" breakdown={breakdown} />;
 }
 
-function Board({ byColumn, stats, onOpen, activeId }) {
+function Board({ byColumn, stats, onOpen, activeId, onMove, dragCol, setDragCol }) {
   return (
     <div className="qg-board">
       <div className="qg-kpis">
@@ -535,8 +553,20 @@ function Board({ byColumn, stats, onOpen, activeId }) {
           const items = byColumn[col] || [];
           const bd = STATUS[col];
           const sum = items.reduce((s, r) => s + quoteAmount(r), 0);
+          const droppable = col !== 'expired'; // «منتهي الصلاحية» حالة محسوبة تلقائياً، لا تُسنَد بالسحب
           return (
-            <div className="qg-col" key={col}>
+            <div
+              className={`qg-col${droppable && dragCol === col ? ' drag-over' : ''}${!droppable ? ' nodrop' : ''}`}
+              key={col}
+              onDragOver={droppable ? (e) => { e.preventDefault(); if (dragCol !== col) setDragCol(col); } : undefined}
+              onDragLeave={droppable ? (e) => { if (e.currentTarget === e.target) setDragCol(null); } : undefined}
+              onDrop={droppable ? (e) => {
+                e.preventDefault();
+                setDragCol(null);
+                const id = e.dataTransfer.getData('text/plain');
+                if (id) onMove(id, col);
+              } : undefined}
+            >
               <div className="qg-colhead"><span className={`qg-badge ${bd[0]}`}>{bd[1]}</span><span className="qg-colcount">{items.length}</span></div>
               <div className="qg-colbody">
                 {items.length === 0 && <div className="qg-colempty">—</div>}
@@ -544,7 +574,14 @@ function Board({ byColumn, stats, onOpen, activeId }) {
                   const fu = needsFollowup(rec);
                   const vu = validUntil(rec);
                   return (
-                    <div key={rec.id} className={`qg-bcard${rec.id === activeId ? ' active' : ''}${fu ? ' fu' : ''}`} onClick={() => onOpen(rec.id)}>
+                    <div
+                      key={rec.id}
+                      className={`qg-bcard${rec.id === activeId ? ' active' : ''}${fu ? ' fu' : ''}`}
+                      draggable
+                      onDragStart={(e) => { e.dataTransfer.setData('text/plain', rec.id); e.currentTarget.classList.add('dragging'); }}
+                      onDragEnd={(e) => { e.currentTarget.classList.remove('dragging'); setDragCol(null); }}
+                      onClick={() => onOpen(rec.id)}
+                    >
                       <div className="qg-btop"><span className="qg-qn">{rec.number}</span>{fu && <span className="qg-futag">متابعة</span>}</div>
                       <div className="qg-bclient">{rec.client || '[ بدون اسم ]'}</div>
                       <div className="qg-bmeta"><span dir="ltr"><span className="qg-riyal">{RIYAL}</span> {fmtNum(quoteAmount(rec))}</span><span>{fmtQuoteDate(rec.date)}</span></div>
@@ -684,7 +721,11 @@ const CSS = `
 .qg-kpiv{font-size:24px;font-weight:700;color:var(--tink)}
 .qg-cols{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px}
 @media(max-width:1100px){.qg-cols{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:minmax(180px,1fr)}}
-.qg-col{background:#F6FAFA;border:1px solid var(--tbd);border-radius:12px;padding:8px;display:flex;flex-direction:column;min-height:120px}
+.qg-col{background:#F6FAFA;border:1px solid var(--tbd);border-radius:12px;padding:8px;display:flex;flex-direction:column;min-height:120px;transition:background .15s,border-color .15s}
+.qg-col.drag-over{background:var(--lbg);border-color:var(--tl);border-style:dashed}
+.qg-col.nodrop{opacity:.85}
+.qg-bcard{cursor:grab}
+.qg-bcard.dragging{opacity:.4}
 .qg-colhead{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 8px}
 .qg-colcount{font-size:12px;font-weight:700;color:var(--tmut)}
 .qg-colbody{display:flex;flex-direction:column;gap:8px;flex:1}

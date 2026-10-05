@@ -87,6 +87,9 @@ function buildCsp(nonce) {
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
+  // request_id لربط سجلات الخادم بطلب العميل (مهمة 15) — نقبل قيمة الوارد إن
+  // أرسلها عميل داخلي (n8n، مهمة مجدولة) موثوق، وإلا نولّد واحداً جديداً.
+  const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
 
   if (pathname.startsWith('/api/admin/')) {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim()
@@ -94,12 +97,16 @@ export async function proxy(request) {
       || 'unknown';
     const { hits, retryAfter } = await rateLimit(ip);
     if (hits > RATE_LIMIT_MAX) {
-      return NextResponse.json(
+      const res = NextResponse.json(
         { error: 'محاولات كثيرة، حاول لاحقاً' },
         { status: 429, headers: { 'Retry-After': String(retryAfter) } },
       );
+      res.headers.set('x-request-id', requestId);
+      return res;
     }
-    return NextResponse.next();
+    const res = NextResponse.next();
+    res.headers.set('x-request-id', requestId);
+    return res;
   }
 
   const nonce = crypto.randomUUID().replace(/-/g, '');
@@ -107,11 +114,13 @@ export async function proxy(request) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', csp);
+  requestHeaders.set('x-request-id', requestId);
   const nextRequest = { headers: requestHeaders };
 
   if (PUBLIC_PATHS.has(pathname)) {
     const response = NextResponse.next({ request: nextRequest });
     response.headers.set('Content-Security-Policy', csp);
+    response.headers.set('x-request-id', requestId);
     return response;
   }
 
@@ -122,6 +131,7 @@ export async function proxy(request) {
   if (!supabaseUrl || !supabaseAnonKey) {
     const response = NextResponse.next({ request: nextRequest });
     response.headers.set('Content-Security-Policy', csp);
+    response.headers.set('x-request-id', requestId);
     return response;
   }
 
@@ -141,9 +151,12 @@ export async function proxy(request) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(new URL('/', request.url));
+    const res = NextResponse.redirect(new URL('/', request.url));
+    res.headers.set('x-request-id', requestId);
+    return res;
   }
   response.headers.set('Content-Security-Policy', csp);
+  response.headers.set('x-request-id', requestId);
   return response;
 }
 

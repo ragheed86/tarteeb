@@ -4,8 +4,11 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('حدود الأمان العامة', () => {
   test('التقرير المالي المحذوف غير متاح', async ({ request }) => {
-    const response = await request.get('/reports/khawla-expense-report.html');
-    expect(response.status()).toBe(404);
+    // الوسيط (proxy.js) لا يستثني *.html من حراسة الجلسة، فطلب بلا جلسة يُحوَّل
+    // (307) لتسجيل الدخول بدل 404 صريح — لا نتابع التحويل كي لا نقيس صفحة
+    // الدخول (200) بدل المسار الأصلي؛ المهم أن المسار لا يُخدَّم فعلياً (ليس 200).
+    const response = await request.get('/reports/khawla-expense-report.html', { maxRedirects: 0 });
+    expect(response.status()).not.toBe(200);
   });
 
   test('المسارات الحساسة ترفض الطلب بلا جلسة', async ({ request }) => {

@@ -114,6 +114,7 @@ export function permissionForPath(pathname) {
   if (path.startsWith('/warehouse')) return 'warehouse';
   if (path.startsWith('/employees')) return 'employees';
   if (path.startsWith('/appointments')) return 'appointments';
+  if (path.startsWith('/calendar')) return 'appointments';
   if (path.startsWith('/heatmap')) return 'heatmap';
   if (path.startsWith('/quotes')) return 'quotes';
   if (path.startsWith('/invoices')) return 'invoices';

@@ -159,13 +159,16 @@ function ClientsPageInner() {
   }
 
   async function del(c) {
-    if (!confirm(`حذف العميل «${c.name}»؟ سيُحذف معه مشاريعه، وستبقى فواتيره السابقة بلا عميل مرتبط.`)) return;
+    if (!confirm(`حذف العميل «${c.name}»؟ سيُحذف معه مشاريعه، وستبقى فواتيره وعروض أسعاره السابقة بلا عميل مرتبط.`)) return;
     try {
       await removeClient(c.id);
       setClients((current) => (current || []).filter((x) => x.id !== c.id));
       toast(`حُذف العميل «${c.name}»`);
     } catch (error) {
-      toast(error.message || 'تعذّر الحذف', 'err');
+      const message = error?.code === '23503'
+        ? 'تعذّر الحذف: هناك سجلات مرتبطة بهذا العميل لم يتم تحويلها بعد. حدّث الصفحة وحاول مجددًا.'
+        : error.message || 'تعذّر الحذف';
+      toast(message, 'err');
     }
   }
 

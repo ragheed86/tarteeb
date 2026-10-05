@@ -78,8 +78,9 @@ export async function getEmployees() {
 // السجل الشخصي الكامل (رقم الهوية، الجنسية، الأجر...) الذي يعرضه getEmployees.
 export async function getEmployeesBasic() {
   return cachedSupabaseRead('employees-basic', async () => {
-    const { data, error } = await supabase.from('employees').select('id,name');
-    if (error) throw error; return data;
+    const { data, error } = await supabase.from('employees').select('id,name,photo_path');
+    if (error) throw error;
+    return signStoredFiles(data, 'employee-photos', 'photo_path', 'photo_url');
   });
 }
 export async function getGovernmentAccounts() {

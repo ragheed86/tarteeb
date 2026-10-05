@@ -77,6 +77,12 @@ export async function removeProjectCost(id) {
   const { error } = await supabase.from('project_costs').delete().eq('id', id);
   if (error) throw error;
 }
+// كل بنود تكلفة كل المشاريع مع اسم المشروع/العميل — لاستيراد/تصدير ملف مصاريف تفصيلي (dataio)
+export async function getAllProjectCostItemsDetailed() {
+  const { data, error } = await supabase.from('project_costs')
+    .select('id,project_id,kind,work_date,note,worker_name,product_name,qty,hours,rate,markup_percent,amount,projects(title,clients(name))');
+  if (error) throw error; return data || [];
+}
 
 // فرق كل المشاريع دفعة واحدة (لعرض صور الفريق في التقويم الموحّد دون استعلام لكل مشروع)
 export async function getAllProjectTeams() {

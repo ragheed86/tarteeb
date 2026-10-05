@@ -474,7 +474,7 @@ export default function QuotesPage() {
                 <div className="qg-foot">
                   <span>المملكة العربية السعودية، الرياض</span>
                   <span>tarteebandmore.com</span>
-                  <span dir="ltr">He@tarteebandmore.com</span>
+                  <span dir="ltr">Hi@tarteebandmore.com</span>
                   <span dir="ltr">+966 55 600 6361</span>
                 </div>
               </div>

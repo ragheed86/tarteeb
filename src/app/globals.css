@@ -1236,31 +1236,31 @@ html[dir="ltr"] .toaster{transform:translateX(-50%)}
   .inv2-pay-row{grid-template-columns:1fr;gap:3px}
   .inv2-footer{gap:8px 18px;padding-inline:18px}
 }
-/* الطباعة/التصدير: صفحة A4 نظيفة بلا هوامش متصفح ولا عناصر تطبيق */
-@page inv2 { size:A4 portrait; margin:10mm }
+/* الطباعة/التصدير: صفحة A4 واحدة دائماً — بلا هوامش متصفح ولا عناصر تطبيق ولا صفحة ثانية */
+@page inv2 { size:A4 portrait; margin:8mm }
 @media print{
-  @page{size:A4 portrait;margin:10mm}
+  @page{size:A4 portrait;margin:8mm}
   html,body{width:auto!important;height:auto!important;min-height:0!important;background:#fff;overflow:visible!important}
-  body{font-size:15px!important;line-height:1.45!important}
+  body{font-size:12.5px!important;line-height:1.3!important}
   .bottom-nav{display:none!important}
   .inv2-page{display:block;page:inv2;width:100%;overflow:visible}
-  .inv2-sheet{width:100%;max-width:none;min-height:0;margin:0;border:0;border-radius:0;box-shadow:none;overflow:visible;font-size:15px;line-height:1.45}
-  .inv2-head{padding:3mm 2mm 0}
-  .inv2-logo{width:46mm}
-  .inv2-title-lg{font-size:31px}
-  .inv2-meta{margin:4mm 2mm 0;padding:3mm 4mm;border-radius:9px}
-  .inv2-qr{width:21mm;height:21mm}
-  .inv2-parties{margin:4mm 2mm 0;gap:4mm}
-  .inv2-party{padding:10px 12px;border-radius:9px}
-  .inv2-party-name{font-size:14px}
-  .inv2-party-line{font-size:11.5px}
-  .inv2-table{margin:5mm 2mm 0}
-  .inv2-thead,.inv2-tr,.inv2-total-row{padding-block:7px}
-  .inv2-grand{padding-block:7px}
-  .inv2-payments{margin:4mm 2mm 0}
-  .inv2-pay-head{padding-block:7px}
-  .inv2-pay-summary div{padding-block:7px}
-  .inv2-pay-row{padding-block:6px}
-  .inv2-note{margin:4mm 2mm 0;padding:9px 12px;font-size:11px;line-height:1.45}
-  .inv2-footer{margin:4mm 2mm 0;padding:4mm 0 0;font-size:10px}
+  .inv2-sheet{width:100%;max-width:none;min-height:0;height:281mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;font-size:12.5px;line-height:1.3}
+  .inv2-head{padding:2mm 2mm 0}
+  .inv2-logo{width:36mm}
+  .inv2-title-lg{font-size:24px}
+  .inv2-meta{margin:3mm 2mm 0;padding:2mm 3mm;border-radius:8px}
+  .inv2-qr{width:16mm;height:16mm}
+  .inv2-parties{margin:3mm 2mm 0;gap:3mm}
+  .inv2-party{padding:7px 10px;border-radius:8px}
+  .inv2-party-name{font-size:13px}
+  .inv2-party-line{font-size:10.5px}
+  .inv2-table{margin:3mm 2mm 0}
+  .inv2-thead,.inv2-tr,.inv2-total-row{padding-block:4px}
+  .inv2-grand{padding-block:4px}
+  .inv2-payments{margin:3mm 2mm 0}
+  .inv2-pay-head{padding-block:5px}
+  .inv2-pay-summary div{padding-block:5px}
+  .inv2-pay-row{padding-block:4px}
+  .inv2-note{margin:3mm 2mm 0;padding:6px 10px;font-size:10px;line-height:1.35}
+  .inv2-footer{margin-top:3mm!important;padding:3mm 0 0;font-size:9.5px}
 }

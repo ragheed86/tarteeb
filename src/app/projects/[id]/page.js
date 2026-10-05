@@ -8,13 +8,14 @@ import {
   getProjectMedia, uploadProjectMedia, removeProjectMedia, updateProject,
   getProjectCosts, createProjectCost, removeProjectCost, removeProject,
   getSuppliers, getEmployeeHourlyRates, getProjectInvoices, saveProjectCosts,
-  estimateToCostRows, costRowsToEstimate,
+  estimateToCostRows, costRowsToEstimate, getProjectInvoiceItemsForProfit,
   getProjectCostAttachments, uploadProjectCostAttachment, removeProjectCostAttachment,
 } from '@/lib/data';
 import {
   fmtMoney, fmtNum, fmtDate, INVOICE_STATUS, PROJECT_STATUS, displayProgress, progressForStatus,
 } from '@/lib/format';
 import { isSupervisorLaborRow } from '@/lib/labor';
+import { organizersProfitFromItems } from '@/lib/invoiceItems';
 import { Loading, Empty, ErrorBar, DataTable, KpiCard } from '@/components';
 import { canAccess } from '@/lib/permissions';
 import { useAccess } from '@/lib/useAccess';
@@ -65,12 +66,13 @@ export default function ProjectDetail() {
   const [attachErr, setAttachErr] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [organizersInvoiceProfit, setOrganizersInvoiceProfit] = useState(0);
 
   async function loadAll() {
     setErr('');
     try {
       const project = await getProject(id);
-      const [client, employees, fin, team, media, costs, suppliers, hourlyRates, invoices, files] = await Promise.all([
+      const [client, employees, fin, team, media, costs, suppliers, hourlyRates, invoices, files, invoiceItems] = await Promise.all([
         project.client_id ? getClient(project.client_id) : Promise.resolve(null),
         getEmployeesBasic(),
         getProjectFinancials(id).catch(() => null),
@@ -79,8 +81,10 @@ export default function ProjectDetail() {
         getEmployeeHourlyRates().catch(() => []),
         getProjectInvoices(id).catch(() => []),
         getProjectCostAttachments(id).catch(() => []),
+        getProjectInvoiceItemsForProfit(id).catch(() => []),
       ]);
       setD({ project, client, employees, fin, team, media, costs });
+      setOrganizersInvoiceProfit(organizersProfitFromItems(invoiceItems));
 
       const rates = Object.fromEntries((hourlyRates || []).map((r) => [r.employee_id, Number(r.hourly_cost) || 0]));
       setCostCtx({ suppliers: suppliers || [], rates });
@@ -314,10 +318,20 @@ export default function ProjectDetail() {
           <KpiCard label="إجمالي التكاليف" value={`${fmtMoney(totalCost)} ⃁`} definition="مجموع جميع بنود التكلفة المرتبطة بهذا المشروع." period="هذا المشروع" formula="جمع العمالة والمواد والنقل والحوافز والتكاليف الأخرى + مصاريف الشركة المرتبطة بالمشروع" breakdown={[...(linkedExpenses > 0.005 ? [{ label: 'مصاريف مرتبطة من صفحة المصاريف', value: `${fmtMoney(linkedExpenses)} ⃁` }] : []), ...costs.slice(0, 6).map((cost) => ({ label: costDescription(cost), value: `${fmtMoney(cost.amount)} ⃁` }))]} note={costs.length > 6 ? `يظهر أول 6 بنود من أصل ${fmtNum(costs.length)}.` : undefined} />
           <KpiCard label="صافي الربح" value={`${fmtMoney(netProfit)} ⃁`} definition="الربح المتوقع للمشروع بعد خصم جميع تكاليفه المسجلة من قيمة العقد." period="هذا المشروع" formula="قيمة العقد − إجمالي التكاليف" breakdown={[{ label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }, { label: 'إجمالي التكاليف', value: `− ${fmtMoney(totalCost)} ⃁` }, { label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }]} />
           <KpiCard label="هامش الربح" value={`${fmtNum(marginPct)}%`} definition="النسبة التي يمثلها صافي الربح من قيمة عقد المشروع." period="هذا المشروع" formula="صافي الربح ÷ قيمة العقد × 100" breakdown={[{ label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }, { label: 'قيمة العقد', value: `${fmtMoney(project.sale_price)} ⃁` }]} />
+          <KpiCard
+            label="إجمالي الربح بعد حساب أرباح بيع المنظمات"
+            value={`${fmtMoney(netProfit + organizersInvoiceProfit)} ⃁`}
+            definition="صافي ربح المشروع مضافاً إليه ربح بيع المنظمات وأدوات الترتيب المعتمد في فواتير هذا المشروع."
+            period="هذا المشروع"
+            formula="صافي الربح + ربح بيع المنظمات (من بنود الفواتير)"
+            breakdown={[{ label: 'صافي الربح', value: `${fmtMoney(netProfit)} ⃁` }, { label: 'ربح بيع المنظمات (من الفواتير)', value: `+ ${fmtMoney(organizersInvoiceProfit)} ⃁` }, { label: 'الإجمالي', value: `${fmtMoney(netProfit + organizersInvoiceProfit)} ⃁` }]}
+            note="ربح المنظمات يُحسب من بند «منظمات وأدوات الترتيب والتخزين» في فواتير المشروع، باستخدام السعر الداخلي المسجَّل لكل بند."
+            className="kpi-span-all"
+          />
         </div>
       </div>
 
-      <div className="pgrid" style={{ alignItems: 'start', marginBottom: 16 }}>
+      <div className="pgrid" style={{ marginBottom: 16 }}>
         <DatesCard project={project} onChange={(p) => setD((s) => ({ ...s, project: p }))} />
         <TeamCard projectId={id} employees={employees} team={team} teamIds={teamIds}
           onChange={(t) => setD((s) => ({ ...s, team: t }))} />
@@ -341,12 +355,6 @@ export default function ProjectDetail() {
               <div className="mg">ربح الخدمة</div>
               <div className="big">{fmtMoney(serviceProfit)} ⃁</div>
               <div className="mg">تكلفة الخدمة {fmtMoney(serviceCost)} ⃁ · هامش {serviceMargin}%</div>
-            </div>
-            <div className="result cb-box">
-              <div className="cb-title">تكلفة وربح المنظمات</div>
-              <div className="mg">ربح المنظمات</div>
-              <div className="big">{fmtMoney(organizersProfit)} ⃁</div>
-              <div className="mg">تكلفة {fmtMoney(organizersCost)} ⃁ · بيع {fmtMoney(organizersSale)} ⃁</div>
             </div>
             <div className="result cb-box cb-total">
               <div className="cb-title">إجمالي الربح من المشروع</div>
@@ -580,14 +588,23 @@ function DatesCard({ project, onChange }) {
 
 // ---------- المهام ----------
 // ---------- الفريق ----------
+function EmployeeAvatar({ employee, size = 28 }) {
+  const initial = (employee?.name || '؟').trim().charAt(0);
+  if (employee?.photo_url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img className="team-avatar" src={employee.photo_url} alt={employee.name} style={{ width: size, height: size }} />;
+  }
+  return <span className="team-avatar team-avatar-fallback" style={{ width: size, height: size }}>{initial}</span>;
+}
+
 function TeamCard({ projectId, employees, team, teamIds, onChange }) {
-  const [sel, setSel] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const available = employees.filter((e) => !teamIds.has(e.id));
 
-  async function add() {
-    if (!sel) return;
-    await addProjectTeam(projectId, sel);
-    onChange(await getProjectTeam(projectId)); setSel('');
+  async function add(employeeId) {
+    await addProjectTeam(projectId, employeeId);
+    onChange(await getProjectTeam(projectId));
+    setPickerOpen(false);
   }
   async function remove(employeeId) {
     await removeProjectTeam(projectId, employeeId);
@@ -599,20 +616,34 @@ function TeamCard({ projectId, employees, team, teamIds, onChange }) {
       <div className="sec-head"><h2>فريق العمل</h2><span className="more">{fmtNum(team.length)}</span></div>
       {team.length === 0 ? <Empty title="لا أعضاء" desc="أضف أعضاء الفريق." /> : (
         <div className="chips">
-          {team.map((t) => (
-            <span className="chip" key={t.employee_id}>
-              {t.employees?.name || '—'}
-              <button onClick={() => remove(t.employee_id)} aria-label="إزالة">✕</button>
-            </span>
-          ))}
+          {team.map((t) => {
+            const emp = employees.find((e) => e.id === t.employee_id) || t.employees;
+            return (
+              <span className="chip team-chip" key={t.employee_id}>
+                <EmployeeAvatar employee={emp} size={22} />
+                {emp?.name || '—'}
+                <button onClick={() => remove(t.employee_id)} aria-label="إزالة">✕</button>
+              </span>
+            );
+          })}
         </div>
       )}
-      <div className="inline-add">
-        <select value={sel} onChange={(e) => setSel(e.target.value)}>
-          <option value="">اختر موظفاً…</option>
-          {available.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-        </select>
-        <button className="btn sm" onClick={add} disabled={!sel}>إضافة</button>
+      <div className="inline-add" style={{ position: 'relative' }}>
+        <button className="btn sm ghost" type="button" onClick={() => setPickerOpen((v) => !v)} disabled={!available.length}>
+          + إضافة عضو
+        </button>
+        {pickerOpen && (
+          <div className="team-picker">
+            {available.length === 0 ? (
+              <div className="team-picker-empty">لا يوجد موظفون متاحون</div>
+            ) : available.map((e) => (
+              <button type="button" key={e.id} className="team-picker-row" onClick={() => add(e.id)}>
+                <EmployeeAvatar employee={e} size={26} />
+                <span>{e.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

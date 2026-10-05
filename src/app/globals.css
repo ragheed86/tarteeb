@@ -136,6 +136,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 .kpis .kpi:nth-child(4){background:var(--grad-warn)}
 .kpis .kpi:nth-child(5){background:var(--grad-brand-deep)}
 .kpis .kpi:nth-child(6){background:var(--grad-neg)}
+.kpi-span-all{grid-column:1 / -1}
 .kpi .lbl{font-size:11px;color:rgba(255,255,255,.9);display:flex;align-items:center;gap:6px}
 .kpi .lbl svg{width:14px;height:14px;opacity:.95}
 .kpi .val{font-family:var(--display);font-size:22px;font-weight:600;margin-top:6px;letter-spacing:.3px;color:#fff}
@@ -485,7 +486,7 @@ tr.clickable{cursor:pointer}
 .daily-cost-summary h2{font-family:var(--display);font-size:18px;font-weight:600}
 .daily-cost-summary small{display:block;color:var(--muted);font-size:12.5px;margin-top:4px}
 .daily-cost-summary .field input{font-family:var(--display);font-size:20px;font-weight:600}
-.cost-breakdown-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+.cost-breakdown-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:16px}
 .cb-box{padding:18px}
 .cb-title{font-size:12.5px;color:var(--sage);font-weight:600;margin-bottom:8px}
 .cb-total{background:var(--pine-2)}
@@ -675,6 +676,13 @@ html[dir="ltr"] .back-link svg{transform:none}
 .chip.active{background:var(--green);color:#fff}
 .chip button{border:0;background:none;color:var(--pine);cursor:pointer;opacity:.6;font-size:12px}
 .chip button:hover{opacity:1}
+.team-chip{padding-inline-start:5px}
+.team-avatar{border-radius:50%;object-fit:cover;flex-shrink:0}
+.team-avatar-fallback{display:inline-flex;align-items:center;justify-content:center;background:var(--green);color:#fff;font-size:12px;font-weight:600}
+.team-picker{position:absolute;inset-inline-start:0;top:calc(100% + 6px);z-index:6;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-card);padding:6px;min-width:220px;max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.team-picker-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;background:none;border-radius:8px;cursor:pointer;font-family:var(--body);font-size:13.5px;color:var(--ink);text-align:start}
+.team-picker-row:hover{background:var(--sage-bg)}
+.team-picker-empty{padding:10px;font-size:13px;color:var(--muted)}
 .pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin:18px 0;flex-wrap:wrap}
 .pagination span{font-size:13px;color:var(--muted)}
 .media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}

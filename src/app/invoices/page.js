@@ -4,15 +4,10 @@ import { useRouter } from 'next/navigation';
 import { getInvoices, getClients, getProjects, getProjectCosts, createInvoice, getQuotes, getInvoiceItems, updateInvoiceWithItems, updateInvoice, removeInvoice, getServices } from '@/lib/data';
 import { fmtMoney, fmtNum, INVOICE_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar, Modal, DataTable, Input, Select, Money, DateText, StatusPill, KpiCard } from '@/components';
+import { isOrganizersItem, unitForDescription } from '@/lib/invoiceItems';
 
 const VAT_RATE = 15;
-const ORGANIZERS_ITEM = 'منظمات و ادوات الترتيب والتخزين';
 const blankItem = () => ({ description: '', qty: 1, unit: 'غرفة', unit_price: '', internal_base_price: '', markup_percent: '' });
-const isOrganizersItem = (description) => {
-  const value = String(description || '').trim();
-  return value === ORGANIZERS_ITEM || value === 'ادوات ترتيب و منظمات';
-};
-const unitForDescription = (description) => (isOrganizersItem(description) ? 'مجموعة' : 'غرفة');
 function organizerPricingFromCosts(rows) {
   const materials = (rows || []).filter((row) => row.kind === 'materials' && Number(row.amount) > 0);
   const named = materials.filter((row) => /منظم|ترتيب|ادوات|أدوات/.test(`${row.product_name || ''} ${row.label || ''} ${row.note || ''}`));
@@ -319,6 +314,9 @@ export default function InvoicesPage() {
   const clientsWithoutInvoices = billingCoverage.filter((client) => client.invoice_count === 0);
   const projectsWithoutInvoices = projects.filter((project) => !invoicedProjectIds.has(project.id));
   const clientsWithInvoices = clients.length - clientsWithoutInvoices.length;
+  const incompleteBillingCoverage = billingCoverage.filter(
+    (client) => client.invoice_count === 0 || client.uninvoiced_projects.length > 0
+  );
 
   // مؤشرات: المرتجعات تُستبعد من الأرقام النشطة وتُعرض على حدة
   const active = invoices.filter((i) => !isRefunded(i));
@@ -388,20 +386,20 @@ export default function InvoicesPage() {
           </div>
         </div>
         <DataTable
-          rows={billingCoverage}
+          rows={incompleteBillingCoverage}
           pageSize={20}
-          empty={<Empty title="لا يوجد عملاء" desc="ستظهر مقارنة الفوترة بعد إضافة العملاء." />}
+          empty={<Empty title="لا توجد مشاكل في الفوترة" desc="جميع العملاء والمشاريع مكتملة الفوترة حالياً." />}
           columns={[
             { key: 'name', label: 'العميل', primary: true, render: (client) => <span className="nm">{client.name}</span> },
             { key: 'project_count', label: 'عدد المشاريع', align: 'center', render: (client) => <span className="amt">{fmtNum(client.project_count)}</span> },
             { key: 'invoice_count', label: 'عدد الفواتير', align: 'center', render: (client) => <span className={`coverage-count ${client.invoice_count === 0 ? 'missing' : ''}`}>{fmtNum(client.invoice_count)}</span> },
             {
               key: 'uninvoiced_projects', label: 'مشاريع بلا فاتورة',
-              render: (client) => client.uninvoiced_projects.length ? (
+              render: (client) => (
                 <div className="coverage-projects">
                   {client.uninvoiced_projects.map((project) => <span key={project.id}>{project.title}</span>)}
                 </div>
-              ) : <span className="coverage-complete">مكتملة الفوترة</span>,
+              ),
             },
           ]}
         />

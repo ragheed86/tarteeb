@@ -49,6 +49,15 @@ export async function getProjectInvoices(projectId) {
     .order('issue_at', { ascending: false });
   if (error) throw error; return attachInvoiceSummaries(data);
 }
+// بنود فواتير المشروع (غير المسترجعة) — لحساب ربح المنظمات المعتمد في الفواتير.
+export async function getProjectInvoiceItemsForProfit(projectId) {
+  const { data, error } = await supabase.from('invoice_items')
+    .select('description,qty,unit_price,internal_base_price,invoices!inner(project_id,status)')
+    .eq('invoices.project_id', projectId)
+    .neq('invoices.status', 'refunded');
+  if (error) throw error;
+  return (data || []).map(({ invoices: _invoice, ...item }) => item);
+}
 export async function getInvoiceItems(invoiceId) {
   const { data, error } = await supabase.from('invoice_items').select('*').eq('invoice_id', invoiceId);
   if (error) throw error; return data;

@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useRef } from 'react';
-// v6 أزالت default export (كسر توافق)؛ استيراد namespace يبقي maplibregl.Map/.Popup/... كما هي.
-import * as maplibregl from 'maplibre-gl';
+// مثبّتة على v5: v6 تكسر تحميل الـ Web Worker تحت Next.js/Webpack (يطلب
+// chunk غير موجود فيرجع صفحة HTML بدل JS، فيفشل الـ worker بصمت والخريطة تبقى فارغة).
+import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { colorFor } from '@/lib/heatmap/colors';
 

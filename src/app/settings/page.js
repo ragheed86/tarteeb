@@ -55,7 +55,7 @@ const NAV = [
   },
   {
     label: 'التكاملات',
-    items: [{ key: 'daftra', label: 'دفترة (محاسبة)', icon: IconLink }],
+    items: [{ key: 'alostaz', label: 'alostaz.io (محاسبة)', icon: IconLink }],
   },
   {
     label: 'النظام',
@@ -149,7 +149,7 @@ export default function SettingsPage() {
       {tab === 'company' && <CompanyForm row={company} setRow={setCompany} />}
       {tab === 'services' && <ServicesPanel rows={services} setRows={setServices} />}
       {tab === 'vat' && <VatForm row={company} setRow={setCompany} />}
-      {tab === 'daftra' && <DaftraPanel />}
+      {tab === 'alostaz' && <AlostazPanel />}
       {tab === 'data' && <ImportExportPanel />}
     </div>
   );
@@ -604,30 +604,39 @@ function VatForm({ row, setRow }) {
   );
 }
 
-/* ============================ دفترة (محاسبة) ============================ */
+/* ============================ alostaz.io (محاسبة) ============================ */
 
-const EMPTY_DAFTRA = { subdomain: '', api_key: '', default_country_code: 'SA', default_currency_code: 'SAR', enabled: true };
+const EMPTY_ALOSTAZ = {
+  base_url: '', token: '', branch_id: '', api_version: '', locale: 'ar',
+  default_treasury_id: '', default_product_id: '', default_storehouse_id: '', enabled: true,
+};
 
-function DaftraPanel() {
+function AlostazPanel() {
   const [status, setStatus] = useState(null); // null = جارٍ التحميل
-  const [form, setForm] = useState(EMPTY_DAFTRA);
+  const [form, setForm] = useState(EMPTY_ALOSTAZ);
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncingClients, setSyncingClients] = useState(false);
+  const [syncingInvoices, setSyncingInvoices] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const busy = saving || syncingClients || syncingInvoices;
 
   async function load() {
     try {
-      const res = await fetch('/api/integrations/daftra/status', { headers: await authHeaders() });
+      const res = await fetch('/api/integrations/alostaz/status', { headers: await authHeaders() });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'تعذّر جلب حالة الربط');
       setStatus(json);
       setForm((f) => ({
         ...f,
-        subdomain: json.subdomain || '',
-        api_key: '',
-        default_country_code: json.default_country_code || 'SA',
-        default_currency_code: json.default_currency_code || 'SAR',
+        base_url: json.base_url || '',
+        token: '',
+        branch_id: json.branch_id || '',
+        api_version: json.api_version || '',
+        locale: json.locale || 'ar',
+        default_treasury_id: json.default_treasury_id || '',
+        default_product_id: json.default_product_id || '',
+        default_storehouse_id: json.default_storehouse_id || '',
         enabled: json.enabled,
       }));
     } catch (e) { setErr(e.message || 'تعذّر جلب حالة الربط'); setStatus({ connected: false }); }
@@ -639,68 +648,91 @@ function DaftraPanel() {
 
   async function submit(e) {
     e.preventDefault();
-    if (!form.subdomain.trim()) { setErr('اسم النطاق الفرعي مطلوب'); return; }
-    if (!status?.connected && !form.api_key.trim()) { setErr('مفتاح API مطلوب'); return; }
+    if (!form.base_url.trim()) { setErr('رابط API الأساسي مطلوب'); return; }
+    if (!form.branch_id.trim()) { setErr('معرّف الفرع (Branch Id) مطلوب'); return; }
+    if (!form.api_version.trim()) { setErr('إصدار API مطلوب'); return; }
+    if (!status?.connected && !form.token.trim()) { setErr('رمز الدخول (Token) مطلوب'); return; }
     setSaving(true); setErr(''); setMsg('');
     try {
-      const res = await fetch('/api/integrations/daftra/connect', {
+      const res = await fetch('/api/integrations/alostaz/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
         body: JSON.stringify({
-          subdomain: form.subdomain.trim(),
-          api_key: form.api_key.trim() || undefined,
-          default_country_code: form.default_country_code,
-          default_currency_code: form.default_currency_code,
+          base_url: form.base_url.trim(),
+          token: form.token.trim() || undefined,
+          branch_id: form.branch_id.trim(),
+          api_version: form.api_version.trim(),
+          locale: form.locale,
+          default_treasury_id: form.default_treasury_id.trim(),
+          default_product_id: form.default_product_id.trim(),
+          default_storehouse_id: form.default_storehouse_id.trim(),
           enabled: form.enabled,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'تعذّر الحفظ');
-      setMsg('تم الاتصال بدفترة وحفظ الإعدادات بنجاح ✓');
+      setMsg('تم الاتصال بـalostaz.io وحفظ الإعدادات بنجاح ✓');
       await load();
     } catch (e2) { setErr(e2.message || 'تعذّر الحفظ'); }
     finally { setSaving(false); }
   }
 
   async function disconnect() {
-    if (!confirm('فصل الربط مع دفترة؟ لن تُزامَن بيانات العملاء الجديدة بعد ذلك.')) return;
+    if (!confirm('فصل الربط مع alostaz.io؟ لن تُزامَن بيانات العملاء والفواتير الجديدة بعد ذلك.')) return;
     setSaving(true); setErr(''); setMsg('');
     try {
-      const res = await fetch('/api/integrations/daftra/disconnect', { method: 'POST', headers: await authHeaders() });
+      const res = await fetch('/api/integrations/alostaz/disconnect', { method: 'POST', headers: await authHeaders() });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'تعذّر فصل الربط');
-      setForm(EMPTY_DAFTRA);
+      setForm(EMPTY_ALOSTAZ);
       setMsg('تم فصل الربط');
       await load();
     } catch (e2) { setErr(e2.message || 'تعذّر فصل الربط'); }
     finally { setSaving(false); }
   }
 
-  async function syncNow() {
-    setSyncing(true); setErr(''); setMsg('');
+  async function syncClientsNow() {
+    setSyncingClients(true); setErr(''); setMsg('');
     try {
-      const res = await fetch('/api/integrations/daftra/sync-clients', {
+      const res = await fetch('/api/integrations/alostaz/sync-clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ force: true }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'تعذّرت المزامنة');
       setMsg(`تمت مزامنة ${fmtNum(json.synced || 0)} من ${fmtNum(json.total || 0)} عميلاً${json.errors?.length ? ` — ${fmtNum(json.errors.length)} فشل` : ''}`);
       await load();
     } catch (e2) { setErr(e2.message || 'تعذّرت المزامنة'); }
-    finally { setSyncing(false); }
+    finally { setSyncingClients(false); }
+  }
+
+  async function syncInvoicesNow() {
+    setSyncingInvoices(true); setErr(''); setMsg('');
+    try {
+      const res = await fetch('/api/integrations/alostaz/sync-invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+        body: JSON.stringify({ force: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'تعذّرت المزامنة');
+      setMsg(`تمت مزامنة ${fmtNum(json.synced || 0)} من ${fmtNum(json.total || 0)} فاتورة${json.errors?.length ? ` — ${fmtNum(json.errors.length)} فشلت` : ''}`);
+      await load();
+    } catch (e2) { setErr(e2.message || 'تعذّرت المزامنة'); }
+    finally { setSyncingInvoices(false); }
   }
 
   if (!status) return <Loading />;
 
   return (
     <>
-      <PanelHead icon={IconLink} title="دفترة (محاسبة)" />
+      <PanelHead icon={IconLink} title="alostaz.io (محاسبة)" />
       <form className="set-body" onSubmit={submit}>
         <div className="card" style={{ maxWidth: 760 }}>
           <div className="notebar">
-            يُزامن ترتيب بيانات العملاء تلقائياً إلى حساب دفترة المحاسبي عند إضافة أو تعديل عميل (اتجاه واحد: من ترتيب إلى دفترة). ترتيب يبقى هو مصدر الحقيقة لبيانات CRM.
+            يُزامن ترتيب العملاء والفواتير (وبنودها ودفعاتها) تلقائياً إلى حساب alostaz.io المحاسبي عند إضافة أو تعديل أي منها (اتجاه واحد: من ترتيب إلى alostaz.io). ترتيب يبقى هو مصدر الحقيقة لبياناته.
+            بيانات الاتصال (Token وBranch Id وAPI Version ورابط API) تُؤخَذ من لوحة alostaz.io: الإعدادات ← تكامل API.
           </div>
           {err && <div className="errbar">{err}</div>}
           {msg && <div className="okbar">{msg}</div>}
@@ -714,20 +746,36 @@ function DaftraPanel() {
           </div>
 
           <div className="form-grid">
-            <Input label="النطاق الفرعي لدفترة (subdomain)" ltr value={form.subdomain} onChange={(e) => set('subdomain', e.target.value)} placeholder="yourcompany" required />
+            <Input label="رابط API الأساسي (Base URL)" ltr value={form.base_url} onChange={(e) => set('base_url', e.target.value)} placeholder="https://api.yourcompany.alostaz.io" required />
             <Input
-              label={status.connected ? 'مفتاح API — اتركه فارغاً للإبقاء على الحالي' : 'مفتاح API'}
-              ltr type="password" value={form.api_key} onChange={(e) => set('api_key', e.target.value)}
+              label={status.connected ? 'رمز الدخول (Token) — اتركه فارغاً للإبقاء على الحالي' : 'رمز الدخول (Token)'}
+              ltr type="password" value={form.token} onChange={(e) => set('token', e.target.value)}
               placeholder={status.connected ? '••••••••' : ''} required={!status.connected}
             />
-            <Input label="رمز الدولة الافتراضي" ltr value={form.default_country_code} onChange={(e) => set('default_country_code', e.target.value.toUpperCase())} placeholder="SA" />
-            <Input label="رمز العملة الافتراضي" ltr value={form.default_currency_code} onChange={(e) => set('default_currency_code', e.target.value.toUpperCase())} placeholder="SAR" />
+            <Input label="معرّف الفرع (Branch Id)" ltr value={form.branch_id} onChange={(e) => set('branch_id', e.target.value)} required />
+            <Input label="إصدار API (API Version)" ltr value={form.api_version} onChange={(e) => set('api_version', e.target.value)} required />
+            <div className="field">
+              <label>لغة الاستجابة (Locale)</label>
+              <select value={form.locale} onChange={(e) => set('locale', e.target.value)}>
+                <option value="ar">ar</option>
+                <option value="en">en</option>
+              </select>
+            </div>
             <div className="field span-2">
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                 <input type="checkbox" checked={!!form.enabled} onChange={(e) => set('enabled', e.target.checked)} style={{ width: 'auto' }} />
                 تفعيل المزامنة التلقائية
               </label>
             </div>
+          </div>
+
+          <div className="notebar" style={{ marginTop: 14 }}>
+            الفواتير تتطلب منتجاً ومخزناً حقيقيَّين من alostaz.io تُنسب لهما كل بنود الفواتير (ترتيب ليس له كتالوج منتجات)، وخزنة حقيقية لتسجيل الدفعات. أنشئها مرة واحدة في لوحة alostaz.io وضع معرّفاتها هنا.
+          </div>
+          <div className="form-grid">
+            <Input label="معرّف المنتج الافتراضي (Product Id)" ltr value={form.default_product_id} onChange={(e) => set('default_product_id', e.target.value)} />
+            <Input label="معرّف المخزن الافتراضي (Storehouse Id)" ltr value={form.default_storehouse_id} onChange={(e) => set('default_storehouse_id', e.target.value)} />
+            <Input label="معرّف الخزنة الافتراضية (Treasury Id) — للدفعات" ltr value={form.default_treasury_id} onChange={(e) => set('default_treasury_id', e.target.value)} />
           </div>
 
           {status.connected && (
@@ -740,13 +788,16 @@ function DaftraPanel() {
           <div className="modal-actions" style={{ marginTop: 18 }}>
             {status.connected && (
               <>
-                <button className="btn ghost" type="button" disabled={saving || syncing} onClick={disconnect}>فصل الربط</button>
-                <button className="btn ghost" type="button" disabled={saving || syncing} onClick={syncNow}>
-                  {syncing ? 'جارٍ المزامنة…' : 'مزامنة كل العملاء الآن'}
+                <button className="btn ghost" type="button" disabled={busy} onClick={disconnect}>فصل الربط</button>
+                <button className="btn ghost" type="button" disabled={busy} onClick={syncClientsNow}>
+                  {syncingClients ? 'جارٍ المزامنة…' : 'مزامنة كل العملاء الآن'}
+                </button>
+                <button className="btn ghost" type="button" disabled={busy} onClick={syncInvoicesNow}>
+                  {syncingInvoices ? 'جارٍ المزامنة…' : 'مزامنة كل الفواتير الآن'}
                 </button>
               </>
             )}
-            <button className="btn" type="submit" disabled={saving}>{saving ? 'جارٍ الحفظ…' : 'حفظ واختبار الاتصال'}</button>
+            <button className="btn" type="submit" disabled={busy}>{saving ? 'جارٍ الحفظ…' : 'حفظ واختبار الاتصال'}</button>
           </div>
         </div>
       </form>

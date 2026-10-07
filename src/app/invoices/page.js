@@ -414,7 +414,16 @@ export default function InvoicesPage() {
             ? <Empty title="لا توجد نتائج" desc="جرّب تغيير عبارة البحث أو الحالة أو نطاق التاريخ." />
             : <Empty title="لا توجد فواتير بعد" desc="أنشئ أول فاتورة لمشروع لتظهر هنا." />}
           columns={[
-            { key: 'number', label: 'رقم الفاتورة', primary: true, render: (inv) => <span className="nm amt" dir="ltr">{inv.number || '—'}</span> },
+            {
+              key: 'number', label: 'رقم الفاتورة', primary: true,
+              render: (inv) => (
+                <>
+                  <span className="nm amt" dir="ltr">{inv.number || '—'}</span>
+                  {inv.alostaz_invoice_id && <span className="uid" title="مرتبطة بـalostaz.io" style={{ marginInlineStart: 6 }}>· alostaz ✓</span>}
+                  {!inv.alostaz_invoice_id && inv.alostaz_sync_error && <span className="uid" title={inv.alostaz_sync_error} style={{ marginInlineStart: 6, color: 'var(--neg)' }}>· تعذّرت المزامنة</span>}
+                </>
+              ),
+            },
             { key: 'client', label: 'العميل', render: (inv) => byId[inv.client_id] || '—' },
             { key: 'issue_at', label: 'الإصدار', render: (inv) => <DateText v={inv.issue_at} /> },
             { key: 'due_at', label: 'الاستحقاق', render: (inv) => <DateText v={inv.due_at} /> },

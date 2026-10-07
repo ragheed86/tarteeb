@@ -54,6 +54,7 @@ export const ROLE_PRESETS = {
   admin: ALL_PERMISSIONS.filter((permission) => !RESTRICTED_PERMISSIONS.includes(permission)),
   manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments', 'heatmap', 'quotes', 'invoices', 'expenses', 'whatsapp'],
   accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation', 'loans'],
+  finance_manager: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation', 'loans', 'government', 'payroll'],
   operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments'],
   viewer: ['dashboard', 'clients', 'projects'],
 };
@@ -62,6 +63,7 @@ export const ROLE_LABELS = {
   admin: 'مدير كامل',
   manager: 'مدير عمليات',
   accountant: 'محاسب',
+  finance_manager: 'مدير مالي',
   operations: 'تشغيل',
   viewer: 'مشاهدة فقط',
 };
@@ -70,6 +72,7 @@ export const ROLE_LABELS_EN = {
   admin: 'Full Administrator',
   manager: 'Operations Manager',
   accountant: 'Accountant',
+  finance_manager: 'Finance Manager',
   operations: 'Operations',
   viewer: 'View Only',
 };

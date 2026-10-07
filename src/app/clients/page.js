@@ -253,8 +253,8 @@ function ClientsPageInner() {
                   <>
                     <Link href={`/clients/${c.id}`} className="nm" style={{ color: 'var(--green)' }}>{c.name}</Link>
                     <br /><span className="uid">{c.code || '—'}</span>
-                    {c.daftra_client_id && <span className="uid" title="مرتبط بدفترة" style={{ marginInlineStart: 6 }}>· دفترة ✓</span>}
-                    {!c.daftra_client_id && c.daftra_sync_error && <span className="uid" title={c.daftra_sync_error} style={{ marginInlineStart: 6, color: 'var(--neg)' }}>· تعذّرت المزامنة</span>}
+                    {c.alostaz_partner_id && <span className="uid" title="مرتبط بـalostaz.io" style={{ marginInlineStart: 6 }}>· alostaz ✓</span>}
+                    {!c.alostaz_partner_id && c.alostaz_sync_error && <span className="uid" title={c.alostaz_sync_error} style={{ marginInlineStart: 6, color: 'var(--neg)' }}>· تعذّرت المزامنة</span>}
                   </>
                 ),
               },

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { apiError, requirePermission } from '../../../_auth';
-import { pushClientToDaftra } from '@/lib/daftraAdmin';
+import { pushClientToAlostaz } from '@/lib/alostazAdmin';
 
 // يُستدعى من واجهة العملاء بعد كل إنشاء/تعديل (أفضل جهد، لا يوقف حفظ العميل عند الفشل)
 export async function POST(request) {
@@ -12,9 +12,9 @@ export async function POST(request) {
   if (!clientId) return apiError('client_id مطلوب', 400);
 
   try {
-    const result = await pushClientToDaftra(clientId);
+    const result = await pushClientToAlostaz(clientId);
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error.message || 'تعذّرت المزامنة مع دفترة' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error.message || 'تعذّرت المزامنة مع alostaz.io' }, { status: 500 });
   }
 }

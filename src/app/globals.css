@@ -207,9 +207,10 @@ tr.clickable{cursor:pointer}
 .employee-progress i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--teal-500),var(--teal-700))}
 .employee-completion b{font-size:12px;font-weight:600;color:var(--ink);min-width:34px;direction:ltr}
 .employee-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;white-space:nowrap}
-.employee-row-actions .btn{padding:7px 10px}
-.employee-delete{border:0;background:transparent;color:var(--neg);font-size:12.5px;padding:7px 8px;border-radius:8px;cursor:pointer}
-.employee-delete:hover{background:var(--neg-bg)}
+.employee-row-actions .icon-btn{width:32px;height:32px;border-radius:8px}
+.employee-row-actions .icon-btn svg{width:16px;height:16px}
+.employee-row-actions .icon-btn.danger{color:var(--neg)}
+.employee-row-actions .icon-btn.danger:hover{background:var(--neg-bg);border-color:var(--neg)}
 .pcard .ph{height:96px;background:var(--sage-bg);display:grid;place-items:center;color:var(--sage);position:relative}
 .pcard .pb{padding:15px 16px}.pcard .pb h3{font-size:15px;font-weight:600;margin-bottom:3px}
 .pcard .cl{font-size:12.5px;color:var(--muted);margin-bottom:12px}
@@ -947,7 +948,6 @@ tr.row-low:hover{background:rgba(224,86,107,.09)}
   .employee-completion{min-width:0;width:min(210px,58vw)}
   .employee-progress{flex:1;width:auto}
   .employee-row-actions{width:100%;justify-content:flex-start;flex-wrap:wrap}
-  .employee-row-actions .btn{flex:1;justify-content:center}
   .date-pair{grid-template-columns:1fr;gap:10px}
   .project-total-strip{align-items:flex-start;flex-direction:column;gap:4px}
   .daily-cost-summary{grid-template-columns:1fr;gap:12px}

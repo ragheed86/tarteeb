@@ -45,7 +45,7 @@ function roleRank(role) {
 }
 
 const EMPTY = {
-  name: '', role: '', phone: '', national_id: '', nationality: '', wage: 'fixed', status: 'active',
+  name: '', name_ar: '', role: '', phone: '', national_id: '', nationality: '', wage: 'fixed', status: 'active',
   photo_url: '', photo_path: '', hire_date: '', iban: '', gosi_number: '', is_billable: true,
 };
 
@@ -63,7 +63,7 @@ function expiryCls(d) {
 
 function profileCompletion(employee) {
   const fields = [
-    employee.name, employee.role, employee.phone, employee.national_id,
+    employee.name, employee.name_ar, employee.role, employee.phone, employee.national_id,
     employee.nationality, employee.photo_url || employee.photo_path, employee.wage,
     employee.hire_date, employee.iban,
   ];
@@ -115,7 +115,7 @@ function EmployeesPageInner() {
       .filter((employee) => {
         if (!term) return true;
         const country = countryByCode(employee.nationality);
-        return [employee.name, employee.role, employee.phone, employee.national_id, country?.ar, country?.en]
+        return [employee.name, employee.name_ar, employee.role, employee.phone, employee.national_id, country?.ar, country?.en]
           .some((value) => String(value || '').toLowerCase().includes(term));
       })
       .sort((a, b) => roleRank(a.role) - roleRank(b.role));
@@ -148,7 +148,7 @@ function EmployeesPageInner() {
   function openEdit(em) {
     setEditing(em);
     setForm({
-      name: em.name || '', role: em.role || '', phone: em.phone || '', national_id: em.national_id || '',
+      name: em.name || '', name_ar: em.name_ar || '', role: em.role || '', phone: em.phone || '', national_id: em.national_id || '',
       nationality: em.nationality || '',
       wage: em.wage || 'fixed', status: em.status || 'active', photo_url: em.photo_url || '', photo_path: em.photo_path || '',
       hire_date: em.hire_date || '', iban: em.iban || '', gosi_number: em.gosi_number || '',
@@ -181,7 +181,7 @@ function EmployeesPageInner() {
     if (!form.name.trim()) { setFormErr('اسم الموظف مطلوب'); return; }
     setSaving(true); setFormErr('');
     const payload = {
-      name: form.name.trim(), role: form.role.trim() || null, phone: form.phone.trim() || null,
+      name: form.name.trim(), name_ar: form.name_ar.trim() || null, role: form.role.trim() || null, phone: form.phone.trim() || null,
       national_id: form.national_id.trim() || null,
       nationality: form.nationality || null,
       wage: form.wage, status: form.status,
@@ -250,7 +250,6 @@ function EmployeesPageInner() {
                 <thead>
                   <tr>
                     <th>الموظف</th><th>الدور والجنسية</th><th>الحالة</th><th>نوع الأجر</th>
-                    {canSeePayroll && <th>التكلفة الشهرية</th>}
                     <th>اكتمال البيانات</th><th aria-label="الإجراءات" />
                   </tr>
                 </thead>
@@ -267,7 +266,8 @@ function EmployeesPageInner() {
                               {em.photo_url ? <img src={em.photo_url} alt="" /> : <span>{em.name?.trim()?.[0] || '؟'}</span>}
                             </div>
                             <div className="employee-person-copy">
-                              <strong>{em.name}</strong>
+                              <strong>{em.name_ar || em.name}</strong>
+                              {em.name_ar && <span dir="ltr">{em.name}</span>}
                               <span dir={em.phone ? 'ltr' : undefined}>{em.phone || em.national_id || 'لا توجد بيانات اتصال'}</span>
                             </div>
                           </div>
@@ -277,11 +277,6 @@ function EmployeesPageInner() {
                         </td>
                         <td data-label="الحالة"><span className={`pill ${st.cls}`}>{st.label}</span></td>
                         <td data-label="نوع الأجر"><span>{WAGE[em.wage] || em.wage || '—'}</span></td>
-                        {canSeePayroll && (
-                          <td data-label="التكلفة الشهرية">
-                            <EmployeeCostCell cost={costs[em.id]} />
-                          </td>
-                        )}
                         <td data-label="اكتمال البيانات">
                           <div className="employee-completion" aria-label={`اكتمال البيانات ${completion}%`}>
                             <div className="employee-progress"><i style={{ width: `${completion}%` }} /></div>
@@ -290,11 +285,23 @@ function EmployeesPageInner() {
                         </td>
                         <td data-label="">
                           <div className="employee-row-actions">
-                            {canSeePayroll && <button className="btn ghost sm" onClick={() => setPayFor(em)}>الملف المالي</button>}
-                            <button className="btn ghost sm" onClick={() => setDocFor(em)}>المستندات</button>
-                            <button className="btn ghost sm" onClick={() => setCalFor(em)}>تقويم Google</button>
-                            <button className="btn ghost sm" onClick={() => openEdit(em)}>تعديل</button>
-                            <button className="employee-delete" onClick={() => del(em)} aria-label={`حذف ${em.name}`}>حذف</button>
+                            {canSeePayroll && (
+                              <button className="icon-btn" onClick={() => setPayFor(em)} aria-label={`الملف المالي — ${em.name}`} title="الملف المالي">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20M7 15h3" /></svg>
+                              </button>
+                            )}
+                            <button className="icon-btn" onClick={() => setDocFor(em)} aria-label={`المستندات — ${em.name}`} title="المستندات">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
+                            </button>
+                            <button className="icon-btn" onClick={() => setCalFor(em)} aria-label={`تقويم Google — ${em.name}`} title="تقويم Google">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18M8 2v4M16 2v4" /></svg>
+                            </button>
+                            <button className="icon-btn" onClick={() => openEdit(em)} aria-label={`تعديل — ${em.name}`} title="تعديل">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                            </button>
+                            <button className="icon-btn danger" onClick={() => del(em)} aria-label={`حذف — ${em.name}`} title="حذف">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6" /><path d="M10 11v6M14 11v6" /></svg>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -319,6 +326,7 @@ function EmployeesPageInner() {
             {formErr && <div className="errbar">{formErr}</div>}
             <div className="form-grid">
               <div className="field span-2"><label>الاسم</label><input value={form.name} onChange={(e) => set('name', e.target.value)} required autoFocus /></div>
+              <div className="field span-2"><label>الاسم بالعربي</label><input value={form.name_ar} onChange={(e) => set('name_ar', e.target.value)} /></div>
               <div className="field"><label>الدور</label>
                 <select value={form.role} onChange={(e) => set('role', e.target.value)}>
                   <option value="">— اختر الدور —</option>
@@ -395,25 +403,6 @@ function EmployeesPageInner() {
         />
       )}
     </>
-  );
-}
-
-// التكلفة الفعلية مقابل الراتب. الفرق بينهما هو ما تنساه أغلب الشركات
-// عند تسعير المشاريع.
-function EmployeeCostCell({ cost }) {
-  const total = Number(cost?.total_employer_cost || 0);
-  const gross = Number(cost?.gross_pay || 0);
-  if (!cost?.contract_id) {
-    return <span style={{ fontSize: 12, color: 'var(--muted)' }}>لا عقد</span>;
-  }
-  return (
-    <div className="employee-role-cell">
-      <strong dir="ltr">{fmtMoney(total)} {CURRENCY}</strong>
-      <span dir="ltr">
-        {fmtMoney(gross)} {CURRENCY} أجر
-        {gross > 0 && ` · +${Math.round(((total - gross) / gross) * 100)}٪`}
-      </span>
-    </div>
   );
 }
 

@@ -335,7 +335,9 @@ export default function ProjectDetail() {
         <DatesCard project={project} onChange={(p) => setD((s) => ({ ...s, project: p }))} />
         <TeamCard projectId={id} employees={employees} team={team} teamIds={teamIds}
           onChange={(t) => setD((s) => ({ ...s, team: t }))} />
+        {/* بطاقة الصور (قبل / بعد) - غير مستخدمة حالياً، تم إخفاؤها مؤقتاً
         <MediaCard projectId={id} media={media} onChange={(m) => setD((s) => ({ ...s, media: m }))} />
+        */}
       </div>
 
       <CostsCard projectId={id} costs={costs} onChange={refreshCosts} />

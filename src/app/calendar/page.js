@@ -76,6 +76,53 @@ function layoutLanes(events) {
   return placed.map((ev) => ({ ...ev, totalLanes }));
 }
 
+// ---------- تصدير ICS (متوافق مع جوجل وآبل) ----------
+function icsEscape(text) {
+  return String(text || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+}
+function icsFold(line) {
+  // تقسيم الأسطر الطويلة حسب RFC 5545 (حد 75 محرفاً مع مسافة بادئة للسطر التالي)
+  if (line.length <= 75) return line;
+  const parts = [];
+  let rest = line;
+  while (rest.length > 75) { parts.push(rest.slice(0, 75)); rest = ` ${rest.slice(75)}`; }
+  parts.push(rest);
+  return parts.join('\r\n');
+}
+function toICSDateTime(d) { return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; }
+function toICSDate(d) { return ymd(d).replace(/-/g, ''); }
+function buildICS(events) {
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tarteeb//Calendar//AR', 'CALSCALE:GREGORIAN'];
+  events.forEach((ev) => {
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:${ev.id}@tarteeb`);
+    lines.push(`DTSTAMP:${toICSDateTime(new Date())}`);
+    if (ev.allDay) {
+      lines.push(`DTSTART;VALUE=DATE:${toICSDate(ev.start)}`);
+      lines.push(`DTEND;VALUE=DATE:${toICSDate(addDays(ev.end || ev.start, 1))}`);
+    } else {
+      lines.push(`DTSTART:${toICSDateTime(ev.start)}`);
+      lines.push(`DTEND:${toICSDateTime(ev.end)}`);
+    }
+    lines.push(icsFold(`SUMMARY:${icsEscape(ev.title)}`));
+    const desc = [ev.client, ev.district, ev.sub].filter(Boolean).join(' - ');
+    if (desc) lines.push(icsFold(`DESCRIPTION:${icsEscape(desc)}`));
+    if (ev.sub && ev.kind === 'appointment') lines.push(icsFold(`LOCATION:${icsEscape(ev.sub)}`));
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+function downloadICS(events) {
+  const ics = buildICS(events);
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'مواعيد-تربيب.ics';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function authHeaders() {
   const { data } = await supabase.auth.getSession();
   return { Authorization: `Bearer ${data.session?.access_token || ''}`, 'Content-Type': 'application/json' };
@@ -276,6 +323,10 @@ export default function CalendarPage() {
               <button type="button" className="cm-arrow" onClick={() => nav(-1)} aria-label="السابق"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 6l-6 6 6 6" /></svg></button>
               <button type="button" className="cm-today-btn" onClick={goToday}>اليوم</button>
               <button type="button" className="cm-arrow" onClick={() => nav(1)} aria-label="التالي"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg></button>
+              <button type="button" className="btn ghost sm cm-export-btn" onClick={() => downloadICS(visibleEvents)} title="تصدير إلى جوجل أو آبل كالندر">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4" /><path d="M5 17v2a2 2 0 002 2h10a2 2 0 002-2v-2" /></svg>
+                تصدير المواعيد
+              </button>
             </div>
           </div>
 
@@ -506,6 +557,7 @@ const CSS = `
 .cm-arrow{background:var(--surface);border:1px solid var(--line);color:var(--primary);cursor:pointer;padding:6px;border-radius:50%;display:flex;flex-shrink:0}
 .cm-arrow:hover{background:var(--surface-2)}
 .cm-today-btn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer;padding:6px 14px;white-space:nowrap}
+.cm-export-btn{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .cm-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px}
 
 /* شريط جانبي */

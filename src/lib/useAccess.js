@@ -45,7 +45,7 @@ export function useAccess() {
       try {
         const { data, error } = await supabase
           .from('app_user_access')
-          .select('user_id,email,display_name,role,permissions,active')
+          .select('user_id,email,display_name,role,permissions,active,employee_id')
           .eq('user_id', session.user.id)
           .maybeSingle();
         if (error) throw error;
@@ -59,6 +59,7 @@ export function useAccess() {
             permissions: primary ? ALL_PERMISSIONS : normalizePermissions(data?.permissions || [], email),
             active: primary ? true : data?.active === true,
             isPrimaryAdmin: primary,
+            employee_id: data?.employee_id || null,
           });
         }
       } catch {

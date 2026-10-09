@@ -6,6 +6,7 @@ import {
   getSuppliers, createSupplier, updateSupplier, removeSupplier,
   getServices, createService, updateService, removeService,
   getGovernmentAccounts, updateGovernmentAccount, uploadGovDocument,
+  getEmployeesBasic,
 } from '@/lib/data';
 import { supabase } from '@/lib/supabase';
 import { fmtNum, fmtDate } from '@/lib/format';
@@ -919,7 +920,7 @@ function GovPanel({ rows, setRows }) {
 
 /* ============================ الفريق والصلاحيات ============================ */
 
-const EMPTY_USER = { email: '', display_name: '', password: '', role: 'viewer', permissions: ROLE_PRESETS.viewer, active: true };
+const EMPTY_USER = { email: '', display_name: '', password: '', role: 'viewer', permissions: ROLE_PRESETS.viewer, active: true, employee_id: '' };
 const USER_FILTERS = [
   { key: 'all', label: 'الكل' },
   { key: 'admin', label: 'مدير كامل' },
@@ -945,6 +946,9 @@ function UserPermissions({ users, reload }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [employees, setEmployees] = useState([]);
+
+  useEffect(() => { getEmployeesBasic().then(setEmployees).catch(() => {}); }, []);
 
   const filtered = useMemo(() => {
     if (!users) return null;
@@ -966,6 +970,7 @@ function UserPermissions({ users, reload }) {
       email: user.email || '', display_name: user.display_name || '', password: '',
       role: user.role || 'viewer', permissions: user.permissions || [],
       active: user.active !== false, user_id: user.user_id,
+      employee_id: user.employee_id || '',
     });
     setPermQ(''); setMsg(''); setErr(''); setEditorOpen(true);
   }
@@ -1006,6 +1011,7 @@ function UserPermissions({ users, reload }) {
             role: isPrimaryAdmin(form.email) ? 'admin' : form.role,
             permissions: isPrimaryAdmin(form.email) ? ALL_PERMISSIONS : form.permissions,
             active: isPrimaryAdmin(form.email) ? true : form.active,
+            employee_id: form.employee_id || null,
           }, { onConflict: 'user_id' });
           if (error) throw error;
         } else {
@@ -1148,6 +1154,12 @@ function UserPermissions({ users, reload }) {
               <div className="field"><label>الدور</label>
                 <select value={form.role} onChange={(e) => setField('role', e.target.value)} disabled={primaryForm}>
                   {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </div>
+              <div className="field"><label>الموظف المرتبط (لعرض صورته)</label>
+                <select value={form.employee_id} onChange={(e) => setField('employee_id', e.target.value)}>
+                  <option value="">— بلا ربط —</option>
+                  {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.name}</option>)}
                 </select>
               </div>
             </div>

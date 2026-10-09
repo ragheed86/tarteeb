@@ -86,7 +86,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 .nav a svg{width:18px;height:18px;flex-shrink:0;opacity:.92}
 .nav a .badge{margin-inline-start:auto;background:var(--gold);color:#fff;font-size:11px;font-weight:600;padding:1px 8px;border-radius:20px}
 .side-foot{display:flex;align-items:center;gap:11px;padding:12px 8px 0;border-top:1px solid var(--line);margin-top:8px}
-.avatar{width:36px;height:36px;border-radius:50%;background:var(--sage-bg);color:var(--green);display:grid;place-items:center;font-weight:600;font-size:14px;flex-shrink:0}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--sage-bg);color:var(--green);display:grid;place-items:center;font-weight:600;font-size:14px;flex-shrink:0;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .side-foot div{font-size:13px}.side-foot small{color:var(--muted);font-size:11px}
 .logout{margin-inline-start:auto;border:0;background:none;color:var(--faint);cursor:pointer;font-size:12px;padding:4px}
 .logout:hover{color:var(--neg)}

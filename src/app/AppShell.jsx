@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Toaster } from './toast';
 import { supabase, supabaseReady } from '@/lib/supabase';
+import { getEmployeesBasic } from '@/lib/data';
 import { ROLE_LABELS, ROLE_LABELS_EN, canAccess, permissionForPath } from '@/lib/permissions';
 import { useAccess } from '@/lib/useAccess';
 import { useRouteMemory } from '@/lib/useRouteMemory';
@@ -67,8 +68,22 @@ export default function AppShell({ children }) {
   const [globalQuery, setGlobalQuery] = useState('');
   const navRef = useRef(null);
   const [glide, setGlide] = useState(null);
+  const [avatarUrl, setAvatarUrl] = useState('');
 
   useEffect(() => setOpen(false), [pathname]); // إغلاق القائمة عند التنقّل
+
+  // صورة الموظف المرتبط بالحساب (إن وُجد) لعرضها بدل الحرف الأول في أسفل الشريط الجانبي
+  useEffect(() => {
+    let cancelled = false;
+    if (!access?.employee_id) { setAvatarUrl(''); return undefined; }
+    getEmployeesBasic()
+      .then((list) => {
+        if (cancelled) return;
+        setAvatarUrl(list.find((emp) => emp.id === access.employee_id)?.photo_url || '');
+      })
+      .catch(() => { if (!cancelled) setAvatarUrl(''); });
+    return () => { cancelled = true; };
+  }, [access?.employee_id]);
 
   // مؤشر منزلق خلف الرابط النشط في الشريط الجانبي
   useEffect(() => {
@@ -136,7 +151,12 @@ export default function AppShell({ children }) {
           ))}
         </nav>
         <div className="side-foot">
-          <div className="avatar">{initial}</div>
+          <div className="avatar">
+            {avatarUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={avatarUrl} alt="" />
+            ) : initial}
+          </div>
           <div>{(language === 'en' ? ROLE_LABELS_EN : ROLE_LABELS)[access?.role] || t('app.user')}<br /><small>{email}</small></div>
           <button className="logout" onClick={() => supabase.auth.signOut()}>{t('app.logout')}</button>
         </div>

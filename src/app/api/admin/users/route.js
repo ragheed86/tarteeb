@@ -41,6 +41,7 @@ function cleanUserPayload(input) {
     role: isPrimaryAdmin(email) ? 'admin' : role,
     permissions: isPrimaryAdmin(email) ? ALL_PERMISSIONS : permissions,
     active: isPrimaryAdmin(email) ? true : input.active !== false,
+    employee_id: input.employee_id || null,
   };
 }
 
@@ -70,7 +71,7 @@ async function listRowsWithAuth() {
   const [{ data: rows, error: rowsError }, authUsers] = await Promise.all([
     supabaseAdmin
       .from('app_user_access')
-      .select('user_id,email,display_name,role,permissions,active,created_at,updated_at')
+      .select('user_id,email,display_name,role,permissions,active,employee_id,created_at,updated_at')
       .order('created_at', { ascending: false }),
     listAllAuthUsers(),
   ]);
@@ -132,7 +133,7 @@ export async function POST(request) {
     const { data, error } = await supabaseAdmin
       .from('app_user_access')
       .upsert(row, { onConflict: 'user_id' })
-      .select('user_id,email,display_name,role,permissions,active,created_at,updated_at')
+      .select('user_id,email,display_name,role,permissions,active,employee_id,created_at,updated_at')
       .single();
     if (error) throw error;
     return NextResponse.json({ user: data });
@@ -160,7 +161,7 @@ export async function DELETE(request) {
       .from('app_user_access')
       .update({ active: false })
       .eq('user_id', userId)
-      .select('user_id,email,display_name,role,permissions,active,created_at,updated_at')
+      .select('user_id,email,display_name,role,permissions,active,employee_id,created_at,updated_at')
       .single();
     if (error) throw error;
     return NextResponse.json({ user: data });

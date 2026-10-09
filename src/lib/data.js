@@ -272,3 +272,4 @@ export * from './data/projects';
 export * from './data/invoices';
 export * from './data/inventory';
 export * from './data/reports';
+export * from './data/accounting';

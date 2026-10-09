@@ -32,6 +32,7 @@ export const PERMISSION_GROUPS = [
       { key: 'loans', label: 'القروض والالتزامات', description: 'جدولة أقساط القروض وتسجيل السداد' },
       { key: 'payroll', label: 'الرواتب وتكلفة الموظفين', description: 'العقود والأجور والسلف ومسيّر الرواتب (رغيد ودلال فقط)' },
       { key: 'government', label: 'الجهات الحكومية', description: 'الحسابات والرخص والتنبيهات' },
+      { key: 'accounting', label: 'المحاسبة', description: 'دليل الحسابات والقيود اليومية ودفتر الأستاذ والقوائم المالية' },
     ],
   },
   {
@@ -53,8 +54,8 @@ export const RESTRICTED_PERMISSIONS = ['payroll'];
 export const ROLE_PRESETS = {
   admin: ALL_PERMISSIONS.filter((permission) => !RESTRICTED_PERMISSIONS.includes(permission)),
   manager: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments', 'heatmap', 'quotes', 'invoices', 'expenses', 'whatsapp'],
-  accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation', 'loans'],
-  finance_manager: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation', 'loans', 'government', 'payroll'],
+  accountant: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation', 'loans', 'accounting'],
+  finance_manager: ['dashboard', 'clients', 'projects', 'cost', 'quotes', 'invoices', 'expenses', 'bank_reconciliation', 'loans', 'government', 'payroll', 'accounting'],
   operations: ['dashboard', 'clients', 'projects', 'cost', 'warehouse', 'warehouse_inventory', 'warehouse_products', 'employees', 'appointments'],
   viewer: ['dashboard', 'clients', 'projects'],
 };
@@ -125,6 +126,7 @@ export function permissionForPath(pathname) {
   if (path.startsWith('/bank-reconciliation')) return 'bank_reconciliation';
   if (path.startsWith('/loans')) return 'loans';
   if (path.startsWith('/payroll')) return 'payroll';
+  if (path.startsWith('/accounting')) return 'accounting';
   if (path.startsWith('/partners')) return 'expenses';
   if (path.startsWith('/government')) return 'government';
   if (path.startsWith('/suppliers')) return 'warehouse';

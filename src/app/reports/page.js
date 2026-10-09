@@ -5,7 +5,9 @@ import {
   getClients, getProjects, getInvoices, getAllInvoicePayments, getAllInvoiceItems,
   getAllProjectCosts, getPayrollRuns, getInventory, getCompanyExpenses, getSuppliers,
   getBankAccounts, getBankTransactions, getLoanPayments,
+  getIncomeStatement, getBalanceSheet,
 } from '@/lib/data';
+import Link from 'next/link';
 import { fmtMoney, fmtNum, fmtDate, INVOICE_STATUS, PROJECT_STATUS } from '@/lib/format';
 import { Loading, Empty, ErrorBar, DataTable, KpiCard, Money, DateText, StatusPill } from '@/components';
 
@@ -29,6 +31,23 @@ export default function ReportsPage() {
   const [tab, setTab] = useState('overview');
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
+  const [gl, setGl] = useState(null);
+  const [glError, setGlError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [incomeStatement, balanceSheet] = await Promise.all([
+          getIncomeStatement(from, to), getBalanceSheet(to),
+        ]);
+        setGl({ incomeStatement, balanceSheet });
+        setGlError('');
+      } catch (loadError) {
+        setGl(null);
+        setGlError(loadError.message || 'تعذّر تحميل القوائم المالية من دفتر الأستاذ');
+      }
+    })();
+  }, [from, to]);
 
   useEffect(() => {
     (async () => {
@@ -141,7 +160,7 @@ export default function ReportsPage() {
       <div className="report-tabs" role="tablist">{TABS.map(([key, label]) => <button type="button" role="tab" aria-selected={tab === key} className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}>{label}</button>)}</div>
 
       {tab === 'overview' && <Overview report={report} scope={scope} />}
-      {tab === 'financial' && <Financial report={report} scope={scope} />}
+      {tab === 'financial' && <Financial report={report} scope={scope} gl={gl} glError={glError} />}
       {tab === 'sales' && <Sales report={report} scope={scope} />}
       {tab === 'projects' && <Projects report={report} scope={scope} />}
       {tab === 'purchases' && <Purchases report={report} scope={scope} />}
@@ -166,12 +185,56 @@ function Overview({ report, scope }) {
   </>;
 }
 
-function Financial({ report, scope }) {
+function Financial({ report, scope, gl, glError }) {
   return <>
-    <Section title="التقارير المالية" subtitle={`قائمة الدخل والتدفقات النقدية · ${scope}`} />
+    <Section title="التقارير المالية" subtitle={`قائمة الدخل والتدفقات النقدية (نقدية) · ${scope}`} />
     <div className="grid2 report-grid"><Statement report={report} /><CashFlow report={report} /></div>
-    <div className="grid2 report-grid"><Receivables report={report} /><div className="card report-note"><h3>تقارير محاسبية متقدمة</h3><p>ميزان المراجعة، دفتر الأستاذ العام، الميزانية العمومية، والإقرار الضريبي تحتاج إلى وحدة قيود محاسبية وربط ضريبي مستقل قبل عرض أرقام محاسبية معتمدة.</p></div></div>
+    <Section title="القوائم المحاسبية (قيد مزدوج)" subtitle={`من دفتر الأستاذ الفعلي · ${scope}`} />
+    {glError && <ErrorBar message={glError} />}
+    {!glError && !gl && <Loading />}
+    {!glError && gl && (
+      <div className="grid2 report-grid">
+        <GlIncomeStatement rows={gl.incomeStatement} />
+        <GlBalanceSheet rows={gl.balanceSheet} />
+      </div>
+    )}
+    <div className="card report-note">
+      <h3>المحاسبة التفصيلية</h3>
+      <p>دليل الحسابات، القيود اليومية، دفتر الأستاذ، وميزان المراجعة متاحة بالتفصيل في وحدة المحاسبة.</p>
+      <Link className="btn ghost sm" href="/accounting">فتح وحدة المحاسبة ←</Link>
+    </div>
   </>;
+}
+
+function GlIncomeStatement({ rows }) {
+  const revenue = sum(rows.filter((row) => row.account_type === 'revenue'), (row) => row.amount);
+  const expense = sum(rows.filter((row) => row.account_type === 'expense'), (row) => row.amount);
+  const net = revenue - expense;
+  return (
+    <div className="card report-statement">
+      <h3>قائمة الدخل</h3>
+      <p>مبنية من القيود المحاسبية الفعلية (استحقاق لا نقدية).</p>
+      <Line label="الإيرادات" value={revenue} />
+      <Line label="المصروفات" value={-expense} negative />
+      <Line label="صافي الربح" value={net} total />
+    </div>
+  );
+}
+
+function GlBalanceSheet({ rows }) {
+  const assets = sum(rows.filter((row) => row.account_type === 'asset'), (row) => row.balance);
+  const liabilities = sum(rows.filter((row) => row.account_type === 'liability'), (row) => row.balance);
+  const equity = sum(rows.filter((row) => row.account_type === 'equity'), (row) => row.balance);
+  return (
+    <div className="card report-statement">
+      <h3>الميزانية العمومية</h3>
+      <p>أرصدة تراكمية حتى تاريخ النهاية المحدد أعلاه.</p>
+      <Line label="الأصول" value={assets} />
+      <Line label="الخصوم" value={-liabilities} negative />
+      <Line label="حقوق الملكية (شاملة نتيجة الفترة)" value={equity} />
+      <Line label="أصول − (خصوم + حقوق ملكية)" value={assets - liabilities - equity} total />
+    </div>
+  );
 }
 
 function Sales({ report, scope }) {

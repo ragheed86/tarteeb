@@ -5,17 +5,12 @@
 // ============================================================
 import { cachedSupabaseRead, clearSupabaseReadCache, supabase } from '../supabase';
 import { attachInvoiceSummaries } from './invoices';
-import { triggerAlostazSync } from './alostazSync';
-
-function syncClientToAlostaz(clientId) {
-  return triggerAlostazSync('/api/integrations/alostaz/sync-client', { client_id: clientId });
-}
 
 export async function getClients() {
   return cachedSupabaseRead('clients', async () => {
     const { data, error } = await supabase
       .from('clients')
-      .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at,alostaz_partner_id,alostaz_sync_error')
+      .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
       .eq('in_crm', true) // جهات الواتساب غير المصنّفة تبقى في الصندوق فقط حتى تُضاف للـCRM يدوياً
       .order('created_at', { ascending: false });
     if (error) throw error; return data;
@@ -50,11 +45,10 @@ export async function createClient(input) {
   const { data, error } = await supabase
     .from('clients')
     .insert(payload)
-    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at,alostaz_partner_id,alostaz_sync_error')
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
     .single();
   if (error) throw error;
   clearSupabaseReadCache('clients');
-  syncClientToAlostaz(data.id);
   return data;
 }
 export async function updateClient(id, input) {
@@ -73,13 +67,10 @@ export async function updateClient(id, input) {
     .from('clients')
     .update(payload)
     .eq('id', id)
-    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at,alostaz_partner_id,alostaz_sync_error')
+    .select('id,code,name,phone,source,district,status,first_contact_at,notes,referred_by_client_id,referred_by_employee_id,created_at')
     .single();
   if (error) throw error;
   clearSupabaseReadCache('clients');
-  if (input.name !== undefined || input.phone !== undefined || input.notes !== undefined) {
-    syncClientToAlostaz(data.id); // لا داعٍ لإزعاج alostaz.io عند تغيير الحالة فقط من القائمة السريعة
-  }
   return data;
 }
 export async function removeClient(id) {

@@ -4,15 +4,10 @@
 //  الاستيرادات في الصفحات.
 // ============================================================
 import { cachedSupabaseRead, clearSupabaseReadCache, supabase } from '../supabase';
-import { triggerAlostazSync } from './alostazSync';
-
-function syncInvoiceToAlostaz(invoiceId) {
-  return triggerAlostazSync('/api/integrations/alostaz/sync-invoice', { invoice_id: invoiceId });
-}
 
 const isRefundedInvoice = (invoice) => invoice?.status === 'refunded';
 
-const INVOICE_COLS = 'id,number,project_id,client_id,issue_at,due_at,subtotal,vat_applicable,vat_rate,vat_amount,total,zatca_uuid,zatca_qr,status,paid_at,created_at,alostaz_invoice_id,alostaz_sync_error';
+const INVOICE_COLS = 'id,number,project_id,client_id,issue_at,due_at,subtotal,vat_applicable,vat_rate,vat_amount,total,zatca_uuid,zatca_qr,status,paid_at,created_at';
 
 export async function attachInvoiceSummaries(invoices) {
   const rows = invoices || [];
@@ -42,7 +37,7 @@ export async function attachInvoiceSummaries(invoices) {
 export async function getInvoices() {
   return cachedSupabaseRead('invoices', async () => {
     const { data, error } = await supabase.from('invoices')
-      .select('id,number,project_id,client_id,issue_at,due_at,subtotal,vat_applicable,vat_rate,vat_amount,total,status,paid_at,zatca_qr,alostaz_invoice_id,alostaz_sync_error')
+      .select('id,number,project_id,client_id,issue_at,due_at,subtotal,vat_applicable,vat_rate,vat_amount,total,status,paid_at,zatca_qr')
       .order('issue_at', { ascending: false });
     if (error) throw error; return attachInvoiceSummaries(data);
   });
@@ -90,14 +85,12 @@ export async function createInvoice(invoice, items) {
   });
   if (error) throw error;
   clearSupabaseReadCache('invoices');
-  syncInvoiceToAlostaz(data.id);
   return data;
 }
 export async function updateInvoice(id, p) {
   const { data, error } = await supabase.from('invoices').update(p).eq('id', id).select(INVOICE_COLS).single();
   if (error) throw error;
   clearSupabaseReadCache('invoices');
-  syncInvoiceToAlostaz(data.id);
   const [invoice] = await attachInvoiceSummaries([data]);
   return invoice;
 }
@@ -115,7 +108,6 @@ export async function updateInvoiceWithItems(id, invoice, items) {
   });
   if (error) throw error;
   clearSupabaseReadCache('invoices');
-  syncInvoiceToAlostaz(data.id);
   const [updated] = await attachInvoiceSummaries([data]);
   return updated;
 }
@@ -152,7 +144,6 @@ export async function createInvoicePayment(p) {
   const { data, error } = await supabase.from('invoice_payments').insert(payload).select('*').single();
   if (error) throw error;
   clearSupabaseReadCache('invoices');
-  syncInvoiceToAlostaz(data.invoice_id); // يزامن الفاتورة فيرسل هذه الدفعة الجديدة ضمنها
   return data;
 }
 export async function removeInvoicePayment(id) {
